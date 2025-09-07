@@ -1,0 +1,147 @@
+classdef Config
+    properties
+        Signals         % Table from sheet 'VbRcSignals'
+        Graphs          % Table from sheet 'Graphs'
+        LineColors      % Table from sheet 'lineColors'
+        Calibratables   % Struct of calibration tables 
+    end
+
+    methods
+        function obj = Config()
+            % Empty  constructor; use fromJSON to populate
+        end
+    end
+
+    methods (Static)
+        function obj = fromJSON(jsonFilePath)
+            % Create Config object from JSON file
+            configStruct = Config.loadConfig(jsonFilePath);
+
+            % Create empty object
+            obj = Config();
+
+            % Load SignalPlotSpec sheets
+            specPath = configStruct.SignalPlotSpec.FilePath;
+            sheetList = configStruct.SignalPlotSpec.Sheets;
+            signalSpec = Config.loadSignalPlotSpec(specPath, sheetList);
+
+            obj.Signals    = signalSpec.VbRcSignals;
+            obj.Graphs     = signalSpec.Graphs;
+            obj.LineColors = signalSpec.LineColors;
+
+            % Load Calibratables
+            calibFile = configStruct.Calibration.FilePath;
+            sheetDefs = configStruct.Calibration.Sheets;
+            obj.Calibratables = Config.loadCalibratables(calibFile, sheetDefs);
+        end
+    end
+
+    methods (Static, Access = private)
+        function params = loadConfig(filePath)
+            % Load JSON config and extract paths and sheet definitions
+            if ~isfile(filePath)
+                error('Config file not found: %s', filePath);
+            end
+            
+            cfgText = fileread(filePath);
+            params = jsondecode(cfgText);
+        
+            % Validate SignalPlotSpec
+            if ~isfield(params, 'SignalPlotSpec') || ~isfield(params.SignalPlotSpec, 'FilePath')
+                error('Missing SignalPlotSpec.FilePath in config.');
+            end
+            if ~isfield(params.SignalPlotSpec, 'Sheets') || ~iscell(params.SignalPlotSpec.Sheets)
+                error('SignalPlotSpec.Sheets must be a cell array of sheet names.');
+            end
+        
+            % Validate Calibration
+            if ~isfield(params, 'Calibration') || ~isfield(params.Calibration, 'FilePath')
+                error('Missing Calibration.FilePath in config.');
+            end
+            if ~isstring(params.Calibration.FilePath) && ~ischar(params.Calibration.FilePath)
+                error('Calibration.FilePath must be a string, got %s', class(params.Calibration.FilePath));
+            end
+            if ~isfield(params.Calibration, 'Sheets') || ~isstruct(params.Calibration.Sheets)
+                error('Calibration.Sheets must be a struct of sheet definitions.');
+            end
+            
+            % Normalize sheet names for calibration
+            sheetNames = fieldnames(params.Calibration.Sheets);
+            normSheets = struct();
+            for i = 1:numel(sheetNames)
+                s = sheetNames{i};
+                normSheets.(matlab.lang.makeValidName(s)) = params.Calibration.Sheets.(s);
+            end
+            params.Calibration.SheetsNormalized = normSheets;
+        end % loadConfig
+        
+        function signalSpec = loadSignalPlotSpec(filePath, sheetList)
+            % Load specified sheets from SignalPlotSpec Excel file
+        
+            if ~isfile(filePath)
+                error('SignalPlotSpec file not found: %s', filePath);
+            end
+            if ~iscell(sheetList)
+                error('Sheet list must be a cell array of sheet names.');
+            end
+        
+            signalSpec = struct();
+            for i = 1:numel(sheetList)
+                sheetName = sheetList{i};
+                try
+                    tbl = readtable(filePath, 'Sheet', sheetName, 'PreserveVariableNames', true);
+                    signalSpec.(matlab.lang.makeValidName(sheetName)) = tbl;
+                catch ME
+                    warning('Failed to read sheet "%s": %s', sheetName, ME.message);
+                end
+            end % for
+        end % loadSignalPlotSpec
+
+        function calibratables = loadCalibratables(calibFile, sheetMap)
+            % Load calibration ranges from Excel file
+            if ~isstring(calibFile) && ~ischar(calibFile)
+                error('calibFile must be a string, got %s', class(calibFile));
+            end
+            if ~isfile(calibFile)
+                error('Calibration file not found: %s', calibFile);
+            end
+        
+            calibratables = struct();
+            sheetNames = fieldnames(sheetMap);
+        
+            for i = 1:numel(sheetNames)
+                sheet = sheetNames{i};
+                calDefs = sheetMap.(sheet);
+        
+                calNames = fieldnames(calDefs);
+                for j = 1:numel(calNames)
+                    calName = calNames{j};
+                    range = calDefs.(calName);
+        
+                    try
+                        tbl = readtable(calibFile, 'Sheet', sheet, 'Range', range, 'PreserveVariableNames', true);
+                        nameFromSheet = string(tbl{1,1});
+        
+                        sheetKey = matlab.lang.makeValidName(sheet);
+                        calKey   = matlab.lang.makeValidName(calName);
+        
+                        if ~isfield(calibratables, sheetKey)
+                            calibratables.(sheetKey) = struct();
+                        end
+        
+                        calibratables.(sheetKey).(calKey) = struct( ...
+                            'File', calibFile, ...
+                            'Sheet', sheet, ...
+                            'Range', range, ...
+                            'NameFromSheet', nameFromSheet, ...
+                            'Data', tbl ...
+                        );
+                    catch ME
+                        warning('Failed to load "%s" from sheet "%s" range "%s": %s', ...
+                                calName, sheet, range, ME.message);
+                    end
+                end % for j = ...
+            end % for i = ...
+        end % loadCalibratables
+    end % methods
+end % classdef Config
