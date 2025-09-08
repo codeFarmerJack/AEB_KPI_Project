@@ -92,7 +92,7 @@ classdef InputHandler
             %
             % Inputs:
             %   filePath - Path to the input MF4 file (e.g., 'rawdata/roadcast_debug_converted.mf4')
-            %   map - Struct or containers.Map with signal names as fields
+            %   map - Struct with fields A2LName, TactName, and Raster 
             %   resample_rate - Resampling interval in seconds (e.g., 0.01 for 100 Hz)
             %
             % Outputs:
@@ -113,11 +113,6 @@ classdef InputHandler
             signalNames = fieldnames(map); % Assuming map is a struct or containers.Map
             signalArgs = strjoin(signalNames, ' ');
             
-            % Debug: Display signalNames and signalArgs
-            disp('signalNames:');
-            disp(signalNames);
-            disp('signalArgs:');
-            disp(signalArgs);
 
             % Build Docker command
             dockerBin = '/usr/local/bin/docker';
