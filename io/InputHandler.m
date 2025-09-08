@@ -14,7 +14,7 @@ classdef InputHandler
             % Load visualization configuration from Config instance
             visConfig.Graphs = obj.Config.Graphs;               % All the graphs to be plotted
             visConfig.LineColors = obj.Config.LineColors;       % Line colors of these graphs
-            visConfig.Calibratables = obj.Config.Calibratables; % struct of calibratables 
+            visConfig.Calibratables = obj.Config.Calibratables
         end
 
         function processedData = processMF4Files(obj)
