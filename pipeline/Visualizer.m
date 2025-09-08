@@ -6,32 +6,41 @@ classdef Visualizer
     end
 
     methods
-        function obj = Visualizer(graphFormat, lineColor, calStruct)
-            % Constructor: unpack calibratables internally
-            obj.graphFormat = graphFormat;
-            obj.lineColor = lineColor;
-            obj.calibratables = obj.unpackCalibratables(calStruct);
+        function obj = Visualizer(handler)
+            % Constructor: initializes Visualizer from handler struct
+            obj.graphFormat   = handler.Config.Graphs;
+            obj.lineColor     = handler.Config.LineColors;
+            obj.calibratables = obj.unpackCalibratables(handler.Config.Calibratables);
         end
 
         function plot(obj)
+            % Select folder once
+            originpath = pwd;
+            seldatapath = uigetdir(originpath, 'Select folder containing CSV files');
+            if seldatapath == 0
+                warning('No folder selected. Plotting aborted.');
+                return;
+            end
+
             % Main plotting dispatcher
             numGraphs = height(obj.graphFormat);
 
             for j = 2:numGraphs
-                plotType = lower(strtrim(obj.graphFormat.Format{j}));
+                plotType = lower(strtrim(obj.graphFormat.plotType{j}));
 
                 switch plotType
                     case 'scatter'
-                        Vis_ScatterPlotter(obj.graphFormat, obj.lineColor, obj.calibratables, j);
+                        Vis_ScatterPlotter(obj.graphFormat, obj.lineColor, obj.calibratables, j, seldatapath);
                     case 'stem'
-                        Vis_StemPlotter(obj.graphFormat, obj.lineColor, obj.calibratables, j);
+                        Vis_StemPlotter(obj.graphFormat, obj.lineColor, obj.calibratables, j, seldatapath);
                     case 'pie'
-                        Vis_PiePlotter(obj.graphFormat, obj.lineColor, obj.calibratables, j);
+                        Vis_PiePlotter(obj.graphFormat, obj.lineColor, obj.calibratables, j, seldatapath);
                     otherwise
                         warning('Unsupported plot type "%s" at row %d. Skipping.', plotType, j);
                 end
             end
         end
+
     end
 
     methods (Access = private)
