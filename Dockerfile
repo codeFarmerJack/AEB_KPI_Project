@@ -9,11 +9,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python packages
-RUN pip3 install asammdf scipy pandas argparse
+RUN pip3 install asammdf scipy pandas argparse numpy 
 
 # Create utils directory and copy script
 RUN mkdir -p /data/utils
-COPY utils/mdf2mat.py /data/utils/mdf2mat.py
+COPY +utils/mdf2mat.py /data/utils/mdf2mat.py
 RUN chmod +x /data/utils/mdf2mat.py
 
 CMD ["bash"]

@@ -1,38 +1,53 @@
 classdef Config
     properties
-        Signals         % Table from sheet 'VbRcSignals'
-        Graphs          % Table from sheet 'Graphs'
-        LineColors      % Table from sheet 'lineColors'
-        Calibratables   % Struct of calibration tables 
+        Signals               % Table from sheet 'VbRcSignals'
+        Graphs                % Table from sheet 'Graphs'
+        LineColors            % Table from sheet 'lineColors'
+        Calibratables         % Struct of calibration tables
+        jsonConfigPath        % Path to JSON config file
+        signalMapExcel        % Name of signal mapping Excel file
+
+        % >>> New properties
+        signalPlotSpecPath    % Full path to SignalPlotSpec Excel file
+        signalPlotSpecName    % File name of SignalPlotSpec Excel file
+        calibrationFilePath   % Full path to Calibration Excel file
+        calibrationFileName   % File name of Calibration Excel file
     end
 
     methods
         function obj = Config()
-            % Empty  constructor; use fromJSON to populate
+            % Empty constructor; use fromJSON to populate
         end
     end
 
     methods (Static)
-        function obj = fromJSON(jsonFilePath)
+        function obj = fromJSON(jsonConfigPath)
             % Create Config object from JSON file
-            configStruct = Config.loadConfig(jsonFilePath);
+            configStruct = Config.loadConfig(jsonConfigPath);
 
             % Create empty object
             obj = Config();
+            obj.jsonConfigPath = jsonConfigPath;
 
             % Load SignalPlotSpec sheets
-            specPath = configStruct.SignalPlotSpec.FilePath;
+            specPath  = configStruct.SignalPlotSpec.FilePath;
             sheetList = configStruct.SignalPlotSpec.Sheets;
             signalSpec = Config.loadSignalPlotSpec(specPath, sheetList);
 
-            obj.Signals    = signalSpec.VbRcSignals;
-            obj.Graphs     = signalSpec.Graphs;
-            obj.LineColors = signalSpec.LineColors;
+            obj.Signals            = signalSpec.VbRcSignals;
+            obj.Graphs             = signalSpec.Graphs;
+            obj.LineColors         = signalSpec.LineColors;
+            obj.signalPlotSpecPath = specPath;                   % <<< store full path
+            [~, specName, specExt] = fileparts(specPath);
+            obj.signalPlotSpecName = [specName, specExt];        % <<< store file name only
 
             % Load Calibratables
             calibFile = configStruct.Calibration.FilePath;
             sheetDefs = configStruct.Calibration.Sheets;
-            obj.Calibratables = Config.loadCalibratables(calibFile, sheetDefs);
+            obj.Calibratables       = Config.loadCalibratables(calibFile, sheetDefs);
+            obj.calibrationFilePath = calibFile;                 % <<< store full path
+            [~, calibName, calibExt] = fileparts(calibFile);
+            obj.calibrationFileName = [calibName, calibExt];     % <<< store file name only
         end
     end
 

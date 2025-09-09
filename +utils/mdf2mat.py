@@ -1,154 +1,100 @@
+#!/usr/bin/env python3
+import sys
 import argparse
+import scipy.io as sio
 import pandas as pd
+import numpy as np
 from asammdf import MDF
-from scipy.io import savemat
 
-
-def removeMdfSuffixes(channelNames):
-    """Removes suffixes from MDF channel names."""
-    result = []
-    for ch in channelNames:
-        parts = ch.split("\\")
-        result.append(parts[0])
-    return result
-
-
-def mdf2mat(datPath, signalDatabase=None, resample=None):
-    """
-    Python equivalent of simplified MATLAB mdf2mat_new (V1).
-    """
-    if signalDatabase is None or not isinstance(signalDatabase, pd.DataFrame):
-        raise ValueError("signalDatabase (pandas.DataFrame) is required")
-
-    mdfObj = MDF(datPath)
-    sigs = pd.DataFrame(mdfObj.channels_db)
-    sigsCopy = [ch.replace(".", "_") for ch in sigs["name"]]
-    sigsCopy = removeMdfSuffixes(sigsCopy)
-
-    # --- Determine which signals to read ---
-    if "GenericName" in signalDatabase.columns:
-        sigList = signalDatabase["GenericName"].unique()
-    elif "TactName" in signalDatabase.columns:
-        sigList = signalDatabase["TactName"].unique()
-    else:
-        sigList = []
-
-    toRead = []
-    for sig in sigList:
-        if "GenericName" in signalDatabase.columns:
-            locs = signalDatabase["GenericName"].str.lower() == str(sig).lower()
-        elif "TactName" in signalDatabase.columns:
-            locs = signalDatabase["TactName"].str.lower() == str(sig).lower()
-        else:
-            locs = pd.Series([False] * len(signalDatabase))
-
-        if "Synonym" in signalDatabase.columns:
-            syns = signalDatabase.loc[locs, "Synonym"].tolist()
-        elif "A2LName" in signalDatabase.columns:
-            syns = signalDatabase.loc[locs, "A2LName"].tolist()
-        else:
-            syns = []
-
-        flatSyns = []
-        for s in syns:
-            if isinstance(s, (list, tuple)):
-                flatSyns.extend(s)
-            else:
-                flatSyns.append(s)
-
-        for syn in flatSyns:
-            if syn and isinstance(syn, str):
-                sigToFind = syn.replace(".", "_")
-                if sigToFind.lower() in [s.lower() for s in sigsCopy]:
-                    idx = [j for j, sc in enumerate(sigsCopy) if sc.lower() == sigToFind.lower()][0]
-                    toRead.append({
-                        "fullName": sigs["name"].iloc[idx],
-                        "channel": sigs["channel_group_nr"].iloc[idx],
-                        "genericName": sig
-                    })
-
-    toReadDf = pd.DataFrame(toRead)
-    data = None
-    rasterList = []
-
-    if not toReadDf.empty:
-        for gName in toReadDf["genericName"].unique():
-            row = toReadDf[toReadDf["genericName"] == gName].iloc[0]
-            channelName = row["fullName"]
-
-            signal = mdfObj.get(channelName)
-            ts = signal.timestamps
-            values = signal.samples
-
-            if len(ts) > 1:
-                rasterVal = pd.Series(ts).diff().mean()
-            else:
-                rasterVal = None
-            rasterList.append([gName, rasterVal])
-
-            series = pd.Series(values, index=pd.to_datetime(ts, unit="s"))
-            if resample is not None:
-                series = series.resample(f"{resample}S").nearest()
-
-            df = series.to_frame(name=gName)
-            if data is None:
-                data = df
-            else:
-                data = data.join(df, how="outer")
-
-        raster = pd.DataFrame(rasterList, columns=["variable", "raster"])
-        used = toReadDf[["genericName", "fullName"]]
-    else:
-        data = pd.DataFrame()
-        raster = pd.DataFrame(columns=["variable", "raster"])
-        used = pd.DataFrame(columns=["genericName", "fullName"])
-
-    if not data.empty:
-        data = data.interpolate(method="nearest").ffill().bfill()
-
-    return data, mdfObj, used, sigs, raster
-
-
-def runMdf2mat(mf4Path, matPath, signalDbPath, resample=None):
-    """
-    Wrapper for MATLAB Docker call.
-    Reads mf4, applies signalDatabase, saves result as .mat
-    """
-    # Load signalDatabase
-    if signalDbPath.endswith(".csv"):
-        signalDb = pd.read_csv(signalDbPath)
-    else:
-        signalDb = pd.read_excel(signalDbPath)
-
-    data, mdfObj, used, sigs, raster = mdf2mat(
-        mf4Path,
-        signalDatabase=signalDb,
-        resample=resample,
-    )
-
-    # Export to MAT file (camelCase keys)
-    savemat(matPath, {
-        "data": data.to_dict(orient="list") if data is not None else {},
-        "used": used.to_dict(orient="list"),
-        "sigs": sigs.to_dict(orient="list"),
-        "raster": raster.to_dict(orient="list"),
-    })
-
-import argparse
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Convert MF4 to MAT with signal database mapping")
-
-    parser.add_argument("mf4Path", type=str, help="Path to input .mf4 file")
-    parser.add_argument("matPath", type=str, help="Path to output .mat file")
-    parser.add_argument("signalDbPath", type=str, help="Path to signal database (CSV or Excel)")
-    parser.add_argument("--resample", type=float, default=None, help="Resample rate in seconds")
-
+def main():
+    parser = argparse.ArgumentParser(description="Convert MF4 to MAT via asammdf")
+    parser.add_argument("input", help="Input MF4 file")
+    parser.add_argument("output", help="Output MAT file")
+    parser.add_argument("resample", type=float, help="Resample step in seconds (0 = no resample)")
+    parser.add_argument("signaldb", type=str, help="Path to SignalDatabase CSV file")
     args = parser.parse_args()
 
-    runMdf2mat(
-        args.mf4Path,
-        args.matPath,
-        args.signalDbPath,
-        resample=args.resample
-    )
+    print("==== DEBUG: Arguments ====")
+    print(f"Input: {args.input}")
+    print(f"Output: {args.output}")
+    print(f"Resample: {args.resample}")
+    print(f"SignalDB: {args.signaldb}")
+    print("==========================")
+
+    # Load MDF file
+    print("[DEBUG] Loading MDF file...")
+    mdf = MDF(args.input)
+    print(f"[DEBUG] MDF file loaded with {len(mdf.channels_db)} channels")
+
+    # Determine signals to extract
+    if args.signaldb:
+        print(f"[DEBUG] Trying to load SignalDatabase from {args.signaldb}")
+        try:
+            db = pd.read_csv(args.signaldb)
+            print(f"[DEBUG] SignalDatabase columns: {list(db.columns)}")
+            if 'GenericName' in db.columns:
+                sigs = db['GenericName'].dropna().unique().tolist()
+                print(f"[DEBUG] Using GenericName, found {len(sigs)} signals")
+            elif 'TactName' in db.columns:
+                sigs = db['TactName'].dropna().unique().tolist()
+                print(f"[DEBUG] Using TactName, found {len(sigs)} signals")
+            else:
+                sigs = []
+                print("[WARN] No GenericName or TactName column found in SignalDatabase")
+        except Exception as e:
+            print(f"[ERROR] Failed to load SignalDatabase: {e}")
+            sigs = list(mdf.channels_db.keys())  # Fallback to all signals
+            print(f"[DEBUG] Falling back to all {len(sigs)} signals from MDF")
+    else:
+        sigs = list(mdf.channels_db.keys())  # Default to all signals if no SignalDatabase
+        print(f"[DEBUG] No SignalDatabase provided, using all {len(sigs)} signals from MDF")
+
+    # Ensure sigs is a list
+    if not isinstance(sigs, list):
+        sigs = [sigs]
+
+    print(f"[DEBUG] Final signal list length: {len(sigs)}")
+
+    dfs = []
+    for sig in sigs:
+        if sig in mdf.channels_db:
+            print(f"[DEBUG] Extracting signal: {sig}")
+            df = mdf.get(sig).to_dataframe()
+            dfs.append(df)
+        else:
+            print(f"[WARN] Signal {sig} not found in {args.input}")
+
+    if not dfs:
+        print("[ERROR] No signals loaded")
+        sys.exit(1)
+
+    print(f"[DEBUG] Concatenating {len(dfs)} DataFrames")
+    data = pd.concat(dfs, axis=1)
+    print(f"[DEBUG] Combined DataFrame shape: {data.shape}")
+
+    # Resample if requested
+    if args.resample > 0:
+        print(f"[DEBUG] Resampling with step {args.resample}s")
+        data = data.resample(f"{args.resample}S").nearest()
+        print(f"[DEBUG] Data shape after resample: {data.shape}")
+
+    # Fill gaps
+    print("[DEBUG] Filling gaps with nearest values")
+    data = data.fillna(method="nearest")
+
+    # Convert to dict for MATLAB .mat export
+    mat_dict = {}
+    for col in data.columns:
+        mat_dict[col] = data[col].to_numpy()
+    print(f"[DEBUG] Prepared MAT dict with {len(mat_dict)} variables")
+
+    # Also include time vector
+    mat_dict["time"] = data.index.astype(np.int64) / 1e9  # ns → s
+    print("[DEBUG] Time vector added to MAT dict")
+
+    # Save to .mat
+    sio.savemat(args.output, mat_dict)
+    print(f"[OK] Saved {args.output} with {len(data)} samples and {len(data.columns)} signals.")
+
+if __name__ == "__main__":
+    main()

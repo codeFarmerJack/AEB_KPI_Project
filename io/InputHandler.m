@@ -1,21 +1,42 @@
 classdef InputHandler
     properties
-        Config          % Instance of Config class
-        RawDataPath     % Path to raw data folder - *.mf4, set during processing
+        % Config file reference
+        jsonConfigPath      % Path to JSON config file
+
+        % Data input
+        RawDataPath         % Path to raw data folder - *.mf4, set during processing
+
+        % Mirrored Config properties
+        Signals
+        Graphs
+        LineColors
+        Calibratables
+        signalMapExcel
+
+        signalPlotSpecPath
+        signalPlotSpecName
+        calibrationFilePath
+        calibrationFileName
     end
 
     methods
         function obj = InputHandler(config)
             % Constructor: accepts a Config object
-            obj.Config = config;
-        end
+            obj.jsonConfigPath      = config.jsonConfigPath;
 
-        function visConfig = loadVisualizationConfig(obj)
-            % Load visualization configuration from Config instance
-            visConfig.Graphs = obj.Config.Graphs;               % All the graphs to be plotted
-            visConfig.LineColors = obj.Config.LineColors;       % Line colors of these graphs
-            visConfig.Calibratables = obj.Config.Calibratables
+            % Mirror Config properties
+            obj.Signals             = config.Signals;
+            obj.Graphs              = config.Graphs;
+            obj.LineColors          = config.LineColors;
+            obj.Calibratables       = config.Calibratables;
+            obj.signalMapExcel      = config.signalMapExcel;
+
+            obj.signalPlotSpecPath  = config.signalPlotSpecPath;
+            obj.signalPlotSpecName  = config.signalPlotSpecName;
+            obj.calibrationFilePath = config.calibrationFilePath;
+            obj.calibrationFileName = config.calibrationFileName;
         end
+    end
 
         function processedData = processMF4Files(obj)
             % Process MF4 files: extract specified signals, save to MAT, and return processed data
@@ -43,15 +64,14 @@ classdef InputHandler
 
             % Get signals to extract from Config
             map = obj.Config.Signals; 
+            mapFile = fullfile(obj.jsonConfigPath, ); % Use JSON config path for mapping
+
             if isempty(map)
                 fprintf('No signals specified in Config for extraction.\n');
                 cd(curFolder);
                 processedData = {};
                 return;
             end
-
-            disp('map:');
-            disp(map);
 
             % Initialize cell array to store processed data
             processedData = cell(1, length(files));
@@ -66,7 +86,7 @@ classdef InputHandler
                 
                 try
                     % Call internal method to process MF4 file
-                    datVars = obj.processMF4FileInternally(fullPath, map);
+                    datVars = obj.processMF4FileInternally(fullPath, mapFile, 0.01); % Resample to 100 Hz
 
                     % Save to .mat file in the same folder as MF4 files
                     matFileName = fullfile(seldatapath, [name '.mat']);
@@ -87,32 +107,29 @@ classdef InputHandler
     end
 
     methods (Access = private)
-        function datVars = processMF4FileInternally(~, filePath, map, resample_rate)
+        function datVars = processMF4FileInternally(~, filePath, mapFile, resampleRate)
             % Use Docker + Python to process MF4 file with selected signals
             %
             % Inputs:
             %   filePath - Path to the input MF4 file (e.g., 'rawdata/roadcast_debug_converted.mf4')
             %   map - Struct with fields A2LName, TactName, and Raster 
-            %   resample_rate - Resampling interval in seconds (e.g., 0.01 for 100 Hz)
+            %   resampleRate - Resampling interval in seconds (e.g., 0.01 for 100 Hz)
             %
             % Outputs:
             %   datVars - Data loaded from the generated .mat file
 
             % Validate inputs
             if nargin < 4
-                resample_rate = 0.01; % Default to 10ms (100 Hz), adjust as needed
+                resampleRate = 0.01; % Default to 10ms (100 Hz), adjust as needed
             end
-            validateattributes(resample_rate, {'numeric'}, {'positive', 'scalar'}, ...
-                'processMF4FileInternally', 'resample_rate');
+            validateattributes(resampleRate, {'numeric'}, {'positive', 'scalar'}, ...
+                'processMF4FileInternally', 'resampleRate');
 
             % Extract folder and base name from filePath
             [folder, baseName, ~] = fileparts(filePath);
             matFullPath = fullfile(folder, [baseName '.mat']);
 
-            % Convert signal map (Config.Signals) into a list
-            signalNames = fieldnames(map); % Assuming map is a struct or containers.Map
-            signalArgs = strjoin(signalNames, ' ');
-            
+            disp('before docker run');
 
             % Build Docker command
             dockerBin = '/usr/local/bin/docker';
@@ -121,10 +138,12 @@ classdef InputHandler
             dockerCmd = sprintf([ ...
                 '%s run --rm -v "%s":/data mdf-python:latest ' ...
                 'python3 /data/utils/mdf2mat.py "/data/rawdata/%s.mf4" "/data/rawdata/%s.mat" %s %s' ...
-            ], dockerBin, projectRoot, baseName, baseName, num2str(resample_rate), signalArgs);
+            ], dockerBin, projectRoot, baseName, baseName, resampleRate, mapFile);
 
             % Run Docker
             status = system(dockerCmd);
+
+            disp('after docker run');
 
             if status ~= 0
                 error('Docker failed to process %s', filePath);
