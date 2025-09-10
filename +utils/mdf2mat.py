@@ -12,6 +12,7 @@ def main():
     parser.add_argument("output", help="Output MAT file")
     parser.add_argument("resample", type=float, help="Resample step in seconds (0 = no resample)")
     parser.add_argument("signaldb", type=str, help="Path to SignalDatabase CSV file")
+    parser.add_argument("sheetName", type=str, help="Signal Database sheet name")
     args = parser.parse_args()
 
     print("==== DEBUG: Arguments ====")
@@ -19,6 +20,7 @@ def main():
     print(f"Output: {args.output}")
     print(f"Resample: {args.resample}")
     print(f"SignalDB: {args.signaldb}")
+    print(f"sheetName: {args.sheetName}")
     print("==========================")
 
     # Load MDF file

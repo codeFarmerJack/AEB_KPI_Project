@@ -36,7 +36,6 @@ classdef InputHandler
             obj.calibrationFilePath = config.calibrationFilePath;
             obj.calibrationFileName = config.calibrationFileName;
         end
-    end
 
         function processedData = processMF4Files(obj)
             % Process MF4 files: extract specified signals, save to MAT, and return processed data
@@ -62,16 +61,8 @@ classdef InputHandler
                 return;
             end
 
-            % Get signals to extract from Config
-            map = obj.Config.Signals; 
-            mapFile = fullfile(obj.jsonConfigPath, ); % Use JSON config path for mapping
-
-            if isempty(map)
-                fprintf('No signals specified in Config for extraction.\n');
-                cd(curFolder);
-                processedData = {};
-                return;
-            end
+            % Get path to signal mapping Excel file
+            mapFile = obj.signalPlotSpecPath;
 
             % Initialize cell array to store processed data
             processedData = cell(1, length(files));
@@ -134,11 +125,15 @@ classdef InputHandler
             % Build Docker command
             dockerBin = '/usr/local/bin/docker';
             projectRoot = fileparts(fileparts(filePath)); % Go up from rawdata to project root
+            sheetName = 'VbRcSignals'; % Signal Database sheet name
 
             dockerCmd = sprintf([ ...
                 '%s run --rm -v "%s":/data mdf-python:latest ' ...
-                'python3 /data/utils/mdf2mat.py "/data/rawdata/%s.mf4" "/data/rawdata/%s.mat" %s %s' ...
-            ], dockerBin, projectRoot, baseName, baseName, resampleRate, mapFile);
+                'python3 /data/utils/mdf2mat.py "/data/rawdata/%s.mf4" "/data/rawdata/%s.mat" %s %s %s' ...
+            ], dockerBin, projectRoot, baseName, baseName, resampleRate, mapFile, sheetName);
+
+            disp(dockerCmd);
+            dockerCmd = strtrim(dockerCmd);
 
             % Run Docker
             status = system(dockerCmd);

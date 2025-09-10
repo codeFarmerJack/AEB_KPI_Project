@@ -112,51 +112,46 @@ classdef Config
             end % for
         end % loadSignalPlotSpec
 
+
         function calibratables = loadCalibratables(calibFile, sheetMap)
-            % Load calibration ranges from Excel file
+            % Load calibration ranges from Excel file into a 2-level struct
+            % with only .Data tables
+            
             if ~isstring(calibFile) && ~ischar(calibFile)
                 error('calibFile must be a string, got %s', class(calibFile));
             end
             if ~isfile(calibFile)
                 error('Calibration file not found: %s', calibFile);
             end
-        
+
             calibratables = struct();
             sheetNames = fieldnames(sheetMap);
-        
+
             for i = 1:numel(sheetNames)
                 sheet = sheetNames{i};
                 calDefs = sheetMap.(sheet);
-        
+
                 calNames = fieldnames(calDefs);
                 for j = 1:numel(calNames)
                     calName = calNames{j};
                     range = calDefs.(calName);
-        
+
                     try
-                        tbl = readtable(calibFile, 'Sheet', sheet, 'Range', range, 'PreserveVariableNames', true);
-                        nameFromSheet = string(tbl{1,1});
-        
-                        sheetKey = matlab.lang.makeValidName(sheet);
+                        tbl = readtable(calibFile, 'Sheet', sheet, ...
+                            'Range', range, 'PreserveVariableNames', true);
+
                         calKey   = matlab.lang.makeValidName(calName);
-        
-                        if ~isfield(calibratables, sheetKey)
-                            calibratables.(sheetKey) = struct();
-                        end
-        
-                        calibratables.(sheetKey).(calKey) = struct( ...
-                            'File', calibFile, ...
-                            'Sheet', sheet, ...
-                            'Range', range, ...
-                            'NameFromSheet', nameFromSheet, ...
-                            'Data', tbl ...
-                        );
+
+                        % Store ONLY the Data table
+                        calibratables.(calKey) = tbl;
+
                     catch ME
                         warning('Failed to load "%s" from sheet "%s" range "%s": %s', ...
                                 calName, sheet, range, ME.message);
+                        calibratables.(calKey) = [];
                     end
-                end % for j = ...
-            end % for i = ...
+                end
+            end
         end % loadCalibratables
     end % methods
 end % classdef Config
