@@ -8,9 +8,9 @@ classdef Visualizer
     methods
         function obj = Visualizer(handler)
             % Constructor: initializes Visualizer from handler struct
-            obj.graphFormat   = handler.Config.Graphs;
-            obj.lineColor     = handler.Config.LineColors;
-            obj.calibratables = obj.unpackCalibratables(handler.Config.Calibratables);
+            obj.graphFormat   = handler.Graphs;
+            obj.lineColor     = handler.LineColors;
+            obj.calibratables = handler.Calibratables;
         end
 
         function plot(obj)
@@ -41,29 +41,5 @@ classdef Visualizer
             end
         end
 
-    end
-
-    methods (Access = private)
-        function unpacked = unpackCalibratables(~, calStruct)
-            % Internal method to unpack nested calibratables
-            unpacked = struct();
-            categories = fieldnames(calStruct);
-
-            for i = 1:numel(categories)
-                categoryStruct = calStruct.(categories{i});
-                signals = fieldnames(categoryStruct);
-
-                for j = 1:numel(signals)
-                    signalName = signals{j};
-                    signalStruct = categoryStruct.(signalName);
-
-                    if isfield(signalStruct, 'Data')
-                        unpacked.(signalName) = signalStruct.Data;
-                    else
-                        warning('Skipping "%s" in "%s": no .Data field found.', signalName, categories{i});
-                    end
-                end
-            end
-        end
     end
 end

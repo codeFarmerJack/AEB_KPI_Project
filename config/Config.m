@@ -6,12 +6,12 @@ classdef Config
         Calibratables         % Struct of calibration tables
         jsonConfigPath        % Path to JSON config file
         signalMapExcel        % Name of signal mapping Excel file
-
-        % >>> New properties
         signalPlotSpecPath    % Full path to SignalPlotSpec Excel file
         signalPlotSpecName    % File name of SignalPlotSpec Excel file
         calibrationFilePath   % Full path to Calibration Excel file
         calibrationFileName   % File name of Calibration Excel file
+        kpiSchemaPath         % Full path to kpiSchema JSON file
+        kpiSchemaFileName     % File name of kpiSchema JSON file
     end
 
     methods
@@ -28,6 +28,29 @@ classdef Config
             % Create empty object
             obj = Config();
             obj.jsonConfigPath = jsonConfigPath;
+
+            % Load kpiSchema path and filename if present
+            if isfield(configStruct, 'kpiSchema') && isfield(configStruct.kpiSchema, 'FilePath')
+                kpiSchemaPath = configStruct.kpiSchema.FilePath;
+                if isstring(kpiSchemaPath) || ischar(kpiSchemaPath)
+                    if ~isempty(kpiSchemaPath)  % Additional check for empty path
+                        obj.kpiSchemaPath = kpiSchemaPath;
+                        [~, kpiName, kpiExt] = fileparts(kpiSchemaPath);  % Extracts name and ext safely
+                        obj.kpiSchemaFileName = string([kpiName, kpiExt]);  % Combine name + extension
+                    else
+                        warning('kpiSchema.FilePath is empty. Setting defaults.');
+                        obj.kpiSchemaPath = '';
+                        obj.kpiSchemaFileName = '';
+                    end
+                else
+                    warning('kpiSchema.FilePath should be a string. Ignoring invalid entry.');
+                    obj.kpiSchemaPath = '';
+                    obj.kpiSchemaFileName = '';
+                end
+            else
+                obj.kpiSchemaPath = '';
+                obj.kpiSchemaFileName = '';
+            end
 
             % Load SignalPlotSpec sheets
             specPath  = configStruct.SignalPlotSpec.FilePath;

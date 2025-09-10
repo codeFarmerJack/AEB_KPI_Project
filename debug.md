@@ -11,5 +11,9 @@ processedData = handler.processMF4Files();
 # Process MF4 file 
 processedData = handler.processMF4Files();
 
+# AEB event detector 
+eventDet = EventDetector()
+
+eventDet.processAllFiles()
 
 
