@@ -3,10 +3,17 @@ classdef KPIExtractor
     properties
         kpiTable
         signalMatChunk
-        cutoffFreq = 10
-        timeSampleOffset
-        thresholds
+        calibratables
         fileList
+
+        % Constant Parameter 
+        PB_TGT_DECEL = -6       % Target deceleration for PB in m/s²  
+        FB_TGT_DECEL = -15      % Target deceleration for FB in m/s²
+        TGT_TOL = 0.2           % Tolerance for target deceleration
+        AEB_END_THD = -4.9      % Threshold to determine AEB end event in m/s²
+                                % above this value AEB is considered ended
+        TIME_IDX_OFFSET = 300   % Time offset to account for latAccel, yawRate and steering
+        CUTOFF_FREQ = 10        % cutoff frequency used for filtering
     end
     
     methods
@@ -18,26 +25,25 @@ classdef KPIExtractor
             
             % Initialize kpiTable
             obj.kpiTable = utils.createKpiTableFromJson(cfg.kpiSchemaPath, length(fileList));
-            obj.timeSampleOffset = 3000 / obj.cutoffFreq;
             
-            % Load and store thresholds
-            obj.thresholds.SteeringWheelAngle_Th = cfg.Calibratables.SteeringWheelAngle_Th;
-            obj.thresholds.AEB_SteeringAngleRate_Override = cfg.Calibratables.AEB_SteeringAngleRate_Override;
-            obj.thresholds.PedalPosProIncrease_Th = cfg.Calibratables.PedalPosProIncrease_Th;
-            obj.thresholds.PedalPosProIncrease_Th{2, :} = obj.thresholds.PedalPosProIncrease_Th{2, :} * 100;
-            obj.thresholds.YawrateSuspension_Th = cfg.Calibratables.YawrateSuspension_Th;
-            obj.thresholds.LateralAcceleration_th = cfg.Calibratables.LateralAcceleration_th;
+            % Load and store calibratables
+            obj.calibratables.SteeringWheelAngle_Th = cfg.calibratables.SteeringWheelAngle_Th;
+            obj.calibratables.AEB_SteeringAngleRate_Override = cfg.calibratables.AEB_SteeringAngleRate_Override;
+            obj.calibratables.PedalPosProIncrease_Th = cfg.calibratables.PedalPosProIncrease_Th;
+            obj.calibratables.PedalPosProIncrease_Th{2, :} = obj.calibratables.PedalPosProIncrease_Th{2, :} * 100;
+            obj.calibratables.YawrateSuspension_Th = cfg.calibratables.YawrateSuspension_Th;
+            obj.calibratables.LateralAcceleration_th = cfg.calibratables.LateralAcceleration_th;
         end
         
         function [seldatapath, fileList] = selectFolder(~)
             % Select folder containing .mat files
-            originpath = pwd; % Store current folder
+            originpath = pwd;                   % Store current folder
             seldatapath = uigetdir(originpath); % Select folder containing log files
             if seldatapath == 0
                 error('No folder selected. Please select a valid folder containing .mat files.');
             end
-            cd(seldatapath); % Navigate to selected folder
-            fileList = dir('*.mat'); % Get all .mat files in the folder
+            cd(seldatapath);            % Navigate to selected folder
+            fileList = dir('*.mat');    % Get all .mat files in the folder
             if isempty(fileList)
                 error('No .mat files found in the selected folder.');
             end
@@ -57,40 +63,60 @@ classdef KPIExtractor
                 
                 % Preprocess signals
                 obj.signalMatChunk.VehicleSpeed = round(obj.signalMatChunk.VehicleSpeed * 3.6, 1);
-                obj.signalMatChunk.A2_Filt = utils.accelFilter(obj.signalMatChunk.Time, obj.signalMatChunk.A2, obj.cutoffFreq);
-                obj.signalMatChunk.A1_Filt = utils.accelFilter(obj.signalMatChunk.Time, obj.signalMatChunk.A1, obj.cutoffFreq);
+                obj.signalMatChunk.A2_Filt = utils.accelFilter(obj.signalMatChunk.Time, obj.signalMatChunk.A2, obj.CUTOFF_FREQ);
+                obj.signalMatChunk.A1_Filt = utils.accelFilter(obj.signalMatChunk.Time, obj.signalMatChunk.A1, obj.CUTOFF_FREQ);
                 
                 % Logging
                 obj.kpiTable.label(i) = filename;
                 obj.kpiTable.condTrue(i) = true;
                 obj.kpiTable.logTime(i) = round(seconds(obj.signalMatChunk.Time(1)), 2);
                 
-                % Locate intervention start (M0)
-                [AEB_Req, ~, ~] = utils.findFirstLastIndicesAdvanced(obj.signalMatChunk.DADCAxLmtIT4, -6, 'less', 0.1);
-                if isempty(AEB_Req)
-                    warning('No AEB intervention detected in file %s', filename);
+                % Locate AEB intervention start - M0
+                [aebStartIdx, M0] = utils.findAEBInterventionStart(obj);
+                if isempty(aebStartIdx)
+                    warning('No AEB intervention start found in file %s. Skipping KPI calculations.', filename);
+                    obj.kpiTable.condTrue(i) = false;
                     continue;
                 end
-                
-                M0 = obj.signalMatChunk.Time(AEB_Req(1));
-                obj.kpiTable.m0IntvStart(i) = round(seconds(M0), 2);
-                vehSpd = obj.signalMatChunk.VehicleSpeed(AEB_Req(1));
+
+                obj.kpiTable.m0IntvStart(i) = round(seconds(M0), 2);            
+                vehSpd = obj.signalMatChunk.VehicleSpeed(aebStartIdx(1));
                 obj.kpiTable.vehSpd(i) = vehSpd;
+
+                % Locate AEB intervention end - M2
+                [isVehStopped, aebEndIdx, M2] = utils.findAEBInterventionEnd(obj, aebStartIdx(1));
+
+                obj.kpiTable.m2IntvEnd(i) = round(seconds(M2), 2);
+                obj.kpiTable.isVehStopped(i) = isVehStopped;
+
+                %% Calculate Intervention Duration
+                intvDur = M2 - M0;
+                obj.kpiTable.intvDur(i) = round(seconds(intvDur), 2);
+
+                %% Longitudinal Clearance
+                longGap = round(obj.signalMatChunk.Long_Clearance(aebEndIdx), 2);
+                obj.kpiTable.longGap(i) = longGap;
                 
-                % Interpolate thresholds
-                steerAngTh = utils.interpolateThresholdClamped(obj.thresholds.SteeringWheelAngle_Th, vehSpd);
-                steerAngRateTh = utils.interpolateThresholdClamped(obj.thresholds.AEB_SteeringAngleRate_Override, vehSpd);
-                pedalPosIncTh = utils.interpolateThresholdClamped(obj.thresholds.PedalPosProIncrease_Th, vehSpd);
-                yawRateSuspTh = utils.interpolateThresholdClamped(obj.thresholds.YawrateSuspension_Th, vehSpd);
-                latAccelTh = utils.interpolateThresholdClamped(obj.thresholds.LateralAcceleration_th, vehSpd);
+                % Interpolate calibratables
+                steerAngTh = utils.interpolateThresholdClamped(obj.calibratables.SteeringWheelAngle_Th, vehSpd);
+                steerAngRateTh = utils.interpolateThresholdClamped(obj.calibratables.AEB_SteeringAngleRate_Override, vehSpd);
+                pedalPosIncTh = utils.interpolateThresholdClamped(obj.calibratables.PedalPosProIncrease_Th, vehSpd);
+                yawRateSuspTh = utils.interpolateThresholdClamped(obj.calibratables.YawrateSuspension_Th, vehSpd);
+                latAccelTh = utils.interpolateThresholdClamped(obj.calibratables.LateralAcceleration_th, vehSpd);
                 
+                obj.kpiTable.steerAngTh(i) = steerAngTh;
+                obj.kpiTable.steerAngRateTh(i) = steerAngRateTh;
+                obj.kpiTable.pedalPosIncTh(i) = pedalPosIncTh;
+                obj.kpiTable.yawRateSuspTh(i) = yawRateSuspTh;      
+                obj.kpiTable.latAccelTh(i) = latAccelTh;    
+
                 % KPI calculations
-                obj.kpiTable = kpiThrottle(obj.kpiTable, i, obj.signalMatChunk, AEB_Req, pedalPosIncTh);
-                obj.kpiTable = kpiSteeringWheel(obj.kpiTable, i, obj.signalMatChunk, AEB_Req, steerAngTh, steerAngRateTh, obj.timeSampleOffset);
-                obj.kpiTable = kpiLatAccel(obj.kpiTable, i, obj.signalMatChunk, AEB_Req, latAccelTh, obj.timeSampleOffset);
-                obj.kpiTable = kpiYawRate(obj.kpiTable, i, obj.signalMatChunk, AEB_Req, yawRateSuspTh, obj.timeSampleOffset);
-                obj.kpiTable = kpiBrakeMode(obj.kpiTable, i, obj.signalMatChunk, AEB_Req, obj.cutoffFreq);
-                obj.kpiTable = kpiLatency(obj.kpiTable, i, obj.signalMatChunk, AEB_Req, obj.cutoffFreq);
+                obj.kpiTable = kpiThrottle(obj, i, aebStartIdx, pedalPosIncTh);
+                obj.kpiTable = kpiSteeringWheel(obj, i, aebStartIdx, steerAngTh, steerAngRateTh);
+                obj.kpiTable = kpiLatAccel(obj, i, aebStartIdx, latAccelTh);
+                obj.kpiTable = kpiYawRate(obj, i, aebStartIdx, yawRateSuspTh);
+                obj.kpiTable = kpiBrakeMode(obj, i, aebStartIdx);
+                obj.kpiTable = kpiLatency(obj, i, aebStartIdx);
 
             end
             % Notify user when done

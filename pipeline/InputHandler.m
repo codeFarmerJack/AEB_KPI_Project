@@ -1,22 +1,14 @@
 classdef InputHandler
     properties
-        % Config file reference
         jsonConfigPath      % Path to JSON config file
-
-        % Data input
-        RawDataPath         % Path to raw data folder - *.mf4, set during processing
-
+        rawDataPath         % Path to raw data folder - *.mf4, set during processing
         % Mirrored Config properties
-        Signals
-        Graphs
-        LineColors
-        Calibratables
-        signalMapExcel
-
+        signalMap
+        graphSpec          % Table from sheet 'graphSpec'
+        lineColors         % Table from sheet 'lineColors'
+        % Additional properties for convenience
         signalPlotSpecPath
         signalPlotSpecName
-        calibrationFilePath
-        calibrationFileName
     end
 
     methods
@@ -25,16 +17,12 @@ classdef InputHandler
             obj.jsonConfigPath      = config.jsonConfigPath;
 
             % Mirror Config properties
-            obj.Signals             = config.Signals;
-            obj.Graphs              = config.Graphs;
-            obj.LineColors          = config.LineColors;
-            obj.Calibratables       = config.Calibratables;
-            obj.signalMapExcel      = config.signalMapExcel;
-
+            obj.graphSpec           = config.graphSpec;
+            obj.lineColors          = config.lineColors;
+            obj.signalMap           = config.signalMap;
+        
             obj.signalPlotSpecPath  = config.signalPlotSpecPath;
             obj.signalPlotSpecName  = config.signalPlotSpecName;
-            obj.calibrationFilePath = config.calibrationFilePath;
-            obj.calibrationFileName = config.calibrationFileName;
         end
 
         function processedData = processMF4Files(obj)
@@ -49,8 +37,8 @@ classdef InputHandler
                 return;
             end
 
-            % Set RawDataPath to the selected folder
-            obj.RawDataPath = seldatapath;
+            % Set rawDataPath to the selected folder
+            obj.rawDataPath = seldatapath;
 
             % Verify if folder contains MF4 files
             files = dir(fullfile(seldatapath, '*.mf4'));

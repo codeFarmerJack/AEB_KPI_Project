@@ -1,10 +1,10 @@
-function Vis_ScatterPlotter(graphFormat, lineColor, calibratables, graphIndex, seldatapath)
+function Vis_ScatterPlotter(graphSpec, lineColor, calibratables, graphIndex, seldatapath)
 % Vis_ScatterPlotter - Generates scatter plot for a specific graph index
 % Inputs:
-%   graphFormat   - Table containing graph metadata
+%   graphSpec     - Table containing graph metadata
 %   lineColor     - Cell array or table of line colors
 %   calibratables - Struct of unpacked calibratable data
-%   graphIndex    - Row index in graphFormat to plot
+%   graphIndex    - Row index in graphSpec to plot
 %   seldatapath   - Path to folder containing CSV files
 
     originpath = pwd;
@@ -23,12 +23,12 @@ function Vis_ScatterPlotter(graphFormat, lineColor, calibratables, graphIndex, s
     fig = figure; hold on;
     set(fig, 'Position', [10 10 900 600]);
     xlim([-5 95]);
-    ylim([graphFormat.Min_Axis_value(graphIndex), graphFormat.Max_Axis_value(graphIndex)]);
-    xlabel(char(graphFormat.Output_name(1)), 'Interpreter', 'none');
-    ylabel(char(graphFormat.Output_name(graphIndex)), 'Interpreter', 'none');
-    title(char(graphFormat.Legend(graphIndex)));
+    ylim([graphSpec.Min_Axis_value(graphIndex), graphSpec.Max_Axis_value(graphIndex)]);
+    xlabel(char(graphSpec.Output_name(1)), 'Interpreter', 'none');
+    ylabel(char(graphSpec.Output_name(graphIndex)), 'Interpreter', 'none');
+    title(char(graphSpec.Legend(graphIndex)));
 
-    Calibration_Limit = char(graphFormat.Calibration_Lim(graphIndex));
+    Calibration_Limit = char(graphSpec.Calibration_Lim(graphIndex));
 
     for i = 1:N
         filename = files(i).name;
@@ -36,12 +36,15 @@ function Vis_ScatterPlotter(graphFormat, lineColor, calibratables, graphIndex, s
             "ReadRowNames", true, 'Delimiter', ',');
         data = readtable(filename, opts);
 
-        Filt_Idx = find(data.(char(graphFormat.Condition_Var(graphIndex))));
-        x = round(data.Veh_Spd(Filt_Idx), 1);
-        y = data.(char(graphFormat.Reference(graphIndex)))(Filt_Idx);
+        filtIdx = find(data.(char(graphSpec.Condition_Var(graphIndex))));
+        legendName = char(graphSpec.Legend(graphIndex));
+        
+        x = round(data.vehSpd(filtIdx), 1);
+        y = data.(char(graphSpec.Reference(graphIndex)))(filtIdx);
 
         plot(x, y, 'LineStyle', 'none', 'Marker', '*', ...
-            'DisplayName', filename, 'Color', lineColor{i,:});
+            'DisplayName', legendName, 'Color', lineColor{i,:});
+        
     end
 
     % Extract and plot calibration limit if specified
@@ -61,7 +64,7 @@ function Vis_ScatterPlotter(graphFormat, lineColor, calibratables, graphIndex, s
     grid on;
     set(gca, 'xminorgrid', 'on', 'yminorgrid', 'on');
 
-    fig_name = strcat('Fig_', num2str(graphIndex-1, '%02d'), " - ", char(graphFormat.Legend(graphIndex)));
+    fig_name = strcat('Fig_', num2str(graphIndex-1, '%02d'), " - ", char(graphSpec.Legend(graphIndex)));
     print(fig, fig_name, '-dpng', '-r400');
 
     cd(originpath);

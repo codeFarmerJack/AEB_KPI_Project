@@ -1,16 +1,16 @@
 classdef Visualizer
     properties
-        graphFormat     % metadata of graph
-        lineColor       % color of the curve
-        calibratables   % unpacked calibratables
+        graphSpec      % metadata of graph
+        lineColor      % color of the curve
+        calibratables  % unpacked calibratables
     end
 
     methods
-        function obj = Visualizer(handler)
+        function obj = Visualizer(config)
             % Constructor: initializes Visualizer from handler struct
-            obj.graphFormat   = handler.Graphs;
-            obj.lineColor     = handler.LineColors;
-            obj.calibratables = handler.Calibratables;
+            obj.graphSpec     = config.graphSpec;
+            obj.lineColor     = config.lineColors;
+            obj.calibratables = config.calibratables;
         end
 
         function plot(obj)
@@ -23,23 +23,22 @@ classdef Visualizer
             end
 
             % Main plotting dispatcher
-            numGraphs = height(obj.graphFormat);
+            numGraphs = height(obj.graphSpec);
 
             for j = 2:numGraphs
-                plotType = lower(strtrim(obj.graphFormat.plotType{j}));
+                plotType = lower(strtrim(obj.graphSpec.plotType{j}));
 
-                switch plotType
+                switch lower(plotType)
                     case 'scatter'
-                        Vis_ScatterPlotter(obj.graphFormat, obj.lineColor, obj.calibratables, j, seldatapath);
+                        Vis_ScatterPlotter(obj.graphSpec, obj.lineColor, obj.calibratables, j, seldatapath);
                     case 'stem'
-                        Vis_StemPlotter(obj.graphFormat, obj.lineColor, obj.calibratables, j, seldatapath);
+                        Vis_StemPlotter(obj.graphSpec, obj.lineColor, obj.calibratables, j, seldatapath);
                     case 'pie'
-                        Vis_PiePlotter(obj.graphFormat, obj.lineColor, obj.calibratables, j, seldatapath);
+                        Vis_PiePlotter(obj.graphSpec, obj.lineColor, obj.calibratables, j, seldatapath);
                     otherwise
                         warning('Unsupported plot type "%s" at row %d. Skipping.', plotType, j);
                 end
             end
-        end
-
-    end
-end
+        end % function plot
+    end % methods
+end % classdef Visualizer

@@ -1,11 +1,10 @@
 classdef Config
     properties
-        Signals               % Table from sheet 'VbRcSignals'
-        Graphs                % Table from sheet 'Graphs'
-        LineColors            % Table from sheet 'lineColors'
-        Calibratables         % Struct of calibration tables
+        graphSpec             % Table from sheet 'graphSpec'
+        lineColors            % Table from sheet 'lineColors'
+        calibratables         % Struct of calibration tables
         jsonConfigPath        % Path to JSON config file
-        signalMapExcel        % Name of signal mapping Excel file
+        signalMap             % Name of signal mapping Excel file
         signalPlotSpecPath    % Full path to SignalPlotSpec Excel file
         signalPlotSpecName    % File name of SignalPlotSpec Excel file
         calibrationFilePath   % Full path to Calibration Excel file
@@ -55,19 +54,19 @@ classdef Config
             % Load SignalPlotSpec sheets
             specPath  = configStruct.SignalPlotSpec.FilePath;
             sheetList = configStruct.SignalPlotSpec.Sheets;
-            signalSpec = Config.loadSignalPlotSpec(specPath, sheetList);
+            signalMapPlotSpec = Config.loadSignalMapPlotSpec(specPath, sheetList);
 
-            obj.Signals            = signalSpec.VbRcSignals;
-            obj.Graphs             = signalSpec.Graphs;
-            obj.LineColors         = signalSpec.LineColors;
+            obj.signalMap          = signalMapPlotSpec.vbRcSignals;
+            obj.graphSpec          = signalMapPlotSpec.graphSpec;
+            obj.lineColors         = signalMapPlotSpec.lineColors;
             obj.signalPlotSpecPath = specPath;                   % <<< store full path
             [~, specName, specExt] = fileparts(specPath);
             obj.signalPlotSpecName = [specName, specExt];        % <<< store file name only
 
-            % Load Calibratables
+            % Load calibratables
             calibFile = configStruct.Calibration.FilePath;
             sheetDefs = configStruct.Calibration.Sheets;
-            obj.Calibratables       = Config.loadCalibratables(calibFile, sheetDefs);
+            obj.calibratables       = Config.loadCalibratables(calibFile, sheetDefs);
             obj.calibrationFilePath = calibFile;                 % <<< store full path
             [~, calibName, calibExt] = fileparts(calibFile);
             obj.calibrationFileName = [calibName, calibExt];     % <<< store file name only
@@ -113,7 +112,7 @@ classdef Config
             params.Calibration.SheetsNormalized = normSheets;
         end % loadConfig
         
-        function signalSpec = loadSignalPlotSpec(filePath, sheetList)
+        function signalMapPlotSpec = loadSignalMapPlotSpec(filePath, sheetList)
             % Load specified sheets from SignalPlotSpec Excel file
         
             if ~isfile(filePath)
@@ -123,17 +122,17 @@ classdef Config
                 error('Sheet list must be a cell array of sheet names.');
             end
         
-            signalSpec = struct();
+            signalMapPlotSpec = struct();
             for i = 1:numel(sheetList)
                 sheetName = sheetList{i};
                 try
                     tbl = readtable(filePath, 'Sheet', sheetName, 'PreserveVariableNames', true);
-                    signalSpec.(matlab.lang.makeValidName(sheetName)) = tbl;
+                    signalMapPlotSpec.(matlab.lang.makeValidName(sheetName)) = tbl;
                 catch ME
                     warning('Failed to read sheet "%s": %s', sheetName, ME.message);
                 end
             end % for
-        end % loadSignalPlotSpec
+        end % loadSignalMapPlotSpec
 
 
         function calibratables = loadCalibratables(calibFile, sheetMap)
