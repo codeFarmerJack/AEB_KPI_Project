@@ -50,7 +50,23 @@ classdef InputHandler
             end
 
             % Get path to signal mapping Excel file
-            mapFile = obj.signalPlotSpecPath;
+            % mapFile = obj.signalPlotSpecPath;
+
+            mapFile = uigetfile({'*.csv;*.xlsx','Signal DB Files (*.csv,*.xlsx)'}, 'Select Signal Database');
+            if mapFile == 0
+                fprintf('No signal database file selected. Operation cancelled.\n');
+                processedData = {};
+                return;
+            end
+            % Ensure mapFile is a file, not a directory
+            if ~isfile(fullfile(obj.rawDataPath, mapFile))
+                fprintf('Error: Selected signal database is not a valid file: %s\n', mapFile);
+                processedData = {};
+                return;
+            end
+            disp('Selected Signal DB file:');
+            disp(mapFile);
+            
 
             % Initialize cell array to store processed data
             processedData = cell(1, length(files));
@@ -87,60 +103,65 @@ classdef InputHandler
 
     methods (Access = private)
         function datVars = processMF4FileInternally(~, filePath, mapFile, resampleRate)
-            % Use Docker + Python to process MF4 file with selected signals
+            % Process MF4 file with Docker + Python
             %
             % Inputs:
-            %   filePath - Path to the input MF4 file (e.g., 'rawdata/roadcast_debug_converted.mf4')
-            %   map - Struct with fields A2LName, TactName, and Raster 
+            %   filePath     - Full path to the .mf4 file
+            %   mapFile      - Path to signalDatabase.csv or .xlsx
             %   resampleRate - Resampling interval in seconds (e.g., 0.01 for 100 Hz)
             %
             % Outputs:
             %   datVars - Data loaded from the generated .mat file
 
-            % Validate inputs
-            if nargin < 4
-                resampleRate = 0.01; % Default to 10ms (100 Hz), adjust as needed
+            if nargin < 3
+                error('Usage: processMF4FileInternally(filePath, mapFile, resampleRate)');
             end
-            validateattributes(resampleRate, {'numeric'}, {'positive', 'scalar'}, ...
+            if nargin < 4
+                resampleRate = 0.01; % Default 10 ms
+            end
+            validateattributes(resampleRate, {'numeric'}, {'positive','scalar'}, ...
                 'processMF4FileInternally', 'resampleRate');
 
-            % Extract folder and base name from filePath
+            % Verify the .mf4 file exists
+            if ~isfile(filePath)
+                error('MF4 file not found: %s', filePath);
+            end
+
+            % Extract folder and base name
             [folder, baseName, ~] = fileparts(filePath);
             matFullPath = fullfile(folder, [baseName '.mat']);
 
-            disp('before docker run');
-
             % Build Docker command
-            dockerBin = '/usr/local/bin/docker';
-            projectRoot = fileparts(fileparts(filePath)); % Go up from rawdata to project root
-            sheetName = 'VbRcSignals'; % Signal Database sheet name
+            dockerBin   = '/usr/local/bin/docker';
+            projectRoot = fileparts(folder); % Go up from rawdata to project root
 
             dockerCmd = sprintf([ ...
                 '%s run --rm -v "%s":/data mdf-python:latest ' ...
-                'python3 /data/utils/mdf2mat.py "/data/rawdata/%s.mf4" "/data/rawdata/%s.mat" %s %s %s' ...
-            ], dockerBin, projectRoot, baseName, baseName, resampleRate, mapFile, sheetName);
+                'python /data/AEB_KPI_Project/pipeline/mdf2matSim.py "/data/rawdata/%s.mf4" ' ...
+                '--signal_db "/data/%s" --resample %g' ...
+            ], dockerBin, projectRoot, baseName, mapFile, resampleRate);
 
-            disp(dockerCmd);
             dockerCmd = strtrim(dockerCmd);
 
             % Run Docker
             status = system(dockerCmd);
-
-            disp('after docker run');
-
             if status ~= 0
                 error('Docker failed to process %s', filePath);
             end
 
             % Load the generated .mat file
+            if ~isfile(matFullPath)
+                error('MAT file not generated: %s', matFullPath);
+            end
+
             loaded = load(matFullPath);
 
-            % Expect "data" variable from Python
             if isfield(loaded, 'data')
                 datVars = loaded.data;
             else
                 error('MAT file did not contain expected variable "data".');
             end
         end % processMF4FileInternally
+
     end % methods
 end
