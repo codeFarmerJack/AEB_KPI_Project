@@ -13,24 +13,24 @@ function [isVehStopped, aebEndIdx, M2] = findAEBInterventionEnd(obj, aebStartIdx
     signalMatChunk = obj.signalMatChunk;
     AEB_END_THD = obj.AEB_END_THD;
 
-    isIntvEnd = ~isempty(find(signalMatChunk.DADCAxLmtIT4(aebStartIdx:end) > AEB_END_THD, 1));
+    isIntvEnd = ~isempty(find(signalMatChunk.aebTargetDecel(aebStartIdx:end) > AEB_END_THD, 1));
     % the window to check if vehicle stopped: from AEB start to intervention end
-    intvEndIdxTmp = find(signalMatChunk.DADCAxLmtIT4(aebStartIdx:end) > AEB_END_THD, 1) + aebStartIdx;
-    isVehStopped = ~isempty(find(signalMatChunk.VehicleSpeed(aebStartIdx:intvEndIdxTmp) == 0, 1));
+    intvEndIdxTmp = find(signalMatChunk.aebTargetDecel(aebStartIdx:end) > AEB_END_THD, 1) + aebStartIdx;
+    isVehStopped = ~isempty(find(signalMatChunk.egoSpeed(aebStartIdx:intvEndIdxTmp) == 0, 1));
 
     if isIntvEnd && isVehStopped
         aebEndIdx = min(...
-                        find(signalMatChunk.VehicleSpeed(aebStartIdx:end) == 0, 1) + aebStartIdx, ...
-                        find(signalMatChunk.DADCAxLmtIT4(aebStartIdx:end) > AEB_END_THD, 1) + aebStartIdx ...
+                        find(signalMatChunk.egoSpeed(aebStartIdx:end) == 0, 1) + aebStartIdx, ...
+                        find(signalMatChunk.aebTargetDecel(aebStartIdx:end) > AEB_END_THD, 1) + aebStartIdx ...
                         );
     elseif ~isIntvEnd && isVehStopped
-        aebEndIdx = find(signalMatChunk.VehicleSpeed(aebStartIdx:end) == 0, 1) + aebStartIdx;
+        aebEndIdx = find(signalMatChunk.egoSpeed(aebStartIdx:end) == 0, 1) + aebStartIdx;
     elseif isIntvEnd && ~isVehStopped
-        aebEndIdx = find(signalMatChunk.DADCAxLmtIT4(aebStartIdx:end) > AEB_END_THD, 1) + aebStartIdx;
+        aebEndIdx = find(signalMatChunk.aebTargetDecel(aebStartIdx:end) > AEB_END_THD, 1) + aebStartIdx;
     else
-        aebEndIdx = length(signalMatChunk.Time);
+        aebEndIdx = length(signalMatChunk.time);
     end
 
-    M2 = signalMatChunk.Time(aebEndIdx);
+    M2 = signalMatChunk.time(aebEndIdx);
 
 end

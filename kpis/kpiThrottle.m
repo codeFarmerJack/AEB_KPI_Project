@@ -1,28 +1,67 @@
-function kpiTable = kpiThrottle(obj, i, aebStartIdx, pedalPosIncTh)
-    
+function kpiThrottle(obj, i, aebStartIdx, pedalPosIncTh)
     % Throttle pedal analysis
     %% Inputs:
-    % kpiTable       - Table to store KPI results
-    % i                  - Current index in the kpiTable
-    % signalMatChunk - Struct containing signal data with fields:
-    %                  Time, PedalPosPro
+    % obj            - KPIExtractor object
+    % i              - Current index in the kpiTable
     % aebStartIdx    - Index of AEB request event
     % pedalPosIncTh  - Threshold for pedal position increase   
     %% Outputs:
-    % kpiTable       - Updated table with throttle pedal KPIs
+    % kpiTable       - Updated table with throttle pedal KPIs (for consistency)
 
-    % bind variables from object
-    kpiTable = obj.kpiTable; 
-    signalMatChunk = obj.signalMatChunk;    
+    % Use obj.kpiTable directly
+    kpiTable = obj.kpiTable;
 
-    pedalStart = signalMatChunk.PedalPosPro(aebStartIdx);
-    kpiTable.pedalStart(i) = pedalStart;
-    kpiTable.isPedalOnAtStrt(i) = pedalStart ~= 0;
+    % Ensure required columns exist
+    if ~ismember('pedalStart', kpiTable.Properties.VariableNames)
+        obj.kpiTable.pedalStart = NaN(height(obj.kpiTable), 1);
+    end
+    if ~ismember('pedalMax', kpiTable.Properties.VariableNames)
+        obj.kpiTable.pedalMax = NaN(height(obj.kpiTable), 1);
+    end
+    if ~ismember('pedalInc', kpiTable.Properties.VariableNames)
+        obj.kpiTable.pedalInc = NaN(height(obj.kpiTable), 1);
+    end
+    if ~ismember('isPedalHigh', kpiTable.Properties.VariableNames)
+        obj.kpiTable.isPedalHigh = false(height(obj.kpiTable), 1);
+    end
+    if ~ismember('isPedalOnAtStrt', kpiTable.Properties.VariableNames)
+        obj.kpiTable.isPedalOnAtStrt = false(height(obj.kpiTable), 1);
+    end
 
-    pedalMax = max(signalMatChunk.PedalPosPro(aebStartIdx:end));
-    kpiTable.pedalMax(i) = pedalMax;
+    % Bind signal data
+    signalMatChunk = obj.signalMatChunk;
 
-    isPedalHigh = (pedalMax - pedalStart) > pedalPosIncTh;
-    kpiTable.isPedalHigh(i) = isPedalHigh;
-    kpiTable.pedalInc(i) = pedalMax - pedalStart;
+    % Validate throttleValue
+    if ~isfield(signalMatChunk, 'throttleValue')
+        obj.kpiTable.pedalStart(i) = NaN;
+        obj.kpiTable.pedalMax(i) = NaN;
+        obj.kpiTable.pedalInc(i) = NaN;
+        obj.kpiTable.isPedalHigh(i) = false;
+        obj.kpiTable.isPedalOnAtStrt(i) = false;
+        return;
+    end
+
+    if isempty(aebStartIdx) || aebStartIdx < 1 || aebStartIdx > length(signalMatChunk.throttleValue)
+        obj.kpiTable.pedalStart(i) = NaN;
+        obj.kpiTable.pedalMax(i) = NaN;
+        obj.kpiTable.pedalInc(i) = NaN;
+        obj.kpiTable.isPedalHigh(i) = false;
+        obj.kpiTable.isPedalOnAtStrt(i) = false;
+        return;
+    end
+
+    % Calculate and assign throttle KPIs
+    pedalStart = signalMatChunk.throttleValue(aebStartIdx);
+    obj.kpiTable.pedalStart(i) = pedalStart;
+    obj.kpiTable.isPedalOnAtStrt(i) = logical(pedalStart ~= 0);
+
+    % Check for non-zero throttle values after aebStartIdx
+    throttleRange = signalMatChunk.throttleValue(aebStartIdx:end);
+    pedalMax = max(throttleRange);
+    obj.kpiTable.pedalMax(i) = pedalMax;
+
+    pedalInc = pedalMax - pedalStart;
+    obj.kpiTable.pedalInc(i) = pedalInc;
+    isPedalHigh = pedalInc > pedalPosIncTh;
+    obj.kpiTable.isPedalHigh(i) = isPedalHigh;
 end

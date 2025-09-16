@@ -30,11 +30,11 @@ classdef Visualizer
 
                 switch lower(plotType)
                     case 'scatter'
-                        Vis_ScatterPlotter(obj.graphSpec, obj.lineColor, obj.calibratables, j, seldatapath);
+                        visScatterPlotter(obj.graphSpec, obj.lineColor, obj.calibratables, j, seldatapath);
                     case 'stem'
-                        Vis_StemPlotter(obj.graphSpec, obj.lineColor, obj.calibratables, j, seldatapath);
+                        visStemPlotter(obj.graphSpec, obj.lineColor, obj.calibratables, j, seldatapath);
                     case 'pie'
-                        Vis_PiePlotter(obj.graphSpec, obj.lineColor, obj.calibratables, j, seldatapath);
+                        visPiePlotter(obj.graphSpec, obj.lineColor, obj.calibratables, j, seldatapath);
                     otherwise
                         warning('Unsupported plot type "%s" at row %d. Skipping.', plotType, j);
                 end

@@ -30,6 +30,11 @@ classdef EventDetector
         end
         
         %% Main function to process all .mat files
+        % Expects each .mat file to contain a variable 'signalMat'  
+        % which is a timetable with required signals
+        % Calls detectEvents and extractAEBEvents   
+        % Saves extracted chunks to PostProcessing folder
+        % Each chunk is saved as <original_filename>_<event_index>.mat
         function processAllFiles(obj)
             cd(obj.destFolder);
             files = dir('*.mat');
@@ -59,61 +64,107 @@ classdef EventDetector
         
         %% Detect start and end times of AEB events
         function [locateStartTime, locateEndTime] = detectEvents(~, signalMat)
-            mode = int8(signalMat.DADCAxLmtIT4);
+            mode = int8(signalMat.aebTargetDecel);
             modeChange = diff(mode);
-
-            % Transition 5 -> 8 (start of patial braking or full braking)
             locateStart = find(diff(modeChange < -30));
-            locateStartReq = signalMat.DADCAxLmtIT4(locateStart + 1, 1) < -5.9;
-            locateStartTime = signalMat.Time(locateStart, 1) .* locateStartReq;
-            locateStartTime = seconds(nonzeros(seconds(locateStartTime)));
-
-            % Transition 8 -> 5 (end of AEB intervention)
+            locateStartReq = signalMat.aebTargetDecel(locateStart + 1, 1) < -5.9;
+            locateStartTime = signalMat.time(locateStart, 1) .* locateStartReq;
+            nonZeroTimes = nonzeros(locateStartTime);
+            if isempty(nonZeroTimes)
+                locateStartTime = duration.empty;
+            else
+                locateStartTime = seconds(nonZeroTimes);
+            end
+            
             locateEnd = find(modeChange > 20);
-            locateEndStat = signalMat.DADCAxLmtIT4(locateEnd + 1, 1) > 20;
-            locateEndTime = signalMat.Time(locateEnd, 1) .* locateEndStat;
-            locateEndTime = seconds(nonzeros(seconds(locateEndTime)));
-        end
+            locateEndStat = signalMat.aebTargetDecel(locateEnd + 1, 1) > 20;
+            locateEndTime = signalMat.time(locateEnd, 1) .* locateEndStat;
+            nonZeroEndTimes = nonzeros(locateEndTime);
+            if isempty(nonZeroEndTimes)
+                if ~isempty(locateStartTime)
+                    locateEndTime = locateStartTime + seconds(7);
+                else
+                    locateEndTime = duration.empty;
+                end
+            else
+                locateEndTime = seconds(nonZeroEndTimes);
+            end
+        end % detectEvents
         
         %% Extract AEB events (-preTime to +postTime) and save chunks
         function extractAEBEvents(obj, signalMat, locateStartTime, locateEndTime, name)
             loopRun = length(locateStartTime);
-            n = 0;
-            stop = 0;
-
+            fields = fieldnames(signalMat);
+            
+            % Validate field sizes
+            expectedRows = size(signalMat.time, 1);
+            for f = 1:length(fields)
+                if size(signalMat.(fields{f}), 1) ~= expectedRows
+                    error('Field %s has %d rows, expected %d', fields{f}, size(signalMat.(fields{f}), 1), expectedRows);
+                end
+            end
+            
             for j = 1:loopRun
+                % Convert startT to numeric seconds
                 startT = locateStartTime(j) - obj.preTime;
-                [~, start] = utils.findDuration(signalMat.Time, startT);
+                startT_seconds = seconds(startT);
+                [~, start] = utils.findDuration(signalMat.time, startT_seconds);
 
+                % Compute startNext
                 if j + 1 <= loopRun
-                    [~, startNext] = utils.findDuration(signalMat.Time, locateStartTime(j + 1) - obj.preTime);
+                    startNextT = locateStartTime(j + 1) - obj.preTime;
+                    startNextT_seconds = seconds(startNextT);
+                    [~, startNext] = utils.findDuration(signalMat.time, startNextT_seconds);
                 else
-                    startNext = length(signalMat.Time);
+                    startNext = length(signalMat.time);
                 end
 
+                % Initialize stop
+                stop = 0;
+                n = 0;
+
+                % Try to find a valid end time
                 if j + n <= length(locateEndTime)
-                    while stop < start
+                    while stop < start && j + n <= length(locateEndTime)
                         stopT = locateEndTime(j + n) + obj.postTime;
-                        [~, stop] = utils.findDuration(signalMat.Time, stopT);
-
-                        if stop < start
+                        stopT_seconds = seconds(stopT);
+                        [~, stop] = utils.findDuration(signalMat.time, stopT_seconds);
+                        if stop < start || stop > startNext
                             n = n + 1;
-                        end
-
-                        if j + n > length(locateEndTime) || stop > startNext || ...
-                           (stopT - startT - obj.preTime - obj.postTime) > seconds(30)
-                            start = 1;
-                            stop = 1;
+                        else
+                            break;
                         end
                     end
                 end
 
+                % Fallback if no valid end time found
+                if stop < start || j + n > length(locateEndTime)
+                    stopT = locateStartTime(j) + obj.postTime;
+                    stopT_seconds = seconds(stopT);
+                    [~, stop] = utils.findDuration(signalMat.time, stopT_seconds);
+                end
+
+                % Ensure stop doesn't exceed signal length
+                stop = min(stop, length(signalMat.time));
+
                 if stop > start
-                    signalMatChunk = signalMat(start:stop, :);
+                    % Create signalMatChunk as a struct
+                    signalMatChunk = struct();
+                    for f = 1:length(fields)
+                        try
+                            signalMatChunk.(fields{f}) = signalMat.(fields{f})(start:stop);
+                        catch e
+                            error('Error indexing field %s: %s', fields{f}, e.message);
+                        end
+                    end
                     extractFileName = fullfile(obj.destFolder, 'PostProcessing', sprintf('%s_%d.mat', name, j));
-                    save(extractFileName, 'signalMatChunk');
+                    try
+                        save(extractFileName, 'signalMatChunk');
+                    catch e
+                        error('Error saving %s: %s', extractFileName, e.message);
+                    end
                 end
             end
-        end
-    end
+        end % extractAEBEvents
+    end % methods
 end

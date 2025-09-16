@@ -1,26 +1,33 @@
-function kpiTable = kpiLatAccel(obj, i, aebStartIdx, latAccelTh)
+function kpiLatAccel(obj, i, aebStartIdx, latAccelTh)
     % Lateral acceleration
     %% Inputs:
-    % kpiTable       - Table to store KPI results
+    % obj            - KPIExtractor object
     % i              - Current index in the kpiTable
-    % signalMatChunk - Struct containing signal data with fields:
-    %                  Time, A1_Filt
     % aebStartIdx    - Index of AEB request event
     % latAccelTh     - Threshold for lateral acceleration in m/s²
-    % offset         - Offset to consider before aebStartIdx for analysis   
-    %% Outputs:
-    % kpiTable       - Updated table with lateral acceleration KPIs
 
-    % bind variables from object
+    % Use obj.kpiTable and obj.signalMatChunk directly
     kpiTable = obj.kpiTable;
     signalMatChunk = obj.signalMatChunk;
-    offset = obj.TIME_IDX_OFFSET;    
+    offset = obj.TIME_IDX_OFFSET;
 
+    % Ensure required columns exist
+    if ~ismember('latAccelMax', kpiTable.Properties.VariableNames)
+        obj.kpiTable.latAccelMax = NaN(height(obj.kpiTable), 1);
+    end
+    if ~ismember('absLatAccelMax', kpiTable.Properties.VariableNames)
+        obj.kpiTable.absLatAccelMax = NaN(height(obj.kpiTable), 1);
+    end
+    if ~ismember('isLatAccelHigh', kpiTable.Properties.VariableNames)
+        obj.kpiTable.isLatAccelHigh = false(height(obj.kpiTable), 1);
+    end
+
+    % Calculate lateral acceleration KPIs
     [~, idx] = max(abs(signalMatChunk.A1_Filt(aebStartIdx - offset:end)));
     latAccelMax = signalMatChunk.A1_Filt(aebStartIdx - offset + idx - 1);
     absLatAccelMax = abs(latAccelMax);
 
-    kpiTable.latAccelMax(i) = latAccelMax;
-    kpiTable.absLatAccelMax(i) = absLatAccelMax;
-    kpiTable.isLatAccelHigh(i) = absLatAccelMax > latAccelTh;
+    obj.kpiTable.latAccelMax(i) = latAccelMax;
+    obj.kpiTable.absLatAccelMax(i) = absLatAccelMax;
+    obj.kpiTable.isLatAccelHigh(i) = absLatAccelMax > latAccelTh;
 end

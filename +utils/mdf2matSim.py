@@ -156,8 +156,6 @@ def mdf2matSim(dat_path: str,
     channels_db = m.channels_db  # Dictionary of {channel_name: (group_index, channel_index, ...)}
     sigs_data = []
     for ch_name, value in channels_db.items():
-        # Debug print to inspect value structure
-        # print(f"Channel: {ch_name}, Value: {value}, Length: {len(value)}")
         if len(value) < 1:
             continue  # Skip if no group index
         if isinstance(value[0], tuple):
@@ -403,11 +401,14 @@ if __name__ == "__main__":
     if not data.empty:
         mat_file = os.path.splitext(args.dat_path)[0] + '.mat'
         try:
-            time_arr = data.index.values
-            var_dict = {'data': data.values, 'time': time_arr}  # Include 'data' as the signal matrix
+            # Create a struct with time and signals
+            signals_struct = {'time': data.index.values}
             for col in data.columns:
-                var_dict[col] = data[col].values
-            savemat(mat_file, var_dict)
+                # Replace invalid characters for MATLAB field names
+                valid_name = col.replace('.', '_').replace('-', '_').replace(' ', '_')
+                signals_struct[valid_name] = data[col].values
+            # Save the struct to .mat file
+            savemat(mat_file, {'signalMat': signals_struct})
             print(f"Saved {mat_file}")
         except Exception as e:
             print(f"Error saving .mat file: {e}")
