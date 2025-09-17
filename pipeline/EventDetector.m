@@ -1,33 +1,41 @@
 classdef EventDetector
     properties
-        currFolder   % original working directory
-        destFolder   % destination folder for PostProcessing
-        preTime      % time before event (duration)
-        postTime     % time after event (duration)
+        pathToMat                 % original working directory
+        pathToMatChunks           % destination folder for PostProcessing
+        
+        % Parameters for event extraction
+        PRE_TIME = seconds(4)     % time before event (duration)
+        POST_TIME = seconds(3)    % time after event (duration)
     end
     
     methods
         %% Constructor
-        function obj = EventDetector(destFolder, preTime, postTime)
+        function obj = EventDetector(inputHandler)
+            % Constructor: accepts an InputHandler instance
+            % Parameters PRE_TIME and POST_TIME are set to defaults
+            
             if nargin < 1
-                obj.currFolder = pwd;
-                seldatapath = uigetdir(obj.currFolder, 'Select folder with *.mat files');
-                obj.destFolder = seldatapath;
-            else
-                obj.currFolder = pwd;
-                obj.destFolder = destFolder;
+                error('InputHandler instance required for initialization.');
             end
-
-            if nargin < 2, preTime = seconds(4); end
-            if nargin < 3, postTime = seconds(3); end
-            obj.preTime = preTime;
-            obj.postTime = postTime;
-
-            % Ensure PostProcessing directory exists
-            if ~exist(fullfile(obj.destFolder, 'PostProcessing'), 'dir')
-                mkdir(fullfile(obj.destFolder, 'PostProcessing'));
+            
+            % Validate input is an InputHandler instance
+            if ~isa(inputHandler, 'InputHandler')
+                error('Input argument must be an instance of InputHandler.');
             end
-        end
+            
+            % Set paths using InputHandler's pathToRawData
+            obj.pathToMat       = inputHandler.pathToRawData;
+            obj.pathToMatChunks = fullfile(obj.pathToMat, 'PostProcessing');
+            
+            % Create PostProcessing directory if it doesn't exist
+            if ~exist(obj.pathToMatChunks, 'dir')
+                mkdir(obj.pathToMatChunks);
+            end
+            
+            % Set default parameters (already set as property defaults, but explicit for clarity)
+            obj.PRE_TIME  = seconds(4);
+            obj.POST_TIME = seconds(3);
+        end % constructor
         
         %% Main function to process all .mat files
         % Expects each .mat file to contain a variable 'signalMat'  
@@ -36,25 +44,34 @@ classdef EventDetector
         % Saves extracted chunks to PostProcessing folder
         % Each chunk is saved as <original_filename>_<event_index>.mat
         function processAllFiles(obj)
-            cd(obj.destFolder);
+            
+            cd(obj.pathToMat);
             files = dir('*.mat');
             N = length(files);
 
             for i = 1:N
                 filePath = fullfile(files(i).folder, files(i).name);
                 [~, name, ~] = fileparts(filePath);
-                
-                % Load the mat file (expects variable signalMat inside)
-                load(filePath, "signalMat");
+                % Load the .mat file
+                matFile = load(filePath, 'signalMat');
+               
+                signalMat = matFile.signalMat;
+
+                % Force every field into a column vector
+                fields = fieldnames(signalMat);
+                for f = 1:numel(fields)
+                    signalMat.(fields{f}) = signalMat.(fields{f})(:);
+                end
+
 
                 % Process this file
-                obj.processFile(signalMat, name);
+                obj.processSingleFileInternally(signalMat, name);
             end
-            cd(obj.currFolder);
+            cd(obj.pathToMat);
         end
         
         %% Process a single file
-        function processFile(obj, signalMat, name)
+        function processSingleFileInternally(obj, signalMat, name)
             % Run event detection
             [locateStartTime, locateEndTime] = obj.detectEvents(signalMat);
 
@@ -64,21 +81,20 @@ classdef EventDetector
         
         %% Detect start and end times of AEB events
         function [locateStartTime, locateEndTime] = detectEvents(~, signalMat)
-            mode = int8(signalMat.aebTargetDecel);
-            modeChange = diff(mode);
-            locateStart = find(diff(modeChange < -30));
-            locateStartReq = signalMat.aebTargetDecel(locateStart + 1, 1) < -5.9;
+            modeChange      = diff(signalMat.aebTargetDecel);
+            locateStart     = find(diff(modeChange < -30));
+            locateStartReq  = signalMat.aebTargetDecel(locateStart + 1, 1) < -5.9;
             locateStartTime = signalMat.time(locateStart, 1) .* locateStartReq;
-            nonZeroTimes = nonzeros(locateStartTime);
+            nonZeroTimes    = nonzeros(locateStartTime);
             if isempty(nonZeroTimes)
                 locateStartTime = duration.empty;
             else
                 locateStartTime = seconds(nonZeroTimes);
             end
             
-            locateEnd = find(modeChange > 20);
-            locateEndStat = signalMat.aebTargetDecel(locateEnd + 1, 1) > 20;
-            locateEndTime = signalMat.time(locateEnd, 1) .* locateEndStat;
+            locateEnd       = find(modeChange > 20);
+            locateEndStat   = signalMat.aebTargetDecel(locateEnd + 1, 1) > 20;
+            locateEndTime   = signalMat.time(locateEnd, 1) .* locateEndStat;
             nonZeroEndTimes = nonzeros(locateEndTime);
             if isempty(nonZeroEndTimes)
                 if ~isempty(locateStartTime)
@@ -91,7 +107,7 @@ classdef EventDetector
             end
         end % detectEvents
         
-        %% Extract AEB events (-preTime to +postTime) and save chunks
+        %% Extract AEB events (-PRE_TIME to +POST_TIME) and save chunks
         function extractAEBEvents(obj, signalMat, locateStartTime, locateEndTime, name)
             loopRun = length(locateStartTime);
             fields = fieldnames(signalMat);
@@ -106,15 +122,15 @@ classdef EventDetector
             
             for j = 1:loopRun
                 % Convert startT to numeric seconds
-                startT = locateStartTime(j) - obj.preTime;
-                startT_seconds = seconds(startT);
-                [~, start] = utils.findDuration(signalMat.time, startT_seconds);
+                startT          = locateStartTime(j) - obj.PRE_TIME;
+                startT_seconds  = seconds(startT);
+                [~, start]      = utils.findDuration(signalMat.time, startT_seconds);
 
                 % Compute startNext
                 if j + 1 <= loopRun
-                    startNextT = locateStartTime(j + 1) - obj.preTime;
-                    startNextT_seconds = seconds(startNextT);
-                    [~, startNext] = utils.findDuration(signalMat.time, startNextT_seconds);
+                    startNextT          = locateStartTime(j + 1) - obj.PRE_TIME;
+                    startNextT_seconds  = seconds(startNextT);
+                    [~, startNext]      = utils.findDuration(signalMat.time, startNextT_seconds);
                 else
                     startNext = length(signalMat.time);
                 end
@@ -126,7 +142,7 @@ classdef EventDetector
                 % Try to find a valid end time
                 if j + n <= length(locateEndTime)
                     while stop < start && j + n <= length(locateEndTime)
-                        stopT = locateEndTime(j + n) + obj.postTime;
+                        stopT = locateEndTime(j + n) + obj.POST_TIME;
                         stopT_seconds = seconds(stopT);
                         [~, stop] = utils.findDuration(signalMat.time, stopT_seconds);
                         if stop < start || stop > startNext
@@ -139,7 +155,7 @@ classdef EventDetector
 
                 % Fallback if no valid end time found
                 if stop < start || j + n > length(locateEndTime)
-                    stopT = locateStartTime(j) + obj.postTime;
+                    stopT = locateStartTime(j) + obj.POST_TIME;
                     stopT_seconds = seconds(stopT);
                     [~, stop] = utils.findDuration(signalMat.time, stopT_seconds);
                 end
@@ -157,14 +173,17 @@ classdef EventDetector
                             error('Error indexing field %s: %s', fields{f}, e.message);
                         end
                     end
-                    extractFileName = fullfile(obj.destFolder, 'PostProcessing', sprintf('%s_%d.mat', name, j));
+
+                    % Save directly into pathToMatChunks, overwrite if exists
+                    extractFileName = fullfile(obj.pathToMatChunks, sprintf('%s_%d.mat', name, j));
                     try
                         save(extractFileName, 'signalMatChunk');
                     catch e
                         error('Error saving %s: %s', extractFileName, e.message);
                     end
                 end
-            end
+
+            end % for j = 1:loopRun
         end % extractAEBEvents
     end % methods
-end
+end % classdef

@@ -9,9 +9,9 @@ function kpiYawRate(obj, i, aebStartIdx, yawRateSuspTh)
     % yawRateSuspTh  - Threshold for yaw rate suspension in degrees per second
 
     % Use obj.kpiTable and obj.signalMatChunk directly
-    kpiTable = obj.kpiTable;
-    signalMatChunk = obj.signalMatChunk;
-    offset = obj.TIME_IDX_OFFSET;
+    kpiTable        = obj.kpiTable;
+    signalMatChunk  = obj.signalMatChunk;
+    offset          = obj.TIME_IDX_OFFSET;
 
     % Ensure required columns exist
     if ~ismember('yawRateMax', kpiTable.Properties.VariableNames)

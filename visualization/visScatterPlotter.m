@@ -1,25 +1,57 @@
-function visScatterPlotter(graphSpec, lineColor, calibratables, graphIndex, seldatapath)
+function visScatterPlotter(obj, graphIndex)
 % visScatterPlotter - Generates scatter plot for a specific graph index
 % Inputs:
-%   graphSpec     - Table containing graph metadata
-%   lineColor     - Cell array or table of line colors
-%   calibratables - Struct of unpacked calibratable data
-%   graphIndex    - Row index in graphSpec to plot
-%   seldatapath   - Path to folder containing CSV files
+%   obj        - Visualizer object with graphSpec, lineColor, calibratables, pathToCsv
+%   graphIndex - Row index in graphSpec to plot
+%   jsonFile   - Path to JSON schema file for variable name mapping
+
+    graphSpec       = obj.graphSpec;
+    lineColor       = obj.lineColor;
+    calibratables   = obj.calibratables;
+    pathToCsv       = obj.pathToCsv;
+    pathToKpiSchema = obj.pathToKpiSchema;
+
+    % Read JSON schema to get variable names and units
+    if isempty(pathToKpiSchema)
+        error('JSON schema file path required.');
+    end
+    fid = fopen(pathToKpiSchema, 'r');
+    if fid == -1
+        error('Failed to open JSON file: %s', pathToKpiSchema);
+    end
+    raw = fread(fid, inf, 'uint8=>char')';
+    fclose(fid);
+    schema = jsondecode(raw);
+    vars = schema.variables;
+    varName = {vars.name};
+    varUnit = cell(size(varName));
+    for i = 1:length(vars)
+        varUnit{i} = '';
+        if isfield(vars(i), 'unit') && ~isempty(vars(i).unit)
+            varUnit{i} = vars(i).unit;
+        end
+    end
+    displayNames = cell(size(varName));
+    for i = 1:length(varName)
+        if isempty(varUnit{i})
+            displayNames{i} = varName{i};
+        else
+            displayNames{i} = sprintf('%s [%s]', varName{i}, varUnit{i});
+        end
+    end
 
     originpath = pwd;
-    cd(seldatapath);
+    cd(pathToCsv);
 
     files = dir('*.csv');
     N = length(files);
     if N == 0
-        warning('No CSV files found in %s. Skipping plot.', seldatapath);
+        warning('No CSV files found in %s. Skipping plot.', pathToCsv);
         cd(originpath);
         return;
     end
 
     % Optional: apply transformation to specific calibratables
-    % Convert the decimal values to percentages
     if isfield(calibratables, 'PedalPosProIncrease_Th')
         calibratables.PedalPosProIncrease_Th{2, :} = ...
             calibratables.PedalPosProIncrease_Th{2, :} * 100;
@@ -29,8 +61,15 @@ function visScatterPlotter(graphSpec, lineColor, calibratables, graphIndex, seld
     set(fig, 'Position', [10 10 900 600]);
     xlim([-5 95]);
     ylim([graphSpec.Min_Axis_value(graphIndex), graphSpec.Max_Axis_value(graphIndex)]);
-    xlabel(char(graphSpec.Output_name(1)), 'Interpreter', 'none');
-    ylabel(char(graphSpec.Output_name(graphIndex)), 'Interpreter', 'none');
+    
+    % Define x and y variables
+    xVar = 'vehSpd';
+    yVar = char(graphSpec.Reference(graphIndex));
+    conditionVar = char(graphSpec.Condition_Var(graphIndex));
+    
+    % Use variable names without units for axis labels
+    xlabel(strrep(xVar, '_', '\_'), 'Interpreter', 'none');
+    ylabel(strrep(yVar, '_', '\_'), 'Interpreter', 'none');
     title(char(graphSpec.Legend(graphIndex)));
 
     Calibration_Limit = char(graphSpec.Calibration_Lim(graphIndex));
@@ -39,8 +78,6 @@ function visScatterPlotter(graphSpec, lineColor, calibratables, graphIndex, seld
         filename = files(i).name;
         opts = detectImportOptions(filename, 'VariableNamesLine', 1, ...
             'Delimiter', ',', 'PreserveVariableNames', true);
-        % Force condTrue to be logical (can extend to other logicals if needed)
-        conditionVar = char(graphSpec.Condition_Var(graphIndex));
         if ismember(conditionVar, opts.VariableNames)
             opts.VariableTypes{strcmp(opts.VariableNames, conditionVar)} = 'logical';
         end
@@ -51,45 +88,59 @@ function visScatterPlotter(graphSpec, lineColor, calibratables, graphIndex, seld
             continue;
         end
 
-        % Validate condition variable
-        if ~ismember(conditionVar, data.Properties.VariableNames)
-            warning('Column "%s" not found in %s. Available columns: %s. Skipping file.', ...
-                    conditionVar, filename, strjoin(data.Properties.VariableNames, ', '));
-            continue;
-        end
-
-        % Ensure condition variable is logical (handle double or string)
-        if ~islogical(data.(conditionVar))
-            warning('Column "%s" in %s is not logical. Converting.', ...
-                    conditionVar, filename);
-            if isstring(data.(conditionVar)) || iscellstr(data.(conditionVar))
-                data.(conditionVar) = strcmp(data.(conditionVar), 'true');
-            elseif isnumeric(data.(conditionVar))
-                data.(conditionVar) = logical(data.(conditionVar));
+        % Map expected names to actual column names
+        xCol = '';
+        yCol = '';
+        for j = 1:length(varName)
+            if strcmp(varName{j}, xVar)
+                xCol = displayNames{j};
+            end
+            if strcmp(varName{j}, yVar)
+                yCol = displayNames{j};
             end
         end
-
-        filtIdx = find(data.(conditionVar));
-        if isempty(filtIdx)
-            warning('No data satisfies condition "%s" in %s. Skipping file. Consider checking data or graphSpec configuration.', ...
-                    conditionVar, filename);
-            continue;
+        if isempty(xCol)
+            xCol = xVar;
+        end
+        if isempty(yCol)
+            yCol = yVar;
         end
 
         % Validate x and y variables
-        xVar = 'vehSpd';
-        yVar = char(graphSpec.Reference(graphIndex));
-        if ~ismember(xVar, data.Properties.VariableNames) || ...
-           ~ismember(yVar, data.Properties.VariableNames)
+        if ~ismember(xCol, data.Properties.VariableNames) || ...
+           ~ismember(yCol, data.Properties.VariableNames)
             warning('X (%s) or Y (%s) variable not found in %s. Skipping file.', ...
-                    xVar, yVar, filename);
+                    xCol, yCol, filename);
             continue;
+        end
+
+        % Validate condition variable
+        if ~ismember(conditionVar, data.Properties.VariableNames)
+            warning('Column "%s" not found in %s. Plotting without condition.', ...
+                    conditionVar, filename);
+            filtIdx = 1:height(data);
+        else
+            if ~islogical(data.(conditionVar))
+                warning('Column "%s" in %s is not logical. Converting.', ...
+                        conditionVar, filename);
+                if isstring(data.(conditionVar)) || iscellstr(data.(conditionVar))
+                    data.(conditionVar) = strcmp(data.(conditionVar), 'true');
+                elseif isnumeric(data.(conditionVar))
+                    data.(conditionVar) = logical(data.(conditionVar));
+                end
+            end
+            filtIdx = find(data.(conditionVar));
+            if isempty(filtIdx)
+                warning('No data satisfies condition "%s" in %s. Plotting without condition.', ...
+                        conditionVar, filename);
+                filtIdx = 1:height(data);
+            end
         end
 
         legendName = char(graphSpec.Legend(graphIndex));
         
-        x = round(data.(xVar)(filtIdx), 1);
-        y = data.(yVar)(filtIdx);
+        x = round(data.(xCol)(filtIdx), 1);
+        y = data.(yCol)(filtIdx);
 
         plot(x, y, 'LineStyle', 'none', 'Marker', '*', ...
              'DisplayName', legendName, 'Color', lineColor{i,:});

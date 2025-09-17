@@ -12,8 +12,8 @@ RUN apt-get update && apt-get install -y \
 RUN pip3 install asammdf scipy pandas argparse numpy 
 
 # Create utils directory and copy script
-RUN mkdir -p /data/AEB_KPI_Project/pipeline
-COPY pipeline/mdf2matSim.py /data/AEB_KPI_Project/pipeline/mdf2matSim.py
-RUN chmod +x /data/AEB_KPI_Project/pipeline/mdf2matSim.py
+RUN mkdir -p /data/AEB_KPI_Project/docker
+COPY docker/mdf2matSim.py /data/AEB_KPI_Project/docker/mdf2matSim.py
+RUN chmod +x /data/AEB_KPI_Project/docker/mdf2matSim.py
 
 CMD ["bash"]

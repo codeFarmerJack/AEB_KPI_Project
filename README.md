@@ -5,7 +5,7 @@ This project aims to develop a tool to extract AEB KPIs from data collected. rea
 AEB_Analysis/
 ├── MainScript.mlx                 % Live script entry point
 ├── classes/
-│   ├── AEBProcessor.m             % Main class orchestrating the pipeline
+│   ├── AEBPipeline.m             % Main class orchestrating the pipeline
 │   ├── Config.m                   % Class for configuration (paths, registries)
 │   ├── DataReader.m               % Class for reading MF4 files and thresholds
 │   ├── EventDetector.m            % Class for detecting and segmenting AEB events
@@ -25,7 +25,7 @@ AEB_Analysis/
 
 **Explanation of Folder Structure**
 
- - **MainScript**.m: Entry point that instantiates AEBProcessor and runs the pipeline.
+ - **MainScript**.m: Entry point that instantiates AEBPipeline and runs the pipeline.
  - **classes**/: Contains class definitions for the core components. Each class encapsulates a specific part of the pipeline (e.g., reading data, extracting KPIs). Classes use composition or inheritance for extensibility.
  - **kpis**/: Contains classes for individual KPI extractors, inheriting from a base KPI class (defined in KPIExtractor.m). New KPIs are added as new subclasses.
  - **visualization**/: Contains classes for visualizations, inheriting from a base Visualization class (defined in Visualizer.m). New visualizations are added as new subclasses.
@@ -53,9 +53,9 @@ addpath(genpath('utils'));
 disp('Environment initialized. All subfolders added to MATLAB path.');
 
 %% Create AEB Processor
-% Instantiate the AEBProcessor class, which orchestrates the pipeline.
-processor = AEBProcessor();
-disp('AEBProcessor instantiated with configuration:');
+% Instantiate the AEBPipeline class, which orchestrates the pipeline.
+processor = AEBPipeline();
+disp('AEBPipeline instantiated with configuration:');
 disp(processor.config);
 
 %% Run the Pipeline

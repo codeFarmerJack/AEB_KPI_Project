@@ -7,9 +7,9 @@ function kpiLatAccel(obj, i, aebStartIdx, latAccelTh)
     % latAccelTh     - Threshold for lateral acceleration in m/s²
 
     % Use obj.kpiTable and obj.signalMatChunk directly
-    kpiTable = obj.kpiTable;
-    signalMatChunk = obj.signalMatChunk;
-    offset = obj.TIME_IDX_OFFSET;
+    kpiTable        = obj.kpiTable;
+    signalMatChunk  = obj.signalMatChunk;
+    offset          = obj.TIME_IDX_OFFSET;
 
     % Ensure required columns exist
     if ~ismember('latAccelMax', kpiTable.Properties.VariableNames)

@@ -1,28 +1,39 @@
 classdef Visualizer
     properties
-        graphSpec      % metadata of graph
-        lineColor      % color of the curve
-        calibratables  % unpacked calibratables
+        graphSpec        % metadata of graph
+        lineColor        % color of the curve
+        calibratables    % unpacked calibratables
+        pathToCsv        % path to csv files
+        pathToKpiSchema  % path to JSON schema file
     end
 
     methods
-        function obj = Visualizer(config)
-            % Constructor: initializes Visualizer from handler struct
-            obj.graphSpec     = config.graphSpec;
-            obj.lineColor     = config.lineColors;
-            obj.calibratables = config.calibratables;
+        function obj = Visualizer(config, kpiExtractor)
+            % Constructor: initializes Visualizer from config and KPIExtractor
+            if nargin < 2
+                error('Configuration object and KPIExtractor instance are required for initialization.');
+            end
+            
+            % Validate input is a KPIExtractor instance
+            if ~isa(kpiExtractor, 'KPIExtractor')
+                error('Second argument must be an instance of KPIExtractor.');
+            end
+            
+            % Initialize properties
+            obj.graphSpec       = config.graphSpec;
+            obj.lineColor       = config.lineColors;
+            obj.calibratables   = config.calibratables;
+            obj.pathToKpiSchema = config.kpiSchemaPath;
+            obj.pathToCsv       = kpiExtractor.pathToCsv;
         end
 
         function plot(obj)
-            % Select folder once
-            originpath = pwd;
-            seldatapath = uigetdir(originpath, 'Select folder containing CSV files');
-            if seldatapath == 0
-                warning('No folder selected. Plotting aborted.');
+            % Main plotting dispatcher using pathToCsv
+            if isempty(obj.pathToCsv) || ~isfolder(obj.pathToCsv)
+                warning('Invalid or empty pathToCsv: %s. Plotting aborted.', obj.pathToCsv);
                 return;
             end
 
-            % Main plotting dispatcher
             numGraphs = height(obj.graphSpec);
 
             for j = 2:numGraphs
@@ -30,11 +41,11 @@ classdef Visualizer
 
                 switch lower(plotType)
                     case 'scatter'
-                        visScatterPlotter(obj.graphSpec, obj.lineColor, obj.calibratables, j, seldatapath);
+                        visScatterPlotter(obj, j);
                     case 'stem'
-                        visStemPlotter(obj.graphSpec, obj.lineColor, obj.calibratables, j, seldatapath);
+                        visStemPlotter(obj, j);
                     case 'pie'
-                        visPiePlotter(obj.graphSpec, obj.lineColor, obj.calibratables, j, seldatapath);
+                        visPiePlotter(obj, j);
                     otherwise
                         warning('Unsupported plot type "%s" at row %d. Skipping.', plotType, j);
                 end

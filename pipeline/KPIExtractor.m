@@ -3,10 +3,11 @@ classdef KPIExtractor < handle
     %  
     % KPIExtractor class for processing AEB data and calculating KPIs
     properties
-        kpiTable
-        signalMatChunk
-        calibratables
-        fileList
+        kpiTable                % Table to hold KPI results
+        signalMatChunk          % Struct to hold the loaded signal data chunk
+        calibratables           % Struct to hold calibratable thresholds
+        fileList                % List of .mat files to process
+        pathToCsv               % Path to save CSV results
 
         % Constant Parameters
         PB_TGT_DECEL = -6       % Target deceleration for PB in m/s²  
@@ -18,9 +19,27 @@ classdef KPIExtractor < handle
     end
     
     methods
-        function obj = KPIExtractor(cfg)
-            % Constructor: Initialize with configuration object
-            [seldatapath, fileList] = obj.selectFolder();
+        function obj = KPIExtractor(cfg, eventDetector)
+            
+            % Constructor: Initialize with configuration object and EventDetector
+            % Initialize pathToCsv with eventDetector.pathToMatChunks and fileList from that directory
+            if nargin < 2
+                error('Configuration object and EventDetector are required for initialization.');
+            end
+            
+            % Validate input is an EventDetector instance
+            if ~isa(eventDetector, 'EventDetector')
+                error('Second argument must be an instance of EventDetector.');
+            end
+            
+            % Set pathToCsv to eventDetector.pathToMatChunks
+            obj.pathToCsv = eventDetector.pathToMatChunks;
+            
+            % Get fileList from pathToCsv
+            fileList = dir(fullfile(obj.pathToCsv, '*.mat')); % Get all .mat files in the folder
+            if isempty(fileList)
+                error('No .mat files found in the folder: %s', obj.pathToCsv);
+            end
             obj.fileList = fileList;
             
             % Initialize kpiTable using updated createKpiTableFromJson with unit support
@@ -35,27 +54,14 @@ classdef KPIExtractor < handle
             obj.calibratables.LateralAcceleration_th = cfg.calibratables.LateralAcceleration_th;
         end
         
-        function [seldatapath, fileList] = selectFolder(~)
-            % Select folder containing .mat files
-            originpath = pwd;                   % Store current folder
-            seldatapath = uigetdir(originpath); % Select folder containing log files
-            if seldatapath == 0
-                error('No folder selected. Please select a valid folder containing .mat files.');
-            end
-            cd(seldatapath);            % Navigate to selected folder
-            fileList = dir('*.mat');    % Get all .mat files in the folder
-            if isempty(fileList)
-                error('No .mat files found in the selected folder.');
-            end
-        end
-        
         function obj = processAllMatFiles(obj)
             % Process all .mat files and calculate KPIs
-            dataFolder = pwd; % Assume current directory from selectFolder
+            originpath = pwd; % Store current directory
+            cd(obj.pathToCsv); % Navigate to pathToCsv
             aebStartIdxList = zeros(length(obj.fileList), 1); % Store aebStartIdx per file
 
             for i = 1:length(obj.fileList)
-                filename = fullfile(dataFolder, obj.fileList(i).name);
+                filename = fullfile(obj.pathToCsv, obj.fileList(i).name);
         
                 % Load data and set signalMatChunk
                 try
@@ -86,7 +92,7 @@ classdef KPIExtractor < handle
                     obj.kpiTable.label{i} = filename; % Assign char to cell
                     warning('label column is cell. Assigned char directly. Consider updating schema to string.');
                 else
-                    obj.kpiTable.label(i) = string(filename); % Assign string to string column
+                    obj.kpiTable.label(i) = string(obj.fileList(i).name); % Assign file name to label column
                 end
                 obj.kpiTable.condTrue(i) = true;
                 if isduration(obj.signalMatChunk.time)
@@ -177,13 +183,14 @@ classdef KPIExtractor < handle
                 kpiLatency(obj, i, aebStartIdx);
             end % for each file
 
+            cd(originpath); % Return to original directory
             % Notify user when done
             disp('✅ All KPI extraction and processing completed successfully.');
         end % processAllMatFiles    
         
         function exportToCSV(obj)
             % Export kpiTable to CSV with headers including units
-            outputFilename = 'AEB_KPI_Results.csv';
+            outputFilename = fullfile(obj.pathToCsv, 'AEB_KPI_Results.csv');
             try
                 % Clean and sort the table
                 RowsToDelete = ismissing(obj.kpiTable.label);
@@ -209,7 +216,7 @@ classdef KPIExtractor < handle
                     obj.kpiTable.Properties.VariableNames = originalVarNames;
                 end
                 warning('⚠️ Failed to export KPI results: %s', e.message);
-            end
+            end 
         end % exportToCSV
-    end
+    end % methods
 end

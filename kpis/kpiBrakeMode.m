@@ -7,11 +7,11 @@ function kpiBrakeMode(obj, i, aebStartIdx)
     % aebStartIdx    - Index of AEB request event
 
     % Use obj.kpiTable and obj.signalMatChunk directly
-    kpiTable = obj.kpiTable;
-    signalMatChunk = obj.signalMatChunk;
-    PB_TGT_DECEL = obj.PB_TGT_DECEL;
-    FB_TGT_DECEL = obj.FB_TGT_DECEL;
-    TGT_TOL = obj.TGT_TOL;
+    kpiTable        = obj.kpiTable;
+    signalMatChunk  = obj.signalMatChunk;
+    PB_TGT_DECEL    = obj.PB_TGT_DECEL;
+    FB_TGT_DECEL    = obj.FB_TGT_DECEL;
+    TGT_TOL         = obj.TGT_TOL;
 
     aebEndReq = length(signalMatChunk.time); % Simplified: you can reuse your end-detection logic
 

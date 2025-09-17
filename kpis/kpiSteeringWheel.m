@@ -8,9 +8,9 @@ function kpiSteeringWheel(obj, i, aebStartIdx, steerAngTh, steerAngRateTh)
     % steerAngRateTh - Threshold for steering angle rate in degrees per second
 
     % Use obj.kpiTable and obj.signalMatChunk directly
-    kpiTable = obj.kpiTable;
-    signalMatChunk = obj.signalMatChunk;
-    offset = obj.TIME_IDX_OFFSET;
+    kpiTable        = obj.kpiTable;
+    signalMatChunk  = obj.signalMatChunk;
+    offset          = obj.TIME_IDX_OFFSET;
 
     % Ensure required columns exist
     if ~ismember('steerMax', kpiTable.Properties.VariableNames)

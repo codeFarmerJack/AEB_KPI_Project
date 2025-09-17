@@ -6,9 +6,9 @@ function kpiLatency(obj, i, aebStartIdx)
     % aebStartIdx    - Index of AEB request event
 
     % Use obj.kpiTable and obj.signalMatChunk directly
-    kpiTable = obj.kpiTable;
-    signalMatChunk = obj.signalMatChunk;
-    cutoffFreq = obj.CUTOFF_FREQ;
+    kpiTable        = obj.kpiTable;
+    signalMatChunk  = obj.signalMatChunk;
+    cutoffFreq      = obj.CUTOFF_FREQ;
 
     % Ensure required columns exist
     if ~ismember('m1IntvSysResp', kpiTable.Properties.VariableNames)
