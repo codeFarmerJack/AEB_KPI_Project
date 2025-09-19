@@ -3,7 +3,6 @@ function visScatterPlotter(obj, graphIndex)
 % Inputs:
 %   obj        - Visualizer object with graphSpec, lineColor, calibratables, pathToCsv
 %   graphIndex - Row index in graphSpec to plot
-%   jsonFile   - Path to JSON schema file for variable name mapping
 
     graphSpec       = obj.graphSpec;
     lineColor       = obj.lineColor;
@@ -21,8 +20,8 @@ function visScatterPlotter(obj, graphIndex)
     end
     raw = fread(fid, inf, 'uint8=>char')';
     fclose(fid);
-    schema = jsondecode(raw);
-    vars = schema.variables;
+    schema  = jsondecode(raw);
+    vars    = schema.variables;
     varName = {vars.name};
     varUnit = cell(size(varName));
     for i = 1:length(vars)
@@ -62,11 +61,10 @@ function visScatterPlotter(obj, graphIndex)
     xlim([-5 95]);
     ylim([graphSpec.Min_Axis_value(graphIndex), graphSpec.Max_Axis_value(graphIndex)]);
     
-    % Define x and y variables
+    % Define x and y variables (JSON variable names)
     xVar = 'vehSpd';
     yVar = char(graphSpec.Reference(graphIndex));
-    conditionVar = char(graphSpec.Condition_Var(graphIndex));
-    
+
     % Use variable names without units for axis labels
     xlabel(strrep(xVar, '_', '\_'), 'Interpreter', 'none');
     ylabel(strrep(yVar, '_', '\_'), 'Interpreter', 'none');
@@ -74,13 +72,14 @@ function visScatterPlotter(obj, graphIndex)
 
     Calibration_Limit = char(graphSpec.Calibration_Lim(graphIndex));
 
+    % prepare quick lookup map from lower(varName) -> displayName
+    varNameLower = lower(varName);
+    % for mapping convenience (parallel arrays used below)
+
     for i = 1:N
         filename = files(i).name;
         opts = detectImportOptions(filename, 'VariableNamesLine', 1, ...
             'Delimiter', ',', 'PreserveVariableNames', true);
-        if ismember(conditionVar, opts.VariableNames)
-            opts.VariableTypes{strcmp(opts.VariableNames, conditionVar)} = 'logical';
-        end
         try
             data = readtable(filename, opts);
         catch e
@@ -88,63 +87,79 @@ function visScatterPlotter(obj, graphIndex)
             continue;
         end
 
-        % Map expected names to actual column names
-        xCol = '';
-        yCol = '';
-        for j = 1:length(varName)
-            if strcmp(varName{j}, xVar)
-                xCol = displayNames{j};
-            end
-            if strcmp(varName{j}, yVar)
-                yCol = displayNames{j};
-            end
+        % --- Resolve X and Y column indices robustly (case-insensitive) ---
+        % Candidate display-name (JSON) for x and y
+        xCandidate = xVar;
+        idxX = find(strcmpi(xVar, varName), 1);
+        if ~isempty(idxX), xCandidate = displayNames{idxX}; end
+
+        yCandidate = yVar;
+        idxY = find(strcmpi(yVar, varName), 1);
+        if ~isempty(idxY), yCandidate = displayNames{idxY}; end
+
+        % Try to find actual column indices in the CSV (case-insensitive)
+        xColIdx = find(strcmpi(xCandidate, data.Properties.VariableNames), 1);
+        if isempty(xColIdx)
+            xColIdx = find(strcmpi(xVar, data.Properties.VariableNames), 1);
         end
-        if isempty(xCol)
-            xCol = xVar;
-        end
-        if isempty(yCol)
-            yCol = yVar;
+        yColIdx = find(strcmpi(yCandidate, data.Properties.VariableNames), 1);
+        if isempty(yColIdx)
+            yColIdx = find(strcmpi(yVar, data.Properties.VariableNames), 1);
         end
 
-        % Validate x and y variables
-        if ~ismember(xCol, data.Properties.VariableNames) || ...
-           ~ismember(yCol, data.Properties.VariableNames)
+        if isempty(xColIdx) || isempty(yColIdx)
             warning('X (%s) or Y (%s) variable not found in %s. Skipping file.', ...
-                    xCol, yCol, filename);
+                    xVar, yVar, filename);
             continue;
         end
 
-        % Validate condition variable
-        if ~ismember(conditionVar, data.Properties.VariableNames)
-            warning('Column "%s" not found in %s. Plotting without condition.', ...
-                    conditionVar, filename);
-            filtIdx = 1:height(data);
-        else
-            if ~islogical(data.(conditionVar))
-                warning('Column "%s" in %s is not logical. Converting.', ...
-                        conditionVar, filename);
-                if isstring(data.(conditionVar)) || iscellstr(data.(conditionVar))
-                    data.(conditionVar) = strcmp(data.(conditionVar), 'true');
-                elseif isnumeric(data.(conditionVar))
-                    data.(conditionVar) = logical(data.(conditionVar));
-                end
+        % Normalize plotEnabled (already guaranteed to be string from import)
+        plotEnabled = strtrim(string(graphSpec.plotEnabled(graphIndex)));
+
+        % Debug
+        fprintf('Graph %d plotEnabled = %s\n', graphIndex, plotEnabled);
+
+        % Apply condition
+        if strcmpi(plotEnabled, "true")
+            filtIdx = 1:height(data);   % all rows
+        elseif strcmpi(plotEnabled, "false") || strcmpi(plotEnabled, "NA")
+            continue;                   % skip plot
+        elseif ismember(plotEnabled, data.Properties.VariableNames)
+            % Dynamic filtering based on a column in the CSV
+            condCol = data.(plotEnabled);
+
+            % Convert if not logical
+            if isnumeric(condCol)
+                condCol = condCol ~= 0;
+            elseif isstring(condCol) || iscellstr(condCol)
+                condCol = strcmpi(condCol, "true");
+            elseif ~islogical(condCol)
+                warning('Unexpected type in column "%s". Defaulting to all rows.', plotEnabled);
+                condCol = true(height(data),1);
             end
-            filtIdx = find(data.(conditionVar));
+
+            filtIdx = find(condCol);
             if isempty(filtIdx)
-                warning('No data satisfies condition "%s" in %s. Plotting without condition.', ...
-                        conditionVar, filename);
-                filtIdx = 1:height(data);
+                warning('Condition "%s" in %s has no true rows. Skipping.', ...
+                        plotEnabled, filename);
+                continue;
             end
+        else
+            warning('Condition column "%s" not found in %s. Using all rows.', ...
+                    plotEnabled, filename);
+            filtIdx = 1:height(data);
         end
+
 
         legendName = char(graphSpec.Legend(graphIndex));
         
-        x = round(data.(xCol)(filtIdx), 1);
-        y = data.(yCol)(filtIdx);
+        % extract x and y using column indices (safe for any column name)
+        x = round(data{filtIdx, xColIdx}, 1);
+        y = data{filtIdx, yColIdx};
 
         plot(x, y, 'LineStyle', 'none', 'Marker', '*', ...
              'DisplayName', legendName, 'Color', lineColor{i,:});
-    end
+    end % for i = 1:N
 
     % Extract and plot calibration limit if specified
     if ~strcmp(Calibration_Limit, 'none')

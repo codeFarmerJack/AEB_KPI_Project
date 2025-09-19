@@ -25,19 +25,14 @@ classdef AEBPipeline < handle
             validateattributes(configPath, {'char', 'string'}, {'nonempty'}, ...
                 'AEBPipeline', 'configPath');
             
-            % Step 1: Add project path to MATLAB path
-            projectRoot = '/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_matlab/01_kpi_extractor/AEB_KPI_Project';
-            addpath(genpath(projectRoot));
-            fprintf('Added project path: %s\n', projectRoot);
-            
-            % Step 2: Create Config instance
+            % Step 1: Create Config instance
             try
                 obj.Config = Config.fromJSON(configPath);
             catch err
                 error('Failed to create Config instance: %s', err.message);
             end
             
-            % Step 3: Create InputHandler instance
+            % Step 2: Create InputHandler instance
             try
                 obj.InputHandler = InputHandler(obj.Config);
             catch err
@@ -51,7 +46,7 @@ classdef AEBPipeline < handle
             % Executes the pipeline steps: process MF4 files, detect AEB events,
             % extract KPIs, export to CSV, and visualize results.
             
-            % Step 4: Process MF4 files
+            % Step 3: Process MF4 files
             fprintf('Processing MF4 files...\n');
             try
                 processedData = obj.InputHandler.processMF4Files();
@@ -63,7 +58,7 @@ classdef AEBPipeline < handle
                 error('Failed to process MF4 files: %s', err.message);
             end
             
-            % Step 5: Create EventDetector and process files
+            % Step 4: Create EventDetector and process files
             fprintf('Detecting AEB events...\n');
             try
                 obj.EventDetector = EventDetector(obj.InputHandler);
@@ -72,7 +67,7 @@ classdef AEBPipeline < handle
                 error('Failed to process AEB events: %s', err.message);
             end
             
-            % Step 6: Create KPIExtractor, process mat files, and export to CSV
+            % Step 5: Create KPIExtractor, process mat files, and export to CSV
             fprintf('Extracting KPIs and exporting to CSV...\n');
             try
                 obj.KPIExtractor = KPIExtractor(obj.Config, obj.EventDetector);
@@ -82,7 +77,7 @@ classdef AEBPipeline < handle
                 error('Failed to extract KPIs or export to CSV: %s', err.message);
             end
             
-            % Step 7: Create Visualizer and plot results
+            % Step 6: Create Visualizer and plot results
             fprintf('Generating visualizations...\n');
             try
                 obj.Visualizer = Visualizer(obj.Config, obj.KPIExtractor);

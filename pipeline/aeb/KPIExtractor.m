@@ -19,7 +19,7 @@ classdef KPIExtractor < handle
     end
     
     methods
-        function obj = KPIExtractor(cfg, eventDetector)
+        function obj = KPIExtractor(config, eventDetector)
             
             % Constructor: Initialize with configuration object and EventDetector
             % Initialize pathToCsv with eventDetector.pathToMatChunks and fileList from that directory
@@ -43,15 +43,15 @@ classdef KPIExtractor < handle
             obj.fileList = fileList;
             
             % Initialize kpiTable using updated createKpiTableFromJson with unit support
-            obj.kpiTable = utils.createKpiTableFromJson(cfg.kpiSchemaPath, length(fileList));
+            obj.kpiTable = utils.createKpiTableFromJson(config.kpiSchemaPath, length(fileList));
             
             % Load and store calibratables
-            obj.calibratables.SteeringWheelAngle_Th = cfg.calibratables.SteeringWheelAngle_Th;
-            obj.calibratables.AEB_SteeringAngleRate_Override = cfg.calibratables.AEB_SteeringAngleRate_Override;
-            obj.calibratables.PedalPosProIncrease_Th = cfg.calibratables.PedalPosProIncrease_Th;
-            obj.calibratables.PedalPosProIncrease_Th{2, :} = obj.calibratables.PedalPosProIncrease_Th{2, :} * 100;
-            obj.calibratables.YawrateSuspension_Th = cfg.calibratables.YawrateSuspension_Th;
-            obj.calibratables.LateralAcceleration_th = cfg.calibratables.LateralAcceleration_th;
+            obj.calibratables.SteeringWheelAngle_Th          = config.calibratables.SteeringWheelAngle_Th;
+            obj.calibratables.AEB_SteeringAngleRate_Override = config.calibratables.AEB_SteeringAngleRate_Override;
+            obj.calibratables.PedalPosProIncrease_Th         = config.calibratables.PedalPosProIncrease_Th;
+            obj.calibratables.PedalPosProIncrease_Th{2, :}   = obj.calibratables.PedalPosProIncrease_Th{2, :} * 100;
+            obj.calibratables.YawrateSuspension_Th           = config.calibratables.YawrateSuspension_Th;
+            obj.calibratables.LateralAcceleration_th         = config.calibratables.LateralAcceleration_th;
         end
         
         function obj = processAllMatFiles(obj)
@@ -84,8 +84,8 @@ classdef KPIExtractor < handle
                 
                 % Preprocess signals
                 obj.signalMatChunk.egoSpeed = obj.signalMatChunk.egoSpeed * 3.6;
-                obj.signalMatChunk.A2_Filt = utils.accelFilter(obj.signalMatChunk.time, obj.signalMatChunk.longActAccel, obj.CUTOFF_FREQ);
-                obj.signalMatChunk.A1_Filt = utils.accelFilter(obj.signalMatChunk.time, obj.signalMatChunk.latActAccel, obj.CUTOFF_FREQ);
+                obj.signalMatChunk.A2_Filt  = utils.accelFilter(obj.signalMatChunk.time, obj.signalMatChunk.longActAccel, obj.CUTOFF_FREQ);
+                obj.signalMatChunk.A1_Filt  = utils.accelFilter(obj.signalMatChunk.time, obj.signalMatChunk.latActAccel, obj.CUTOFF_FREQ);
                 
                 % Logging
                 if isa(obj.kpiTable.label, 'cell')
@@ -94,7 +94,6 @@ classdef KPIExtractor < handle
                 else
                     obj.kpiTable.label(i) = string(obj.fileList(i).name); % Assign file name to label column
                 end
-                obj.kpiTable.condTrue(i) = true;
                 if isduration(obj.signalMatChunk.time)
                     time_value = seconds(obj.signalMatChunk.time(1));
                 else
@@ -162,17 +161,17 @@ classdef KPIExtractor < handle
                 obj.kpiTable.longGap(i) = longGap;
                 
                 % Interpolate calibratables
-                steerAngTh = utils.interpolateThresholdClamped(obj.calibratables.SteeringWheelAngle_Th, vehSpd);
-                steerAngRateTh = utils.interpolateThresholdClamped(obj.calibratables.AEB_SteeringAngleRate_Override, vehSpd);
-                pedalPosIncTh = utils.interpolateThresholdClamped(obj.calibratables.PedalPosProIncrease_Th, vehSpd);
-                yawRateSuspTh = utils.interpolateThresholdClamped(obj.calibratables.YawrateSuspension_Th, vehSpd);
-                latAccelTh = utils.interpolateThresholdClamped(obj.calibratables.LateralAcceleration_th, vehSpd);
+                steerAngTh      = utils.interpolateThresholdClamped(obj.calibratables.SteeringWheelAngle_Th, vehSpd);
+                steerAngRateTh  = utils.interpolateThresholdClamped(obj.calibratables.AEB_SteeringAngleRate_Override, vehSpd);
+                pedalPosIncTh   = utils.interpolateThresholdClamped(obj.calibratables.PedalPosProIncrease_Th, vehSpd);
+                yawRateSuspTh   = utils.interpolateThresholdClamped(obj.calibratables.YawrateSuspension_Th, vehSpd);
+                latAccelTh      = utils.interpolateThresholdClamped(obj.calibratables.LateralAcceleration_th, vehSpd);
                 
-                obj.kpiTable.steerAngTh(i) = steerAngTh;
-                obj.kpiTable.steerAngRateTh(i) = steerAngRateTh;
-                obj.kpiTable.pedalPosIncTh(i) = pedalPosIncTh;
-                obj.kpiTable.yawRateSuspTh(i) = yawRateSuspTh;      
-                obj.kpiTable.latAccelTh(i) = latAccelTh;
+                obj.kpiTable.steerAngTh(i)      = steerAngTh;
+                obj.kpiTable.steerAngRateTh(i)  = steerAngRateTh;
+                obj.kpiTable.pedalPosIncTh(i)   = pedalPosIncTh;
+                obj.kpiTable.yawRateSuspTh(i)   = yawRateSuspTh;      
+                obj.kpiTable.latAccelTh(i)      = latAccelTh;
                 
                 % KPI calculations - update the kpiTable in place
                 kpiThrottle(obj, i, aebStartIdx, pedalPosIncTh);

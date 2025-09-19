@@ -4,6 +4,7 @@ classdef Config
         lineColors            % Table from sheet 'lineColors'
         calibratables         % Struct of calibration tables
         jsonConfigPath        % Path to JSON config file
+        projectRoot           % Root directory of the project
         signalMap             % Name of signal mapping Excel file
         signalPlotSpecPath    % Full path to SignalPlotSpec Excel file
         signalPlotSpecName    % File name of SignalPlotSpec Excel file
@@ -27,6 +28,24 @@ classdef Config
             % Create empty object
             obj = Config();
             obj.jsonConfigPath = jsonConfigPath;
+
+            % Load projectRoot if present
+            if isfield(configStruct, 'projectRoot') && isfield(configStruct.projectRoot, 'FilePath')
+                projectRootPath = configStruct.projectRoot.FilePath;
+                if isstring(projectRootPath) || ischar(projectRootPath)
+                    if ~isempty(projectRootPath)
+                        obj.projectRoot = projectRootPath;
+                    else
+                        warning('projectRoot.FilePath is empty. Setting default.');
+                        obj.projectRoot = '';
+                    end
+                else
+                    warning('projectRoot.FilePath should be a string. Ignoring invalid entry.');
+                    obj.projectRoot = '';
+                end
+            else
+                obj.projectRoot = '';
+            end
 
             % Load kpiSchema path and filename if present
             if isfield(configStruct, 'kpiSchema') && isfield(configStruct.kpiSchema, 'FilePath')
@@ -52,24 +71,24 @@ classdef Config
             end
 
             % Load SignalPlotSpec sheets
-            specPath  = configStruct.SignalPlotSpec.FilePath;
-            sheetList = configStruct.SignalPlotSpec.Sheets;
-            signalMapPlotSpec = Config.loadSignalMapPlotSpec(specPath, sheetList);
+            specPath                 = configStruct.SignalPlotSpec.FilePath;
+            sheetList                = configStruct.SignalPlotSpec.Sheets;
+            signalMapPlotSpec        = Config.loadSignalMapPlotSpec(specPath, sheetList);
 
-            obj.signalMap          = signalMapPlotSpec.vbRcSignals;
-            obj.graphSpec          = signalMapPlotSpec.graphSpec;
-            obj.lineColors         = signalMapPlotSpec.lineColors;
-            obj.signalPlotSpecPath = specPath;                   % <<< store full path
-            [~, specName, specExt] = fileparts(specPath);
-            obj.signalPlotSpecName = [specName, specExt];        % <<< store file name only
+            obj.signalMap            = signalMapPlotSpec.vbRcSignals;
+            obj.graphSpec            = signalMapPlotSpec.graphSpec;
+            obj.lineColors           = signalMapPlotSpec.lineColors;
+            obj.signalPlotSpecPath   = specPath;                   % <<< store full path
+            [~, specName, specExt]   = fileparts(specPath);
+            obj.signalPlotSpecName   = [specName, specExt];        % <<< store file name only
 
             % Load calibratables
-            calibFile = configStruct.Calibration.FilePath;
-            sheetDefs = configStruct.Calibration.Sheets;
-            obj.calibratables       = Config.loadCalibratables(calibFile, sheetDefs);
-            obj.calibrationFilePath = calibFile;                 % <<< store full path
+            calibFile                = configStruct.Calibration.FilePath;
+            sheetDefs                = configStruct.Calibration.Sheets;
+            obj.calibratables        = Config.loadCalibratables(calibFile, sheetDefs);
+            obj.calibrationFilePath  = calibFile;                 % <<< store full path
             [~, calibName, calibExt] = fileparts(calibFile);
-            obj.calibrationFileName = [calibName, calibExt];     % <<< store file name only
+            obj.calibrationFileName  = [calibName, calibExt];     % <<< store file name only
         end
     end
 
@@ -126,12 +145,23 @@ classdef Config
             for i = 1:numel(sheetList)
                 sheetName = sheetList{i};
                 try
-                    tbl = readtable(filePath, 'Sheet', sheetName, 'PreserveVariableNames', true);
+                    opts = detectImportOptions(filePath, ...
+                        'Sheet', sheetName, ...
+                        'PreserveVariableNames', true);
+
+                    % Force plotEnabled column (if it exists) to string
+                    if any(strcmpi(opts.VariableNames, 'plotEnabled'))
+                        opts = setvartype(opts, 'plotEnabled', 'string');
+                    end
+
+                    tbl = readtable(filePath, opts);
                     signalMapPlotSpec.(matlab.lang.makeValidName(sheetName)) = tbl;
+
                 catch ME
                     warning('Failed to read sheet "%s": %s', sheetName, ME.message);
                 end
-            end % for
+            end
+
         end % loadSignalMapPlotSpec
 
 
@@ -150,14 +180,12 @@ classdef Config
             sheetNames = fieldnames(sheetMap);
 
             for i = 1:numel(sheetNames)
-                sheet = sheetNames{i};
-                calDefs = sheetMap.(sheet);
-
+                sheet    = sheetNames{i};
+                calDefs  = sheetMap.(sheet);
                 calNames = fieldnames(calDefs);
                 for j = 1:numel(calNames)
                     calName = calNames{j};
-                    range = calDefs.(calName);
-
+                    range   = calDefs.(calName);
                     try
                         tbl = readtable(calibFile, 'Sheet', sheet, ...
                             'Range', range, 'PreserveVariableNames', true);

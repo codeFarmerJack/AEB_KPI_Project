@@ -110,7 +110,7 @@ classdef EventDetector
         %% Extract AEB events (-PRE_TIME to +POST_TIME) and save chunks
         function extractAEBEvents(obj, signalMat, locateStartTime, locateEndTime, name)
             loopRun = length(locateStartTime);
-            fields = fieldnames(signalMat);
+            fields  = fieldnames(signalMat);
             
             % Validate field sizes
             expectedRows = size(signalMat.time, 1);
@@ -155,9 +155,9 @@ classdef EventDetector
 
                 % Fallback if no valid end time found
                 if stop < start || j + n > length(locateEndTime)
-                    stopT = locateStartTime(j) + obj.POST_TIME;
+                    stopT         = locateStartTime(j) + obj.POST_TIME;
                     stopT_seconds = seconds(stopT);
-                    [~, stop] = utils.findDuration(signalMat.time, stopT_seconds);
+                    [~, stop]     = utils.findDuration(signalMat.time, stopT_seconds);
                 end
 
                 % Ensure stop doesn't exceed signal length

@@ -35,7 +35,6 @@
     { "name": "yawRateSuspTh", "type": "double", "unit": "deg/s" },
     { "name": "absYawRateMaxDeg", "type": "double", "unit": "deg/s" },
     { "name": "isYawRateHigh", "type": "logical", "unit": "" },
-    { "name": "longGap", "type": "double", "unit": "m" },
-    { "name": "condTrue", "type": "logical", "unit": "" }
+    { "name": "longGap", "type": "double", "unit": "m" }
   ]
 }
