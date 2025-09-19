@@ -60,6 +60,10 @@ function visScatterPlotter(obj, graphIndex)
     xVar = 'vehSpd';
     yVar = char(graphSpec.Reference(graphIndex));
 
+    % Axis labels 
+    xLabel = char(graphSpec.Axis_Name(1));
+    yLabel = char(graphSpec.Axis_Name(graphIndex));
+
     % Normalize plotEnabled (already guaranteed to be string from import)
     plotEnabled = strtrim(string(graphSpec.plotEnabled(graphIndex)));
 
@@ -71,12 +75,14 @@ function visScatterPlotter(obj, graphIndex)
         % Create figure only if plotting is enabled
         fig = figure; hold on;
         set(fig, 'Position', [10 10 900 600]);
-        xlim([-5 95]);
+        
+        % Set axis limits
+        xlim([graphSpec.Min_Axis_value(1), graphSpec.Max_Axis_value(1)]);
         ylim([graphSpec.Min_Axis_value(graphIndex), graphSpec.Max_Axis_value(graphIndex)]);
         
         % Use variable names without units for axis labels
-        xlabel(strrep(xVar, '_', '\_'), 'Interpreter', 'none');
-        ylabel(strrep(yVar, '_', '\_'), 'Interpreter', 'none');
+        xlabel(strrep(xLabel, '_', '\_'), 'Interpreter', 'none');
+        ylabel(strrep(yLabel, '_', '\_'), 'Interpreter', 'none');
         title(char(graphSpec.Legend(graphIndex)));
 
         Calibration_Limit = char(graphSpec.Calibration_Lim(graphIndex));
@@ -164,7 +170,7 @@ function visScatterPlotter(obj, graphIndex)
         % Extract and plot calibration limit if specified
         if ~strcmp(Calibration_Limit, 'none')
             if isfield(calibratables, Calibration_Limit)
-                lim_data = calibratables.(Calibration_Limit);
+                lim_data   = calibratables.(Calibration_Limit);
                 lim_data_x = lim_data{1,:};
                 lim_data_y = lim_data{2,:};
                 plot(lim_data_x, lim_data_y, 'DisplayName', Calibration_Limit);
