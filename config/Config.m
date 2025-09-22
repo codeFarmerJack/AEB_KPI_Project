@@ -2,6 +2,7 @@ classdef Config
     properties
         graphSpec             % Table from sheet 'graphSpec'
         lineColors            % Table from sheet 'lineColors'
+        markerShapes          % Table from sheet 'markerShapes'
         calibratables         % Struct of calibration tables
         jsonConfigPath        % Path to JSON config file
         projectRoot           % Root directory of the project
@@ -78,6 +79,7 @@ classdef Config
             obj.signalMap            = signalMapPlotSpec.vbRcSignals;
             obj.graphSpec            = signalMapPlotSpec.graphSpec;
             obj.lineColors           = signalMapPlotSpec.lineColors;
+            obj.markerShapes         = signalMapPlotSpec.markerShapes; % <<< new property
             obj.signalPlotSpecPath   = specPath;                   % <<< store full path
             [~, specName, specExt]   = fileparts(specPath);
             obj.signalPlotSpecName   = [specName, specExt];        % <<< store file name only

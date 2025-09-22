@@ -35,6 +35,10 @@
     { "name": "yawRateSuspTh", "type": "double", "unit": "deg/s" },
     { "name": "absYawRateMaxDeg", "type": "double", "unit": "deg/s" },
     { "name": "isYawRateHigh", "type": "logical", "unit": "" },
-    { "name": "longGap", "type": "double", "unit": "m" }
+    { "name": "firstDetDist", "type": "double", "unit": "m" },
+    { "name": "stableDetDist", "type": "double", "unit": "m" },
+    { "name": "aebIntvDist", "type": "double", "unit": "m" },
+    { "name": "aebStopGap", "type": "double", "unit": "m" }
+
   ]
 }

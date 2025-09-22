@@ -4,7 +4,7 @@
     },
     "SignalPlotSpec": {
         "FilePath": "/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_matlab/01_kpi_extractor/AEB_KPI_Project/config/SignalMapPlotSpec.xlsx",
-        "Sheets": ["vbRcSignals", "graphSpec", "lineColors"]
+        "Sheets": ["vbRcSignals", "graphSpec", "lineColors","markerShapes"]
     },
     "Calibration": {
         "FilePath": "/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_matlab/01_kpi_extractor/Active_Safety_Long_Calibration_Plan.xlsx",

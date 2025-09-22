@@ -29,24 +29,37 @@ extractor.exportToCSV();
 viz = Visualizer(cfg)
 
 figure;
-% Subplot 1: lateral accel, longitudinal accel, target decel
-subplot(4,2,1);
-plot(data1.signalMat.time, data1.signalMat.latActAccel, 'b', 'LineWidth', 1.2); hold on;
-plot(data1.signalMat.time, data1.signalMat.longActAccel, 'r', 'LineWidth', 1.2);
-plot(data1.signalMat.time, data1.signalMat.aebTargetDecel, 'k--', 'LineWidth', 1.2);
-xlabel('Time [s]'); ylabel('Acceleration');
-title('Lat/Long Accel & Target Decel');
-legend('Lat Accel','Long Accel','Target Decel');
+subplot(3,1,1);
+plot(data3.signalMatChunk.time, data3.signalMatChunk.longActAccel, 'r', 'LineWidth', 1.2); hold on;
+plot(data3.signalMatChunk.time, data3.signalMatChunk.aebTargetDecel, 'k--', 'LineWidth', 1.2); hold on;
+plot(data3.signalMatChunk.time, data3.signalMatChunk.throttleValue, 'm', 'LineWidth', 1.2); hold on;
+plot(data3.signalMatChunk.time, data3.signalMatChunk.egoSpeed, 'g', 'LineWidth', 1.2);
+xlabel('Time [s]'); 
+title('data3');
+legend('Long Accel','Target Decel', 'throttle', 'Ego Speed');
+grid on;
+% Subplot 2: targetId
+subplot(3,1,2);
+plot(data3.signalMatChunk.time, data3.signalMatChunk.targetId, 'k', 'LineWidth', 1.2);
+xlabel('Time [s]'); ylabel('Target ID');
+title('Target ID');
+grid on;
+% Subplot 3: longGap
+subplot(3,1,3);
+plot(data3.signalMatChunk.time, data3.signalMatChunk.longGap, 'c', 'LineWidth', 1.2);
+xlabel('Time [s]'); ylabel('Distance [m]');
+title('Longitudinal Gap');
 grid on;
 
+
 % Subplot 2: ego speed and throttle
-subplot(4,2,2);
+subplot(2,2,2);
 yyaxis left;
-plot(data1.signalMat.time, data1.signalMat.egoSpeed, 'g', 'LineWidth', 1.2);
+plot(data3.signalMatChunk.time, data3.signalMatChunk.egoSpeed, 'g', 'LineWidth', 1.2);
 ylabel('Ego Speed');
 
 yyaxis right;
-plot(data1.signalMat.time, data1.signalMat.throttleValue, 'm', 'LineWidth', 1.2);
+plot(data3.signalMatChunk.time, data3.signalMatChunk.throttleValue, 'm', 'LineWidth', 1.2);
 ylabel('Throttle');
 
 xlabel('Time [s]');
@@ -55,36 +68,36 @@ legend('Ego Speed','Throttle');
 grid on;
 
 % Subplot 3: longGap
-subplot(4,2,3);
-plot(data1.signalMat.time, data1.signalMat.longGap, 'c', 'LineWidth', 1.2);
+subplot(2,2,3);
+plot(data3.signalMatChunk.time, data3.signalMatChunk.longGap, 'c', 'LineWidth', 1.2);
 xlabel('Time [s]'); ylabel('Distance [m]');
 title('Longitudinal Gap');
 grid on;
 
 % Subplot 4: targetId
-subplot(4,2,4);
-plot(data1.signalMat.time, data1.signalMat.targetId, 'k', 'LineWidth', 1.2);
+subplot(2,2,4);
+plot(data3.signalMatChunk.time, data3.signalMatChunk.targetId, 'k', 'LineWidth', 1.2);
 xlabel('Time [s]'); ylabel('Target ID');
 title('Target ID');
 grid on;
 
 % Subplot 5: steer wheel angle
 subplot(4,2,5);
-plot(data1.signalMat.time, data1.signalMat.steerWheelAngle, 'b', 'LineWidth', 1.2);
+plot(data3.signalMatChunk.time, data3.signalMatChunk.steerWheelAngle, 'b', 'LineWidth', 1.2);
 xlabel('Time [s]'); ylabel('Angle [deg]');
 title('Steer Wheel Angle');
 grid on;
 
 % Subplot 6: steer wheel angle speed
 subplot(4,2,6);
-plot(data1.signalMat.time, data1.signalMat.steerWheelAngleSpeed, 'r', 'LineWidth', 1.2);
+plot(data3.signalMatChunk.time, data3.signalMatChunk.steerWheelAngleSpeed, 'r', 'LineWidth', 1.2);
 xlabel('Time [s]'); ylabel('Angle Speed');
 title('Steer Wheel Angle Speed');
 grid on;
 
 % Subplot 7: yaw rate
 subplot(4,2,7);
-plot(data1.signalMat.time, data1.signalMat.yawRate, 'm', 'LineWidth', 1.2);
+plot(data3.signalMatChunk.time, data3.signalMatChunk.yawRate, 'm', 'LineWidth', 1.2);
 xlabel('Time [s]'); ylabel('Yaw Rate [deg/s]');
 title('Yaw Rate');
 grid on;
@@ -92,11 +105,11 @@ grid on;
 % Subplot 8: TTC and brake pedal pressed
 subplot(4,2,8);
 yyaxis left;
-plot(data1.signalMat.time, data1.signalMat.ttc, 'k', 'LineWidth', 1.2);
+plot(data3.signalMatChunk.time, data3.signalMatChunk.ttc, 'k', 'LineWidth', 1.2);
 ylabel('TTC [s]');
 
 yyaxis right;
-stairs(data1.signalMat.time, data1.signalMat.brakePedalPressed, 'r', 'LineWidth', 1.2);
+stairs(data3.signalMatChunk.time, data3.signalMatChunk.brakePedalPressed, 'r', 'LineWidth', 1.2);
 ylabel('Brake Pressed');
 
 xlabel('Time [s]');

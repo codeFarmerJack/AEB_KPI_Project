@@ -4,7 +4,7 @@ classdef EventDetector
         pathToMatChunks           % destination folder for PostProcessing
         
         % Parameters for event extraction
-        PRE_TIME = seconds(4)     % time before event (duration)
+        PRE_TIME = seconds(6)     % time before event (duration)
         POST_TIME = seconds(3)    % time after event (duration)
     end
     
@@ -33,8 +33,8 @@ classdef EventDetector
             end
             
             % Set default parameters (already set as property defaults, but explicit for clarity)
-            obj.PRE_TIME  = seconds(4);
-            obj.POST_TIME = seconds(3);
+            % obj.PRE_TIME  = seconds(4);
+            % obj.POST_TIME = seconds(3);
         end % constructor
         
         %% Main function to process all .mat files

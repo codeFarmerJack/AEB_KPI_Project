@@ -1,7 +1,8 @@
 classdef Visualizer
     properties
         graphSpec        % metadata of graph
-        lineColor        % color of the curve
+        lineColors       % color of the curve
+        markerShapes     % marker shape of the curve
         calibratables    % unpacked calibratables
         pathToCsv        % path to csv files
         pathToKpiSchema  % path to JSON schema file
@@ -21,7 +22,8 @@ classdef Visualizer
             
             % Initialize properties
             obj.graphSpec       = config.graphSpec;
-            obj.lineColor       = config.lineColors;
+            obj.lineColors      = config.lineColors;
+            obj.markerShapes    = config.markerShapes;
             obj.calibratables   = config.calibratables;
             obj.pathToKpiSchema = config.kpiSchemaPath;
             obj.pathToCsv       = kpiExtractor.pathToCsv;

@@ -155,10 +155,6 @@ classdef KPIExtractor < handle
                     warning('Invalid intvDur value for %s: %s. Setting intvDur to NaN.', filename, string(intvDur));
                     obj.kpiTable.intvDur(i) = NaN;
                 end
-
-                % Longitudinal Clearance
-                longGap = obj.signalMatChunk.longGap(aebEndIdx);
-                obj.kpiTable.longGap(i) = longGap;
                 
                 % Interpolate calibratables
                 steerAngTh      = utils.interpolateThresholdClamped(obj.calibratables.SteeringWheelAngle_Th, vehSpd);
@@ -174,6 +170,7 @@ classdef KPIExtractor < handle
                 obj.kpiTable.latAccelTh(i)      = latAccelTh;
                 
                 % KPI calculations - update the kpiTable in place
+                kpiDistance(obj, i, aebStartIdx, aebEndIdx)
                 kpiThrottle(obj, i, aebStartIdx, pedalPosIncTh);
                 kpiSteeringWheel(obj, i, aebStartIdx, steerAngTh, steerAngRateTh);
                 kpiLatAccel(obj, i, aebStartIdx, latAccelTh);

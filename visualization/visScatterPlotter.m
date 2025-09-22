@@ -1,14 +1,27 @@
 function visScatterPlotter(obj, graphIndex)
 % visScatterPlotter - Generates scatter plot for a specific graph index
 % Inputs:
-%   obj        - Visualizer object with graphSpec, lineColor, calibratables, pathToCsv
+%   obj        - Visualizer object with graphSpec, lineColors, calibratables, pathToCsv
 %   graphIndex - Row index in graphSpec to plot
 
-    graphSpec       = obj.graphSpec;
-    lineColor       = obj.lineColor;
-    calibratables   = obj.calibratables;
-    pathToCsv       = obj.pathToCsv;
-    pathToKpiSchema = obj.pathToKpiSchema;
+    % --- persistent map of figures ---
+    persistent figs firstRows lastRows titleIdx
+
+    graphSpec        = obj.graphSpec;
+    lineColors       = obj.lineColors;
+    markerShapes     = obj.markerShapes;
+    calibratables    = obj.calibratables;
+    pathToCsv        = obj.pathToCsv;
+    pathToKpiSchema  = obj.pathToKpiSchema;
+
+    % Init grouping info once
+    if isempty(titleIdx)
+        [uniqueTitles, ~, titleIdx] = unique(graphSpec.Title);
+        groupRows = arrayfun(@(g) find(titleIdx==g), 1:numel(uniqueTitles), ...
+                             'UniformOutput', false);
+        firstRows = cellfun(@min, groupRows);
+        lastRows  = cellfun(@max, groupRows);
+    end
 
     % Read JSON schema to get variable names and units
     if isempty(pathToKpiSchema)
@@ -57,14 +70,13 @@ function visScatterPlotter(obj, graphIndex)
     end
 
     % Define x and y variables (JSON variable names)
-    xVar = 'vehSpd';
+    xVar = char(graphSpec.Reference(1));
     yVar = char(graphSpec.Reference(graphIndex));
 
     % Axis labels 
     xLabel = char(graphSpec.Axis_Name(1));
-    yLabel = char(graphSpec.Axis_Name(graphIndex));
 
-    % Normalize plotEnabled (already guaranteed to be string from import)
+    % Normalize plotEnabled
     plotEnabled = strtrim(string(graphSpec.plotEnabled(graphIndex)));
 
     % Debug
@@ -72,24 +84,36 @@ function visScatterPlotter(obj, graphIndex)
 
     % Skip plotting if plotEnabled is false or NA
     if ~strcmpi(plotEnabled, "false") && ~strcmpi(plotEnabled, "NA")
-        % Create figure only if plotting is enabled
-        fig = figure; hold on;
-        set(fig, 'Position', [10 10 900 600]);
-        
-        % Set axis limits
-        xlim([graphSpec.Min_Axis_value(1), graphSpec.Max_Axis_value(1)]);
-        ylim([graphSpec.Min_Axis_value(graphIndex), graphSpec.Max_Axis_value(graphIndex)]);
-        
-        % Use variable names without units for axis labels
-        xlabel(strrep(xLabel, '_', '\_'), 'Interpreter', 'none');
-        ylabel(strrep(yLabel, '_', '\_'), 'Interpreter', 'none');
-        title(char(graphSpec.Legend(graphIndex)));
+
+        % Group info
+        groupId   = titleIdx(graphIndex);
+        groupRows = find(titleIdx == groupId);
+        rowInGroup = find(groupRows == graphIndex);   
+        firstRow  = firstRows(groupId);
+        lastRow   = lastRows(groupId);
+        isFirst   = (graphIndex == firstRow);
+        isLast    = (graphIndex == lastRow);
+
+        % --- Option 2: persistent figure handling ---
+        titleStr = char(graphSpec.Title(graphIndex));
+        titleKey = matlab.lang.makeValidName(titleStr);  % safe key for struct field
+        if isFirst
+            figs.(titleKey) = figure; 
+            hold on;
+            set(figs.(titleKey), 'Position', [10 10 900 600]);
+            % Set axis limits
+            xlim([graphSpec.Min_Axis_value(1), graphSpec.Max_Axis_value(1)]);
+            ylim([graphSpec.Min_Axis_value(firstRow), graphSpec.Max_Axis_value(firstRow)]);
+            xlabel(strrep(xLabel, '_', '\_'), 'Interpreter', 'none');
+            yLabel = char(graphSpec.Axis_Name(firstRow));
+            ylabel(strrep(yLabel, '_', '\_'), 'Interpreter', 'none');
+            title(titleStr, 'Interpreter','none');
+        end
+
+        fig = figs.(titleKey);
+        figure(fig); % bring current
 
         Calibration_Limit = char(graphSpec.Calibration_Lim(graphIndex));
-
-        % prepare quick lookup map from lower(varName) -> displayName
-        varNameLower = lower(varName);
-        % for mapping convenience (parallel arrays used below)
 
         for i = 1:N
             filename = files(i).name;
@@ -103,7 +127,6 @@ function visScatterPlotter(obj, graphIndex)
             end
 
             % --- Resolve X and Y column indices robustly (case-insensitive) ---
-            % Candidate display-name (JSON) for x and y
             xCandidate = xVar;
             idxX = find(strcmpi(xVar, varName), 1);
             if ~isempty(idxX), xCandidate = displayNames{idxX}; end
@@ -112,7 +135,6 @@ function visScatterPlotter(obj, graphIndex)
             idxY = find(strcmpi(yVar, varName), 1);
             if ~isempty(idxY), yCandidate = displayNames{idxY}; end
 
-            % Try to find actual column indices in the CSV (case-insensitive)
             xColIdx = find(strcmpi(xCandidate, data.Properties.VariableNames), 1);
             if isempty(xColIdx)
                 xColIdx = find(strcmpi(xVar, data.Properties.VariableNames), 1);
@@ -130,12 +152,9 @@ function visScatterPlotter(obj, graphIndex)
 
             % Apply condition
             if strcmpi(plotEnabled, "true")
-                filtIdx = 1:height(data);   % all rows
+                filtIdx = 1:height(data);
             elseif ismember(plotEnabled, data.Properties.VariableNames)
-                % Dynamic filtering based on a column in the CSV
                 condCol = data.(plotEnabled);
-
-                % Convert if not logical
                 if isnumeric(condCol)
                     condCol = condCol ~= 0;
                 elseif isstring(condCol) || iscellstr(condCol)
@@ -144,7 +163,6 @@ function visScatterPlotter(obj, graphIndex)
                     warning('Unexpected type in column "%s". Defaulting to all rows.', plotEnabled);
                     condCol = true(height(data),1);
                 end
-
                 filtIdx = find(condCol);
                 if isempty(filtIdx)
                     warning('Condition "%s" in %s has no true rows. Skipping.', ...
@@ -157,17 +175,63 @@ function visScatterPlotter(obj, graphIndex)
                 filtIdx = 1:height(data);
             end
 
-            legendName = char(graphSpec.Legend(graphIndex));
-            
-            % extract x and y using column indices (safe for any column name)
-            x = round(data{filtIdx, xColIdx}, 1);
-            y = data{filtIdx, yColIdx};
+            legendName = string(graphSpec.Legend(graphIndex));
+            legendName = char(legendName);  % ensure char for plot
 
-            plot(x, y, 'LineStyle', 'none', 'Marker', '*', ...
-                 'DisplayName', legendName, 'Color', lineColor{i,:});
+            % --- Force numeric extraction ---
+            x = table2array(data(filtIdx, xColIdx));
+            y = table2array(data(filtIdx, yColIdx));
+
+            % --- Marker + Color selection ---
+            if istable(lineColors)
+                lineColors = table2array(lineColors);
+            end
+
+            if numel(groupRows) == 1
+                % Only one scatter → always use first marker & color
+                markerStyle = markerShapes.Shapes{1};
+                thisColor   = lineColors(1,:);
+            else
+                % Multiple scatters → cycle by rowInGroup
+                mIdx = mod(rowInGroup-1, height(markerShapes)) + 1;
+                cIdx = mod(rowInGroup-1, size(lineColors,1)) + 1;
+
+                markerStyle = markerShapes.Shapes{mIdx};
+                thisColor   = lineColors(cIdx,:);
+            end
+
+            if isstring(markerStyle)
+                markerStyle = char(markerStyle);
+            end
+
+            % ConnectPoints 
+            cpRaw = graphSpec.ConnectPoints(graphIndex);
+            cpStr = lower(strtrim(string(cpRaw)));
+            connectFlag = false;
+            if islogical(cpRaw)
+                connectFlag = cpRaw;
+            elseif isnumeric(cpRaw)
+                connectFlag = cpRaw ~= 0;
+            else
+                connectFlag = ismember(cpStr, ["true","1","yes","y"]);
+            end
+
+            % Ensure lineColors is numeric
+            if istable(lineColors)
+                lineColors = table2array(lineColors);
+            end
+
+            if connectFlag
+                plot(x, y, 'LineStyle','-',   'Marker', markerStyle, ...
+                    'DisplayName', legendName, 'Color', thisColor);
+            else
+                plot(x, y, 'LineStyle','none','Marker', markerStyle, ...
+                    'DisplayName', legendName, 'Color', thisColor);
+            end
+
         end % for i = 1:N
 
-        % Extract and plot calibration limit if specified
+        % Calibration limit
         if ~strcmp(Calibration_Limit, 'none')
             if isfield(calibratables, Calibration_Limit)
                 lim_data   = calibratables.(Calibration_Limit);
@@ -179,14 +243,16 @@ function visScatterPlotter(obj, graphIndex)
             end
         end
 
-        legend('Interpreter', 'none', 'Location', 'northeast', ...
-               'FontSize', 8, 'Orientation', 'vertical');
-        grid on;
-        set(gca, 'xminorgrid', 'on', 'yminorgrid', 'on');
-
-        fig_name = strcat('Fig_', num2str(graphIndex-1, '%02d'), ' - ', ...
-                         char(graphSpec.Legend(graphIndex)));
-        print(fig, fig_name, '-dpng', '-r400');
+        % --- Finalize if last in group ---
+        if isLast
+            legend('Interpreter', 'none', 'Location', 'northeast', ...
+                   'FontSize', 8, 'Orientation', 'vertical');
+            grid on;
+            set(gca, 'xminorgrid', 'on', 'yminorgrid', 'on');
+            fig_name = strcat('Fig_', num2str(firstRow-1, '%02d'), ' - ', ...
+                             char(graphSpec.Legend(graphIndex)));
+            print(fig, fig_name, '-dpng', '-r400');
+        end
     end % End of plotEnabled check
 
     cd(originpath);
