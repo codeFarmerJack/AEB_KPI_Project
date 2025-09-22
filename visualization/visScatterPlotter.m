@@ -57,17 +57,9 @@ function visScatterPlotter(obj, graphIndex)
         % --- persistent figure handling ---
         titleStr = char(graphSpec.Title(graphIndex));
         titleKey = matlab.lang.makeValidName(titleStr);  % safe key for struct field
+        
         if isFirst
-            figs.(titleKey) = figure; 
-            hold on;
-            set(figs.(titleKey), 'Position', [10 10 900 600]);
-            % Set axis limits
-            xlim([graphSpec.Min_Axis_value(1), graphSpec.Max_Axis_value(1)]);
-            ylim([graphSpec.Min_Axis_value(firstRow), graphSpec.Max_Axis_value(firstRow)]);
-            xlabel(strrep(xLabel, '_', '\_'), 'Interpreter', 'none');
-            yLabel = char(graphSpec.Axis_Name(firstRow));
-            ylabel(strrep(yLabel, '_', '\_'), 'Interpreter', 'none');
-            title(titleStr, 'Interpreter','none');
+            figs.(titleKey) = setupScatterFigure(titleKey, titleStr, graphSpec, firstRow, xLabel);
         end
 
         fig = figs.(titleKey);
@@ -180,6 +172,36 @@ function [varName, displayNames] = loadSchemaVars(pathToKpiSchema)
             displayNames{i} = sprintf('%s [%s]', varName{i}, unit);
         end
     end
+end
+
+function fig = setupScatterFigure(titleKey, titleStr, graphSpec, firstRow, xLabel)
+    % setupScatterFigure - Create and configure a new scatter plot figure
+    %
+    % Inputs:
+    %   titleKey   - valid MATLAB struct field name for figure handle storage
+    %   titleStr   - title string for the figure
+    %   graphSpec  - table/struct containing axis limits and labels
+    %   firstRow   - row index in graphSpec for Y-axis config
+    %   xLabel     - label for X-axis
+    %
+    % Output:
+    %   fig        - handle to the created figure
+
+    fig = figure;
+    hold on;
+    set(fig, 'Position', [10 10 900 600]);
+
+    % Set axis limits
+    xlim([graphSpec.Min_Axis_value(1), graphSpec.Max_Axis_value(1)]);
+    ylim([graphSpec.Min_Axis_value(firstRow), graphSpec.Max_Axis_value(firstRow)]);
+
+    % Axis labels
+    xlabel(strrep(xLabel, '_', '\_'), 'Interpreter', 'none');
+    yLabel = char(graphSpec.Axis_Name(firstRow));
+    ylabel(strrep(yLabel, '_', '\_'), 'Interpreter', 'none');
+
+    % Title
+    title(titleStr, 'Interpreter', 'none');
 end
 
 function data = safeReadCsv(filename)
