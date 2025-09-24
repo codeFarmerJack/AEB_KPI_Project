@@ -13,7 +13,7 @@ RUN pip3 install asammdf scipy pandas argparse numpy
 
 # Create utils directory and copy script
 RUN mkdir -p /data/AEB_KPI_Project/docker
-COPY docker/mdf2matSim.py /data/AEB_KPI_Project/docker/mdf2matSim.py
-RUN chmod +x /data/AEB_KPI_Project/docker/mdf2matSim.py
+COPY docker/mdf2matConv.py /data/AEB_KPI_Project/docker/mdf2matConv.py
+RUN chmod +x /data/AEB_KPI_Project/docker/mdf2matConv.py
 
 CMD ["bash"]

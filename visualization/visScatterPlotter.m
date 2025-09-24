@@ -48,11 +48,23 @@ function visScatterPlotter(obj, graphIndex)
         % Group info
         groupId    = titleIdx(graphIndex);
         groupRows  = find(titleIdx == groupId);
-        rowInGroup = find(groupRows == graphIndex);   
-        firstRow   = firstRows(groupId);
-        lastRow    = lastRows(groupId);
-        isFirst    = (graphIndex == firstRow);
-        isLast     = (graphIndex == lastRow);
+
+        % Filter to only enabled rows (ignore "false"/"NA")
+        enabledMask = ~strcmpi(graphSpec.plotEnabled(groupRows), "false") & ...
+                    ~strcmpi(graphSpec.plotEnabled(groupRows), "NA");
+        enabledRows = groupRows(enabledMask);
+
+        % Row position within group
+        rowInGroup = find(groupRows == graphIndex);
+
+        % Define first/last rows for enabled set
+        firstRow = enabledRows(1);
+        lastRow  = enabledRows(end);
+
+        % Flags
+        isFirst = (graphIndex == firstRow);
+        isLast  = (graphIndex == lastRow);
+
 
         % --- persistent figure handling ---
         titleStr = char(graphSpec.Title(graphIndex));
