@@ -40,7 +40,6 @@ function visScatterPlotter(obj, graphIndex)
     yVar        = char(graphSpec.Reference(graphIndex));
     xLabel      = char(graphSpec.Axis_Name(1));
     plotEnabled = strtrim(string(graphSpec.plotEnabled(graphIndex)));
-    fprintf('Graph %d plotEnabled = %s\n', graphIndex, plotEnabled); % debug
 
     % Skip plotting if plotEnabled is false or NA
     if ~strcmpi(plotEnabled, "false") && ~strcmpi(plotEnabled, "NA")

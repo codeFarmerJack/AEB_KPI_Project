@@ -75,7 +75,7 @@ classdef InputHandler < handle
             % Initialize cell array to store processed data
             processedData = cell(1, length(files));
             N = length(files);
-            fprintf('Found %d MF4 file(s) to process...\n', N);
+            fprintf('    Found %d MF4 file(s) to process...\n', N);
 
             % Process each MF4 file
             cd(pathToRawData);
@@ -90,7 +90,7 @@ classdef InputHandler < handle
                     % Save to .mat file in the same folder as MF4 files
                     matFileName = fullfile(pathToRawData, [name '.mat']);
                     save(matFileName, 'signalMat');
-                    fprintf('Processed: %s, saved to %s\n', files(i).name, matFileName);
+                    % fprintf('Processed: %s, saved to %s\n', files(i).name, matFileName);
 
                     % Store processed data
                     processedData{i} = signalMat;
@@ -101,7 +101,6 @@ classdef InputHandler < handle
             end
 
             cd(curFolder);
-            fprintf('✅ Processed %d MF4 files and saved to %s\n', N, pathToRawData);
         end
     end
 

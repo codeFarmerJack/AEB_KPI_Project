@@ -180,8 +180,7 @@ classdef KPIExtractor < handle
             end % for each file
 
             cd(originpath); % Return to original directory
-            % Notify user when done
-            disp('✅ All KPI extraction and processing completed successfully.');
+            
         end % processAllMatFiles    
         
         function exportToCSV(obj)
@@ -204,8 +203,6 @@ classdef KPIExtractor < handle
                 % Restore original VariableNames
                 obj.kpiTable.Properties.VariableNames = originalVarNames;
 
-                % Notify user
-                fprintf('✅ KPI results exported successfully to %s\n', outputFilename);
             catch e
                 % Restore original VariableNames in case of error
                 if exist('originalVarNames', 'var')

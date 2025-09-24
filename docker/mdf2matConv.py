@@ -87,7 +87,7 @@ def mdf2matConv(dat_path: str,
         raise FileNotFoundError(f"File '{dat_path}' does not exist")
 
     if m is None or not isinstance(m, MDF):
-        print(f"Reading MDF file: {dat_path}")
+        print(f"    > Processing MDF file: {dat_path}")
         m = MDF(dat_path)
 
     if not load_signals:
@@ -168,8 +168,7 @@ def mdf2matConv(dat_path: str,
                     break
 
             if not found:
-                print(f"No match found for {generic_name} in raster '{raster_val}'")
-
+                print(f"    ⚠️ No match found for {generic_name} in raster '{raster_val}'")
 
     # --- Read signals ---
     for _, row in pd.DataFrame(to_read).iterrows():
@@ -272,12 +271,6 @@ if __name__ == "__main__":
         convert_to_tact_unit=convert_to_tact_unit
     )
 
-    if data.empty:
-        print("Warning: DataFrame is empty. No signals extracted.")
-    else:
-        print(f"Extracted signals (mapped): {data.columns.tolist()}")
-        print(f"DataFrame shape: {data.shape}")
-
     # Save only mapped signals
     if not data.empty and signal_database is not None:
         mat_file = os.path.splitext(args.dat_path)[0] + '.mat'
@@ -291,10 +284,10 @@ if __name__ == "__main__":
 
             if len(signals_struct) > 1:
                 savemat(mat_file, {'signalMat': signals_struct})
-                print(f"Saved mapped signals to {mat_file}")
+                # print(f"    Saved mapped signals to {mat_file}")
             else:
-                print("Warning: No mapped signals found to save in MAT file.")
+                print("    Warning: No mapped signals found to save in MAT file.")
         except Exception as e:
-            print(f"Error saving .mat file: {e}")
+            print(f"    Error saving .mat file: {e}")
 
-    print("Processing complete.")
+    #print("    Processing complete.")

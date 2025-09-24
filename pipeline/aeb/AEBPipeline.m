@@ -45,48 +45,55 @@ classdef AEBPipeline < handle
             %
             % Executes the pipeline steps: process MF4 files, detect AEB events,
             % extract KPIs, export to CSV, and visualize results.
-            
+
+            fprintf('\n🚀 Starting AEB processing pipeline...\n');
+
             % Step 3: Process MF4 files
-            fprintf('Processing MF4 files...\n');
+            fprintf(' ➡️ [Step 1/4] Processing MF4 files...\n');
             try
                 processedData = obj.InputHandler.processMF4Files();
                 if isempty(processedData)
                     warning('No data processed from MF4 files. Aborting pipeline.');
                     return;
                 end
+                fprintf('    ✅ MF4 files processed successfully.\n');
             catch err
-                error('Failed to process MF4 files: %s', err.message);
+                error('  ❌ Failed to process MF4 files: %s', err.message);
             end
-            
-            % Step 4: Create EventDetector and process files
-            fprintf('Detecting AEB events...\n');
+
+            % Step 4: Detect AEB events
+            fprintf(' ➡️ [Step 2/4] Detecting AEB events...\n');
             try
                 obj.EventDetector = EventDetector(obj.InputHandler);
                 obj.EventDetector.processAllFiles();
+                fprintf('    ✅ AEB events detected successfully.\n');
             catch err
-                error('Failed to process AEB events: %s', err.message);
+                error('  ❌ Failed to process AEB events: %s', err.message);
             end
-            
-            % Step 5: Create KPIExtractor, process mat files, and export to CSV
-            fprintf('Extracting KPIs and exporting to CSV...\n');
+
+            % Step 5: Extract KPIs
+            fprintf(' ➡️ [Step 3/4] Extracting KPIs and exporting to CSV...\n');
             try
                 obj.KPIExtractor = KPIExtractor(obj.Config, obj.EventDetector);
                 obj.KPIExtractor = obj.KPIExtractor.processAllMatFiles();
                 obj.KPIExtractor.exportToCSV();
+                fprintf('    ✅ KPIs extracted and exported to CSV successfully.\n');
             catch err
-                error('Failed to extract KPIs or export to CSV: %s', err.message);
+                error('  ❌ Failed to extract KPIs or export to CSV: %s', err.message);
             end
-            
-            % Step 6: Create Visualizer and plot results
-            fprintf('Generating visualizations...\n');
+
+            % Step 6: Visualize results
+            fprintf(' ➡️ [Step 4/4] Generating visualizations...\n');
             try
                 obj.Visualizer = Visualizer(obj.Config, obj.KPIExtractor);
                 obj.Visualizer.plot();
+                fprintf('    ✅ Visualizations generated successfully.\n');
             catch err
-                error('Failed to generate visualizations: %s', err.message);
+                error('  ❌ Failed to generate visualizations: %s', err.message);
             end
-            
-            fprintf('✅ AEB processing pipeline completed successfully.\n');
-        end
-    end
+
+            fprintf('\n🎉 AEB processing pipeline completed successfully.\n');
+        end % function run
+
+    end % methods
 end
