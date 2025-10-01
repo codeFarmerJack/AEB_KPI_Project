@@ -10,7 +10,7 @@ def kpi_lat_accel(obj, i, aeb_start_idx, lat_accel_th):
     ----------
     obj : object with attributes
         - kpi_table : pandas.DataFrame
-        - signal_mat_chunk : dict-like with array "A1_Filt"
+        - signal_mat_chunk : dict-like with array "latActAccelFlt"
         - TIME_IDX_OFFSET : int
     i : int
         Row index in kpi_table to update.
@@ -33,7 +33,7 @@ def kpi_lat_accel(obj, i, aeb_start_idx, lat_accel_th):
             kpi_table[col] = pd.Series([default] * len(kpi_table), dtype=dtype)
 
     # Slice from AEB start - offset to end
-    segment = signals["A1_Filt"][aeb_start_idx - offset :]
+    segment = signals["latActAccelFlt"][aeb_start_idx - offset :]
 
     # Find max absolute lateral accel
     idx_rel = int(np.argmax(np.abs(segment)))

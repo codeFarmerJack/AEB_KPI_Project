@@ -1,137 +1,137 @@
 import os
 import numpy as np
-from scipy.io import loadmat, savemat
+import pandas as pd
+from asammdf import MDF
+import gc
 
 
 class EventDetector:
     """
-    EventDetector: detects AEB events in MAT files and extracts chunks.
+    EventDetector: detects AEB events in MF4 files and extracts chunks.
 
-    Each MAT file is expected to contain a variable 'signalMat',
-    which is a dict-like structure with at least 'time' and 'aebTargetDecel'.
+    Each MF4 file must contain a signal 'aebTargetDecel'.
     """
 
-    def __init__(self, input_handler, pre_time: float = 6.0, post_time: float = 3.0):
-        """
-        Args:
-            input_handler: InputHandler instance (must have .pathToRawData)
-            pre_time (float): seconds before event
-            post_time (float): seconds after event
-        """
-        if input_handler is None or not hasattr(input_handler, "pathToRawData"):
+    # --- Class-level defaults (constants) ---
+    PRE_TIME = 6.0   # seconds before event
+    POST_TIME = 3.0  # seconds after event
+
+    def __init__(self, input_handler, pre_time: float = None, post_time: float = None):
+        if input_handler is None or not hasattr(input_handler, "path_to_raw_data"):
             raise TypeError("EventDetector requires an InputHandler instance.")
 
-        self.path_to_mat = input_handler.pathToRawData
-        self.path_to_mat_chunks = os.path.join(self.path_to_mat, "PostProcessing")
+        self.path_to_mdf = input_handler.path_to_raw_data
+        self.path_to_mdf_chunks = os.path.join(self.path_to_mdf, "PostProcessing")
 
-        if not os.path.exists(self.path_to_mat_chunks):
-            os.makedirs(self.path_to_mat_chunks)
+        if not os.path.exists(self.path_to_mdf_chunks):
+            os.makedirs(self.path_to_mdf_chunks)
 
-        self.pre_time = float(pre_time)
-        self.post_time = float(post_time)
+        # Use instance values if provided, else fall back to class defaults
+        self.pre_time = float(pre_time if pre_time is not None else self.PRE_TIME)
+        self.post_time = float(post_time if post_time is not None else self.POST_TIME)
 
     # -------------------- Public API -------------------- #
 
-    def process_all_files(self):
-        """Process all .mat files in path_to_mat."""
-        mat_files = [f for f in os.listdir(self.path_to_mat) if f.endswith(".mat")]
+    def process_all_files(self, pre_time: float = None, post_time: float = None):
+        if pre_time is not None:
+            self.pre_time = float(pre_time)
+        if post_time is not None:
+            self.post_time = float(post_time)
 
-        for fname in mat_files:
-            file_path = os.path.join(self.path_to_mat, fname)
+        # Only process *_extracted.mf4 files
+        mdf_files = [f for f in os.listdir(self.path_to_mdf) if f.endswith("_extracted.mf4")]
+        print(f"\n📂 Found {len(mdf_files)} extracted MF4 files in {self.path_to_mdf}\n")
+
+        if not mdf_files:
+            print("⚠️ No extracted MF4 files found. Did you run InputHandler.process_mf4_files first?")
+            return
+
+        for fname in mdf_files:
+            file_path = os.path.join(self.path_to_mdf, fname)
             name, _ = os.path.splitext(fname)
 
             try:
-                mat_data = loadmat(file_path)
-                if "signalMat" not in mat_data:
-                    print(f"⚠️ {fname} missing 'signalMat' → skipped.")
+                print(f"🔍 Reading MF4 file: {fname}")
+                mdf = MDF(file_path)
+
+                # --- SAFELY check for required signal ---
+                if "aebTargetDecel" not in mdf.channels_db.keys():
+                    print(f"⚠️ File {fname} missing required signal 'aebTargetDecel' → skipped")
                     continue
 
-                signal_mat = mat_data["signalMat"]
+                # --- Extract signal safely ---
+                sig = mdf.get("aebTargetDecel")
+                df = pd.DataFrame({
+                    "time": sig.timestamps,
+                    "aebTargetDecel": sig.samples
+                })
 
-                # Convert all fields into column vectors
-                for key in signal_mat.dtype.names:
-                    signal_mat[key][0, 0] = np.atleast_1d(signal_mat[key][0, 0]).flatten()
+                # --- Detect events ---
+                start_times, end_times = self.detect_events(df)
+                print(f"   ➝ Detected {len(start_times)} events")
 
-                self.process_single_file(signal_mat, name)
+                # --- Extract event chunks ---
+                self.extract_aeb_events(mdf, start_times, end_times, name)
+
+                # Cleanup memory
+                del mdf, df, sig
+                gc.collect()
 
             except Exception as e:
                 print(f"⚠️ Error processing {fname}: {e}")
 
-    def process_single_file(self, signal_mat, name: str):
-        """Detect events and extract AEB event chunks."""
-        start_times, end_times = self.detect_events(signal_mat)
-        self.extract_aeb_events(signal_mat, start_times, end_times, name)
-
     # -------------------- Event Detection -------------------- #
 
-    def detect_events(self, signal_mat):
+    def detect_events(self, df: pd.DataFrame):
         """Detect start and end times of AEB events."""
-
-        time = signal_mat["time"][0, 0].flatten()
-        aeb_target_decel = signal_mat["aebTargetDecel"][0, 0].flatten()
+        time = df["time"].values
+        aeb_target_decel = df["aebTargetDecel"].values
 
         mode_change = np.diff(aeb_target_decel)
 
-        # Start events: sharp decel drop
+        # Start events
         locate_start = np.where(np.diff(mode_change < -30))[0]
         start_mask = aeb_target_decel[locate_start + 1] < -5.9
         start_times = time[locate_start][start_mask]
 
-        # End events: decel recovery
+        # End events
         locate_end = np.where(mode_change > 20)[0]
         end_mask = aeb_target_decel[locate_end + 1] > 20
         end_times = time[locate_end][end_mask]
 
-        # Fallback: if no end times, assume +7s after start
+        # Fallback if no end times
         if len(end_times) == 0 and len(start_times) > 0:
-            end_times = start_times + 7
+            buffer_time = max(1.0, self.post_time + 4)
+            end_times = start_times + buffer_time
 
         return start_times, end_times
 
     # -------------------- Event Extraction -------------------- #
 
-    def extract_aeb_events(self, signal_mat, start_times, end_times, name: str):
-        """Extract event chunks and save into PostProcessing folder."""
-
-        time = signal_mat["time"][0, 0].flatten()
-        fields = signal_mat.dtype.names
-        n_samples = len(time)
-
+    def extract_aeb_events(self, mdf: MDF, start_times, end_times, name: str):
+        """Extract event chunks and save into PostProcessing folder (MF4 only)."""
         for j, start_time in enumerate(start_times):
-            # Start index
             start_sec = float(start_time - self.pre_time)
-            start = self._find_time_index(time, start_sec)
 
-            # End index (try to align with end_times[j])
-            stop = 0
             if j < len(end_times):
                 stop_sec = float(end_times[j] + self.post_time)
-                stop = self._find_time_index(time, stop_sec)
-
-            # Fallback if invalid stop
-            if stop <= start or j >= len(end_times):
+            else:
                 stop_sec = float(start_time + self.post_time)
-                stop = self._find_time_index(time, stop_sec)
 
-            stop = min(stop, n_samples - 1)
+            try:
+                mdf_chunk = mdf.cut(start=start_sec, stop=stop_sec)
 
-            if stop > start:
-                signal_chunk = {}
-                for field in fields:
-                    try:
-                        values = signal_mat[field][0, 0].flatten()
-                        signal_chunk[field] = values[start:stop + 1]
-                    except Exception as e:
-                        raise RuntimeError(f"Error slicing {field}: {e}")
+                mf4_name = f"{name}_{j + 1}.mf4"
+                mf4_path = os.path.join(self.path_to_mdf_chunks, mf4_name)
 
-                out_name = f"{name}_{j + 1}.mat"
-                out_path = os.path.join(self.path_to_mat_chunks, out_name)
+                mdf_chunk.save(mf4_path, overwrite=True)
+                print(f"   ✅ Saved event {j+1}: {start_sec:.2f}s → {stop_sec:.2f}s → {mf4_name}")
 
-                try:
-                    savemat(out_path, {"signalMatChunk": signal_chunk})
-                    print(f"✅ Saved {out_path}")
-                except Exception as e:
-                    print(f"⚠️ Error saving {out_name}: {e}")
+                del mdf_chunk
+                gc.collect()
+
+            except Exception as e:
+                print(f"⚠️ Error saving event {j+1} of {name}: {e}")
 
     # -------------------- Helpers -------------------- #
 

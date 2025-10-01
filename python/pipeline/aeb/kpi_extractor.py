@@ -2,16 +2,17 @@ import os
 import warnings
 import numpy as np
 import pandas as pd
-from scipy.io import loadmat
-from utils import (
-    create_kpi_table_from_json,
-    accel_filter,
-    find_aeb_intervention_start,
-    find_aeb_intervention_end,
-    interpolate_threshold_clamped,
+from asammdf import MDF
+
+# --- Local utils imports ---
+from utils.create_kpi_table import create_kpi_table_from_df
+from utils.signal_filters import accel_filter
+from utils.time_locators import (
+    find_aeb_intv_start,
+    find_aeb_intv_end,
 )
-# Your KPI metric functions should also live in utils or metrics
-from utils.kpis import (
+from utils.process_calibratables import interpolate_threshold_clamped
+from utils.kpis.aeb import (
     kpi_distance,
     kpi_throttle,
     kpi_steering_wheel,
@@ -20,195 +21,224 @@ from utils.kpis import (
     kpi_brake_mode,
     kpi_latency,
 )
+from dataclasses import dataclass
 
+@dataclass
+class Thresholds:
+    steer_ang_th: float 
+    steer_ang_rate_th: float
+    pedal_pos_inc_th: float
+    yaw_rate_susp_th: float
+    lat_accel_th: float
 
 class KPIExtractor:
     """
-    KPIExtractor class for processing AEB data and calculating KPIs
+    KPIExtractor for processing MDF (*.mf4) chunks and calculating KPIs
     """
 
-    # --- Constant parameters (class-level defaults) ---
-    PB_TGT_DECEL = -6.0       # m/s²
-    FB_TGT_DECEL = -15.0      # m/s²
-    TGT_TOL = 0.2             # tolerance for target decel
-    AEB_END_THD = -4.9        # threshold for AEB end event
-    TIME_IDX_OFFSET = 300     # offset for latAccel, yawRate, steering
-    CUTOFF_FREQ = 10          # Hz cutoff frequency for filtering
+    PB_TGT_DECEL    = -6.0      # unit: m/s^2
+    FB_TGT_DECEL    = -15.0     # unit: m/s^2
+    TGT_TOL         = 0.2       # unit: m/s^2
+    AEB_END_THD     = -4.9      # unit: m/s^2
+    TIME_IDX_OFFSET = 300       # time indices to advance to account for preconditions
+    CUTOFF_FREQ     = 10        # cut off frequency used in butterworth filter
 
     def __init__(self, config, event_detector):
         if config is None or event_detector is None:
             raise ValueError("Config and EventDetector are required.")
 
-        if not hasattr(event_detector, "path_to_mat_chunks"):
-            raise TypeError("event_detector must have path_to_mat_chunks attribute.")
+        if not hasattr(event_detector, "path_to_mdf_chunks"):
+            raise TypeError("event_detector must have path_to_mdf_chunks attribute.")
 
-        # Paths
-        self.path_to_csv = event_detector.path_to_mat_chunks
-
-        # File list
+        self.path_to_chunks = event_detector.path_to_mdf_chunks
         self.file_list = [
-            f for f in os.listdir(self.path_to_csv) if f.endswith(".mat")
+            f for f in os.listdir(self.path_to_chunks) if f.endswith(".mf4")
         ]
         if not self.file_list:
-            raise FileNotFoundError(f"No .mat files in {self.path_to_csv}")
+            raise FileNotFoundError(f"No .mf4 files in {self.path_to_chunks}")
 
         # KPI table
-        self.kpi_table = create_kpi_table_from_json(
-            config.kpiSchemaPath, len(self.file_list)
+        self.kpi_table = create_kpi_table_from_df(
+            config.kpi_spec, len(self.file_list)
         )
 
-        # Calibratables (cloned from config)
-        self.calibratables = {
-            "SteeringWheelAngle_Th": config.calibratables["SteeringWheelAngle_Th"],
-            "AEB_SteeringAngleRate_Override": config.calibratables["AEB_SteeringAngleRate_Override"],
-            "PedalPosProIncrease_Th": config.calibratables["PedalPosProIncrease_Th"].copy(),
-            "YawrateSuspension_Th": config.calibratables["YawrateSuspension_Th"],
-            "LateralAcceleration_th": config.calibratables["LateralAcceleration_th"],
+        # --- Calibratables with safe mapping ---
+        expected_keys = {
+            "SteeringWheelAngle_Th": "SteeringWheelAngle_Th",
+            "AEB_SteeringAngleRate_Override": "AEB_SteeringAngleRate_Override",
+            "PedalPosProIncrease_Th": "PedalPosProIncrease_Th",
+            "YawrateSuspension_Th": "YawrateSuspension_Th",
+            "LateralAcceleration_th": "LateralAcceleration_th",
         }
-        # Scale pedal threshold (×100)
-        self.calibratables["PedalPosProIncrease_Th"].iloc[1, :] *= 100
 
-        self.signal_mat_chunk = None  # placeholder for active file
+        self.calibratables = {}
+        for internal_name, cfg_key in expected_keys.items():
+            if cfg_key in config.calibratables:
+                self.calibratables[internal_name] = config.calibratables[cfg_key]
+            else:
+                warnings.warn(
+                    f"⚠️ Missing calibratable '{cfg_key}' in config. Using empty DataFrame."
+                )
+                self.calibratables[internal_name] = pd.DataFrame()
+
+        # Scale pedal threshold (×100) if possible
+        if "PedalPosProIncrease_Th" in self.calibratables:
+            val = self.calibratables["PedalPosProIncrease_Th"]
+            if isinstance(val, dict) and "y" in val:
+                val["y"] = [yy * 100 for yy in val["y"] if yy is not None]
+            else:
+                warnings.warn("⚠️ PedalPosProIncrease_Th is not in expected dict format.")
 
     # ------------------------------------------------------------------ #
-    def process_all_mat_files(self):
-        """Process all .mat files and calculate KPIs"""
-        aeb_start_idx_list = []
-
+    def process_all_mdf_files(self):
+        """Process all .mf4 files and calculate KPIs"""
         for i, fname in enumerate(self.file_list):
-            fpath = os.path.join(self.path_to_csv, fname)
+            fpath = os.path.join(self.path_to_chunks, fname)
+            print(f"🔍 Processing {fname}")
 
-            try:
-                data = loadmat(fpath)
-            except Exception as e:
-                warnings.warn(f"⚠️ Failed to load {fname}: {e}")
-                continue
-
-            # Expect a dict with 'signalMatChunk'
-            if "signalMatChunk" in data:
-                self.signal_mat_chunk = data["signalMatChunk"]
+            # --- Save file name into KPI table for traceability ---
+            if "label" in self.kpi_table.columns:
+                self.kpi_table.loc[i, "label"] = fname
             else:
-                # Sometimes MATLAB saves differently
-                keys = [k for k in data.keys() if not k.startswith("__")]
-                if len(keys) == 1:
-                    self.signal_mat_chunk = data[keys[0]]
-                    warnings.warn(f"⚠️ Using {keys[0]} as signalMatChunk in {fname}")
-                else:
-                    warnings.warn(f"⚠️ No signalMatChunk found in {fname}, skipping.")
-                    continue
-
-            # Convert MATLAB struct to dict of numpy arrays
-            self.signal_mat_chunk = self._mat_struct_to_dict(self.signal_mat_chunk)
-
-            # --- Preprocess ---
-            self.signal_mat_chunk["egoSpeed"] = (
-                self.signal_mat_chunk["egoSpeed"] * 3.6
-            )  # m/s → km/h
-            self.signal_mat_chunk["A2_Filt"] = accel_filter(
-                self.signal_mat_chunk["time"],
-                self.signal_mat_chunk["longActAccel"],
-                self.CUTOFF_FREQ,
-            )
-            self.signal_mat_chunk["A1_Filt"] = accel_filter(
-                self.signal_mat_chunk["time"],
-                self.signal_mat_chunk["latActAccel"],
-                self.CUTOFF_FREQ,
-            )
-
-            # Logging
-            if "label" in self.kpi_table:
-                self.kpi_table.at[i, "label"] = fname
-            else:
+                # fallback if schema doesn't define "label"
+                self.kpi_table.insert(0, "label", "")
                 self.kpi_table.loc[i, "label"] = fname
 
-            t0 = float(self.signal_mat_chunk["time"][0])
-            self.kpi_table.loc[i, "logTime"] = round(t0, 2) if np.isfinite(t0) else np.nan
+            try:
+                mdf = MDF(fpath)
+            except Exception as e:
+                warnings.warn(f"⚠️ Failed to read {fname}: {e}")
+                continue
 
-            # --- Locate intervention start M0 ---
-            aeb_start_idx, M0 = find_aeb_intervention_start(self.signal_mat_chunk)
-            aeb_start_idx_list.append(aeb_start_idx)
+            # --- Robust handling of time channel ---
+            try:
+                # Try group 0 by default
+                time = mdf.get("time", group=0).samples
+            except Exception as e:
+                warnings.warn(f"⚠️ Could not fetch 'time' channel directly: {e}")
+                # fallback: use master time of first group
+                try:
+                    time = mdf.get_channel_group(0).get_master().samples
+                except Exception:
+                    # last resort: synthesize a time vector
+                    n = len(mdf.get(list(mdf.channels_db.keys())[0]).samples)
+                    time = np.arange(n, dtype=float)
+                    warnings.warn("⚠️ Synthesized time vector (equidistant).")
 
-            self.kpi_table.loc[i, "m0IntvStart"] = (
-                round(float(M0), 2) if np.isfinite(M0) else np.nan
-            )
-            veh_spd = self.signal_mat_chunk["egoSpeed"][aeb_start_idx]
-            self.kpi_table.loc[i, "vehSpd"] = veh_spd
+                signal_chunk = {}
+                for sig_name in [
+                    "time",
+                    "egoSpeed",
+                    "longActAccel",
+                    "latActAccel",
+                    "throttleValue",
+                    "brakePedalPressed",
+                    "yawRate",
+                    "steerWheelAngle",
+                    "steerWheelAngleSpeed",
+                    "aebTargetDecel",
+                ]:
+                    try:
+                        signal_chunk[sig_name] = mdf.get(sig_name).samples.flatten()
+                    except Exception:
+                        warnings.warn(f"⚠️ Missing signal {sig_name} in {fname}")
+                        signal_chunk[sig_name] = np.full_like(time, np.nan, dtype=float)
 
-            # --- Intervention end M2 ---
-            is_veh_stopped, aeb_end_idx, M2 = find_aeb_intervention_end(
-                self.signal_mat_chunk, aeb_start_idx
-            )
-            self.kpi_table.loc[i, "isVehStopped"] = is_veh_stopped
-            self.kpi_table.loc[i, "m2IntvEnd"] = (
-                round(float(M2), 2) if np.isfinite(M2) else np.nan
-            )
+                signal_chunk["time"] = time
 
-            # Duration
-            intv_dur = float(M2) - float(M0)
-            self.kpi_table.loc[i, "intvDur"] = (
-                round(intv_dur, 2) if np.isfinite(intv_dur) else np.nan
-            )
+                # --- Preprocess ---
+                signal_chunk["egoSpeed"] *= 3.6         # m/s → km/h
+                signal_chunk["longActAccelFlt"] = accel_filter(
+                    signal_chunk["time"], signal_chunk["longActAccel"], self.CUTOFF_FREQ
+                )
+                signal_chunk["latActAccelFlt"] = accel_filter(
+                    signal_chunk["time"], signal_chunk["latActAccel"], self.CUTOFF_FREQ
+                )
 
-            # --- Interpolate calibratables ---
-            self.kpi_table.loc[i, "steerAngTh"] = interpolate_threshold_clamped(
-                self.calibratables["SteeringWheelAngle_Th"], veh_spd
-            )
-            self.kpi_table.loc[i, "steerAngRateTh"] = interpolate_threshold_clamped(
-                self.calibratables["AEB_SteeringAngleRate_Override"], veh_spd
-            )
-            self.kpi_table.loc[i, "pedalPosIncTh"] = interpolate_threshold_clamped(
-                self.calibratables["PedalPosProIncrease_Th"], veh_spd
-            )
-            self.kpi_table.loc[i, "yawRateSuspTh"] = interpolate_threshold_clamped(
-                self.calibratables["YawrateSuspension_Th"], veh_spd
-            )
-            self.kpi_table.loc[i, "latAccelTh"] = interpolate_threshold_clamped(
-                self.calibratables["LateralAcceleration_th"], veh_spd
-            )
+                t0 = float(signal_chunk["time"][0])
+                if "logTime" in self.kpi_table.columns:
+                    self.kpi_table.loc[i, "logTime"] = round(t0, 2) if np.isfinite(t0) else np.nan
 
-            # --- KPI metrics ---
-            kpi_distance(self, i, aeb_start_idx, aeb_end_idx)
-            kpi_throttle(self, i, aeb_start_idx, self.kpi_table.loc[i, "pedalPosIncTh"])
-            kpi_steering_wheel(
-                self,
-                i,
-                aeb_start_idx,
-                self.kpi_table.loc[i, "steerAngTh"],
-                self.kpi_table.loc[i, "steerAngRateTh"],
-            )
-            kpi_lat_accel(self, i, aeb_start_idx, self.kpi_table.loc[i, "latAccelTh"])
-            kpi_yaw_rate(self, i, aeb_start_idx, self.kpi_table.loc[i, "yawRateSuspTh"])
-            kpi_brake_mode(self, i, aeb_start_idx)
-            kpi_latency(self, i, aeb_start_idx)
+                # --- KPI calculations ---
+                aeb_start_idx, M0 = find_aeb_intv_start(signal_chunk, self.PB_TGT_DECEL)
+                is_veh_stopped, aeb_end_idx, M2 = find_aeb_intv_end(
+                    signal_chunk, aeb_start_idx, self.AEB_END_THD
+                )
+
+                self.kpi_table.loc[i, "aebIntvStartTime"] = round(float(M0), 2) if np.isfinite(M0) else np.nan
+                self.kpi_table.loc[i, "isVehStopped"] = is_veh_stopped
+                self.kpi_table.loc[i, "aebIntvEndTime"] = round(float(M2), 2) if np.isfinite(M2) else np.nan
+                if np.isfinite(M0) and np.isfinite(M2):
+                    self.kpi_table.loc[i, "intvDur"] = round(float(M2) - float(M0), 2)
+
+                veh_spd = signal_chunk["egoSpeed"][aeb_start_idx]
+                self.kpi_table.loc[i, "vehSpd"] = veh_spd
+
+                # --- Interpolated calibratables bundled into Thresholds dataclass ---
+                thd = Thresholds(
+                    steer_ang_th = interpolate_threshold_clamped(
+                        self.calibratables["SteeringWheelAngle_Th"], veh_spd
+                    ),
+                    steer_ang_rate_th = interpolate_threshold_clamped(
+                        self.calibratables["AEB_SteeringAngleRate_Override"], veh_spd
+                    ),
+                    pedal_pos_inc_th = interpolate_threshold_clamped(
+                        self.calibratables["PedalPosProIncrease_Th"], veh_spd
+                    ),
+                    yaw_rate_susp_th = interpolate_threshold_clamped(
+                        self.calibratables["YawrateSuspension_Th"], veh_spd
+                    ),
+                    lat_accel_th = interpolate_threshold_clamped(
+                        self.calibratables["LateralAcceleration_th"], veh_spd
+                    ),
+                )
+
+                # Save into KPI table
+                self.kpi_table.loc[i, "steerAngTh"]       = thd.steer_ang_th
+                self.kpi_table.loc[i, "steerAngRateTh"]  = thd.steer_ang_rate_th
+                self.kpi_table.loc[i, "pedalPosIncTh"]   = thd.pedal_pos_inc_th
+                self.kpi_table.loc[i, "yawRateSuspTh"]   = thd.yaw_rate_susp_th
+                self.kpi_table.loc[i, "latAccelTh"]       = thd.lat_accel_th
+
+
+                # KPI metrics
+                kpi_distance(self, i, aeb_start_idx, aeb_end_idx)
+                kpi_throttle(self, i, aeb_start_idx, thd.pedal_pos_inc_th)
+                kpi_steering_wheel(self, i, aeb_start_idx, thd.steer_ang_th, thd.steer_ang_rate_th)
+                kpi_lat_accel(self, i, aeb_start_idx, thd.lat_accel_th)
+                kpi_yaw_rate(self, i, aeb_start_idx, thd.yaw_rate_susp_th)
+                kpi_brake_mode(self, i, aeb_start_idx)
+                kpi_latency(self, i, aeb_start_idx)
 
     # ------------------------------------------------------------------ #
     def export_to_csv(self):
-        """Export KPI table to CSV with headers including units"""
-        output_filename = os.path.join(self.path_to_csv, "AEB_KPI_Results.csv")
+        """Export KPI table to CSV with units in the header"""
+        output_filename = os.path.join(self.path_to_chunks, "AEB_KPI_Results.csv")
         try:
-            # Drop empty rows
-            self.kpi_table = self.kpi_table.dropna(subset=["label"])
-            self.kpi_table = self.kpi_table.sort_values("vehSpd")
+            df = self.kpi_table.copy()
+
+            # Drop rows without label (only if label exists)
+            if "label" in df.columns:
+                df = df.dropna(subset=["label"])
+
+            # Sort by speed if available
+            if "vehSpd" in df.columns:
+                df = df.sort_values("vehSpd")
+
+            # Build header with display names (fall back to colname if missing)
+            display_map = df.attrs.get("display_names", {})
+            renamed = {col: display_map.get(col, col) for col in df.columns}
+
+            # Always force "label" to stay plain
+            renamed["label"] = "label"
+
+            # Rename for export
+            df = df.rename(columns=renamed)
 
             # Export
-            self.kpi_table.to_csv(output_filename, index=False)
+            df.to_csv(output_filename, index=False, encoding="utf-8-sig")
             print(f"✅ Exported KPI results to {output_filename}")
 
         except Exception as e:
             warnings.warn(f"⚠️ Failed to export KPI results: {e}")
 
-    # ------------------------------------------------------------------ #
-    @staticmethod
-    def _mat_struct_to_dict(mat_struct):
-        """
-        Convert a MATLAB struct (from loadmat) into a Python dict of arrays.
-        Assumes mat_struct is a numpy.void with dtype.names.
-        """
-        out = {}
-        if hasattr(mat_struct, "dtype") and mat_struct.dtype.names:
-            for field in mat_struct.dtype.names:
-                try:
-                    out[field] = np.atleast_1d(mat_struct[field][0, 0]).flatten()
-                except Exception:
-                    continue
-        return out

@@ -1,8 +1,7 @@
 import numpy as np
 import pandas as pd
 import warnings
-from utils.time_locators import detect_kneepoint_v4  # assuming you placed it there
-
+from utils.time_locators import detect_kneepoint  
 def kpi_latency(obj, i, aeb_start_idx):
     """
     Compute AEB system latency KPIs.
@@ -41,7 +40,7 @@ def kpi_latency(obj, i, aeb_start_idx):
         return
 
     # Detect kneepoint
-    knee_idx, _, _ = detect_kneepoint_v4(
+    knee_idx, _, _ = detect_kneepoint(
         time=signals["time"][start_idx:end_idx + 1],
         acc=signals["longActAccel"][start_idx:end_idx + 1],
         direction="negative",

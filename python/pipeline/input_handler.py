@@ -1,7 +1,10 @@
 import os
-import pandas as pd
-from typing import List, Optional
-from utils.mdf_to_mat import mdf_to_mat
+from typing import List
+from utils.mf4_extractor import mf4_extractor
+
+# For folder selection
+import tkinter as tk
+from tkinter import filedialog
 
 
 class InputHandler:
@@ -11,84 +14,50 @@ class InputHandler:
 
     def __init__(self, config):
         """
-        Constructor: accepts a Config object and sets pathToRawData
+        Constructor: accepts a Config object, keeps signal_map,
+        and prompts the user to select MF4 folder.
         """
         if config is None:
             raise ValueError("Configuration object is required for initialization.")
 
-        # Validate config type
-        if not hasattr(config, "jsonConfigPath"):
-            raise TypeError("Config object must define jsonConfigPath and related attributes.")
+        if not hasattr(config, "signal_map"):
+            raise TypeError("Config object must define signal_map")
 
-        # Mirror config properties
-        self.jsonConfigPath = config.jsonConfigPath
-        self.graphSpec = config.graphSpec
-        self.lineColors = config.lineColors
-        self.signalMap = config.signalMap
-        self.signalPlotSpecPath = config.signalPlotSpecPath
-        self.signalPlotSpecName = config.signalPlotSpecName
+        self.signal_map = config.signal_map
 
-        # Ask for rawdata folder or take from config
-        if hasattr(config, "pathToRawData") and config.pathToRawData:
-            self.pathToRawData = os.path.abspath(config.pathToRawData)
-        else:
-            raise ValueError("Config must define pathToRawData with MF4 files.")
+        # --- Always prompt user for MF4 folder ---
+        print("📂 Please select the MF4 folder...")
+        root = tk.Tk()
+        root.withdraw()  # hide the root window
+        folder = filedialog.askdirectory(title="Select MF4 Folder")
+        if not folder:
+            raise ValueError("No MF4 folder selected. Aborting.")
+        self.path_to_raw_data = os.path.abspath(folder)
 
-        if not os.path.isdir(self.pathToRawData):
-            raise FileNotFoundError(f"Raw data folder not found: {self.pathToRawData}")
-
-        # Verify MF4 presence
-        mf4_files = [f for f in os.listdir(self.pathToRawData) if f.lower().endswith(".mf4")]
-        if not mf4_files:
-            raise FileNotFoundError(f"No MF4 files found in {self.pathToRawData}")
-
-    def process_mf4_files(self, resample_rate: float = 0.01) -> List[dict]:
+    def process_mf4_files(self, resample_rate: float = 0.01) -> None:
         """
-        Process MF4 files: extract specified signals, save to MAT, and return processed data.
-
-        Args:
-            resample_rate (float): Resampling interval in seconds (default 0.01 = 100Hz)
-
-        Returns:
-            List[dict]: List of processed signal dictionaries (signalMat style)
+        Process MF4 files: extract specified signals,
+        save to new MF4 + spec file (via mf4_extractor).
         """
-        mf4_files = [f for f in os.listdir(self.pathToRawData) if f.lower().endswith(".mf4")]
-        processed_data = []
-
+        mf4_files = [f for f in os.listdir(self.path_to_raw_data) if f.lower().endswith(".mf4")]
         print(f"    Found {len(mf4_files)} MF4 file(s) to process...")
 
         for file in mf4_files:
-            full_path = os.path.join(self.pathToRawData, file)
-            name, _ = os.path.splitext(file)
+            full_path = os.path.join(self.path_to_raw_data, file)
+            print(f"    > Processing file: {full_path}")
+
             try:
-                # Process MF4 file with Python mdf_to_mat
-                data, m, sigs, summary, used, raster, mods = mdf_to_mat(
+                # Call mf4_extractor (it will handle saving + spec file)
+                data, m, sigs, summary, used, raster, mods = mf4_extractor(
                     dat_path=full_path,
-                    signal_database=self.signalMap,
+                    signal_database=self.signal_map,
                     req=None,
                     resample=resample_rate,
-                    convert_to_tact_unit=True
+                    convert_to_tact_unit=True,
                 )
 
-                mat_file = os.path.join(self.pathToRawData, f"{name}.mat")
-
-                if not data.empty:
-                    # Build struct-like dict
-                    signalMat = {"time": data.index.values.reshape(-1, 1)}
-                    for col in data.columns:
-                        valid_name = col.replace(".", "_").replace("-", "_").replace(" ", "_")
-                        signalMat[valid_name] = data[col].values.reshape(-1, 1)
-
-                    from scipy.io import savemat
-                    savemat(mat_file, {"signalMat": signalMat})
-                    print(f"    Processed: {file}, saved to {mat_file}")
-                    processed_data.append(signalMat)
-                else:
-                    print(f"    Warning: no data extracted from {file}")
-                    processed_data.append({})
+                if data.empty:
+                    print(f"    ⚠️ Warning: no data extracted from {file}")
 
             except Exception as e:
-                print(f"Error processing {file}: {e}")
-                processed_data.append({})
-
-        return processed_data
+                print(f"❌ Error processing {file}: {e}")

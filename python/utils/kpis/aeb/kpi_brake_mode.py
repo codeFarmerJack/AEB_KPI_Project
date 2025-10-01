@@ -11,7 +11,7 @@ def kpi_brake_mode(obj, i, aeb_start_idx):
     ----------
     obj : object with attributes
         - kpi_table : pandas.DataFrame
-        - signal_mat_chunk : dict-like with arrays {time, aebTargetDecel}
+        - signal_chunk : dict-like with arrays {time, aebTargetDecel}
         - PB_TGT_DECEL : float
         - FB_TGT_DECEL : float
         - TGT_TOL : float
@@ -20,13 +20,17 @@ def kpi_brake_mode(obj, i, aeb_start_idx):
     aeb_start_idx : int
         Index of AEB request event.
     """
-    kpi_table = obj.kpi_table
-    signals = obj.signal_mat_chunk
-    PB_TGT_DECEL = obj.PB_TGT_DECEL
-    FB_TGT_DECEL = obj.FB_TGT_DECEL
-    TGT_TOL = obj.TGT_TOL
+    kpi_table       = obj.kpi_table
+    signals         = obj.signal_chunk   # ✅ now use MDF-based signals
+    PB_TGT_DECEL    = obj.PB_TGT_DECEL
+    FB_TGT_DECEL    = obj.FB_TGT_DECEL
+    TGT_TOL         = obj.TGT_TOL
 
-    aeb_end_req = len(signals["time"]) - 1  # equivalent to MATLAB length()
+    if "aebTargetDecel" not in signals:
+        warnings.warn(f"⚠️ Missing 'aebTargetDecel' signal for file index {i}")
+        return
+
+    aeb_end_req = len(signals["time"]) - 1  # last index
 
     # Ensure required columns exist
     for col, default, dtype in [
@@ -50,31 +54,23 @@ def kpi_brake_mode(obj, i, aeb_start_idx):
 
     # PB duration
     if is_pb_on:
-        pb_start = aeb_start_idx + pb_idx[0]
-        pb_end = aeb_start_idx + pb_idx[-1]
-        pb_dur = signals["time"][pb_end] - signals["time"][pb_start]
+        pb_start      = aeb_start_idx + pb_idx[0]
+        pb_end        = aeb_start_idx + pb_idx[-1]
+        pb_dur        = signals["time"][pb_end] - signals["time"][pb_start]
+        pb_dur_value  = float(pb_dur)
 
-        pb_dur_value = float(pb_dur)
-        if np.isfinite(pb_dur_value):
-            kpi_table.at[i, "pbDur"] = round(pb_dur_value, 2)
-        else:
-            warnings.warn(f"Invalid pbDur value for file index {i}: {pb_dur}. Setting pbDur to 0.")
-            kpi_table.at[i, "pbDur"] = 0.0
+        kpi_table.at[i, "pbDur"] = round(pb_dur_value, 2) if np.isfinite(pb_dur_value) else 0.0
     else:
         kpi_table.at[i, "pbDur"] = 0.0
 
     # FB duration
     if is_fb_on:
-        fb_start = aeb_start_idx + fb_idx[0]
-        fb_end = aeb_start_idx + fb_idx[-1]
-        fb_dur = signals["time"][fb_end] - signals["time"][fb_start]
+        fb_start      = aeb_start_idx + fb_idx[0]
+        fb_end        = aeb_start_idx + fb_idx[-1]
+        fb_dur        = signals["time"][fb_end] - signals["time"][fb_start]
+        fb_dur_value  = float(fb_dur)
 
-        fb_dur_value = float(fb_dur)
-        if np.isfinite(fb_dur_value):
-            kpi_table.at[i, "fbDur"] = round(fb_dur_value, 2)
-        else:
-            warnings.warn(f"Invalid fbDur value for file index {i}: {fb_dur}. Setting fbDur to 0.")
-            kpi_table.at[i, "fbDur"] = 0.0
+        kpi_table.at[i, "fbDur"] = round(fb_dur_value, 2) if np.isfinite(fb_dur_value) else 0.0
     else:
         kpi_table.at[i, "fbDur"] = 0.0
 

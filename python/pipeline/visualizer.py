@@ -22,7 +22,7 @@ class Visualizer:
             raise TypeError("Second argument must be a KPIExtractor-like instance with path_to_csv.")
 
         # Mirror config
-        self.graph_spec = config.graphSpec
+        self.graph_spec = config.graph_spec
         self.line_colors = config.lineColors
         self.marker_shapes = config.markerShapes
         self.calibratables = config.calibratables
