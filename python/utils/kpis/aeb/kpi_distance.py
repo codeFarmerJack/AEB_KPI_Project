@@ -1,30 +1,42 @@
 import numpy as np
 import pandas as pd
 
-def kpi_distance(obj, i, aeb_start_idx, aeb_end_idx):
+def kpi_distance(mdf, kpi_table, row_idx, aeb_start_idx, aeb_end_idx):
     """
     Compute distance KPIs during AEB event.
-    Updates obj.kpi_table in place.
+    Updates kpi_table in place.
 
     Parameters
     ----------
-    obj : object with attributes
-        - kpi_table : pandas.DataFrame
-        - signal_mat_chunk : dict-like with array "longGap"
-    i : int
-        Index of the file in kpi_table.
+    mdf : SignalMDF (or MDF subclass/wrapper)
+        Must provide .longGap as a numpy array.
+    kpi_table : pandas.DataFrame
+        KPI results table (will be updated in place).
+    row_idx : int
+        Row index in KPI table corresponding to this file.
     aeb_start_idx : int
         Index of AEB request event.
     aeb_end_idx : int
         Index of AEB end event.
     """
-    kpi_table = obj.kpi_table
-    long_gap = np.asarray(obj.signal_mat_chunk["longGap"])
+    # Extract signal
+    try:
+        long_gap = np.asarray(mdf.longGap)
+    except AttributeError:
+        raise RuntimeError("SignalMDF missing required channel 'longGap'")
 
     # Ensure required columns exist
     for col in ["firstDetDist", "stableDetDist", "aebIntvDist", "aebStopGap"]:
         if col not in kpi_table.columns:
             kpi_table[col] = pd.Series([np.nan] * len(kpi_table), dtype="float")
+
+    # If end idx is invalid → fill NaNs
+    if aeb_end_idx is None or aeb_end_idx >= len(long_gap):
+        kpi_table.at[row_idx, "firstDetDist"]  = np.nan
+        kpi_table.at[row_idx, "stableDetDist"] = np.nan
+        kpi_table.at[row_idx, "aebIntvDist"]   = np.nan
+        kpi_table.at[row_idx, "aebStopGap"]    = np.nan
+        return
 
     # Consider segment up to AEB end
     segment = long_gap[: aeb_end_idx + 1]
@@ -33,9 +45,9 @@ def kpi_distance(obj, i, aeb_start_idx, aeb_end_idx):
     nonzero_idx = np.flatnonzero(segment != 0)
     if len(nonzero_idx) > 0:
         first_nonzero_idx = nonzero_idx[0]
-        kpi_table.at[i, "firstDetDist"] = long_gap[first_nonzero_idx]
+        kpi_table.at[row_idx, "firstDetDist"] = long_gap[first_nonzero_idx]
     else:
-        kpi_table.at[i, "firstDetDist"] = np.nan
+        kpi_table.at[row_idx, "firstDetDist"] = np.nan
 
     # Stable detection distance (start of last continuous non-zero segment)
     if len(nonzero_idx) > 0:
@@ -46,10 +58,14 @@ def kpi_distance(obj, i, aeb_start_idx, aeb_end_idx):
             stable_idx = first_nonzero_idx
         else:
             stable_idx = zero_idx[-1] + 1
-        kpi_table.at[i, "stableDetDist"] = segment[stable_idx]
+        kpi_table.at[row_idx, "stableDetDist"] = segment[stable_idx]
     else:
-        kpi_table.at[i, "stableDetDist"] = np.nan
+        kpi_table.at[row_idx, "stableDetDist"] = np.nan
 
     # AEB intervention distance at start and end
-    kpi_table.at[i, "aebIntvDist"] = long_gap[aeb_start_idx]
-    kpi_table.at[i, "aebStopGap"] = long_gap[aeb_end_idx]
+    if aeb_start_idx is not None and aeb_start_idx < len(long_gap):
+        kpi_table.at[row_idx, "aebIntvDist"] = long_gap[aeb_start_idx]
+    else:
+        kpi_table.at[row_idx, "aebIntvDist"] = np.nan
+
+    kpi_table.at[row_idx, "aebStopGap"] = long_gap[aeb_end_idx]

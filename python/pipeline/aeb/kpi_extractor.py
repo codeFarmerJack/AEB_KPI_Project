@@ -7,11 +7,10 @@ from asammdf import MDF
 # --- Local utils imports ---
 from utils.create_kpi_table import create_kpi_table_from_df
 from utils.signal_filters import accel_filter
-from utils.time_locators import (
-    find_aeb_intv_start,
-    find_aeb_intv_end,
-)
+from utils.time_locators import find_aeb_intv_start, find_aeb_intv_end
 from utils.process_calibratables import interpolate_threshold_clamped
+
+# ✅ Import all KPI functions directly via __init__.py
 from utils.kpis.aeb import (
     kpi_distance,
     kpi_throttle,
@@ -21,27 +20,129 @@ from utils.kpis.aeb import (
     kpi_brake_mode,
     kpi_latency,
 )
+
 from dataclasses import dataclass
 
+
+# ------------------------------------------------------------------ #
+# Utility: safe conversion to scalar
+# ------------------------------------------------------------------ #
+def safe_scalar(x):
+    """Convert array-like or weird types to scalar float or NaN."""
+    if x is None:
+        return np.nan
+    if isinstance(x, (list, np.ndarray, pd.Series)):
+        if len(x) == 0:
+            return np.nan
+        return float(np.ravel(x)[0])
+    try:
+        return float(x)
+    except Exception:
+        return np.nan
+
+
+# ------------------------------------------------------------------ #
+# Subclass MDF to allow dot-access for signals
+# ------------------------------------------------------------------ #
+class SignalMDF(MDF):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._injected = {}
+        self._time = self._resolve_time()
+
+    def _resolve_time(self):
+        """Resolve a safe time vector, even if multiple masters exist."""
+        # 1) Try the master of group 0
+        try:
+            master = self.get_master(0)              # returns np.ndarray for group 0
+            if master is not None and master.size:
+                return master.flatten()
+        except Exception:
+            pass
+
+        # 2) Try every "time" occurrence (select may return tuples or Signal objects)
+        try:
+            candidates = self.select("time")
+            if candidates:
+                for item in candidates:
+                    try:
+                        if isinstance(item, tuple) and len(item) == 2:
+                            gp, ch = item
+                            arr = self.get("time", group=gp, index=ch).samples
+                        else:
+                            # item is likely a Signal-like object
+                            arr = getattr(item, "samples", np.array([]))
+                        arr = np.asarray(arr).ravel()
+                        if arr.size > 0:
+                            return arr
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+
+        # 3) Last resort: synthesize equidistant time based on first group's first channel length
+        try:
+            n = len(self.groups[0].channels[0].samples)
+        except Exception:
+            n = 0
+        warnings.warn("⚠️ Synthesized time vector (equidistant).")
+        return np.arange(n, dtype=float)
+
+
+    def __getattr__(self, name):
+        if name == "time":
+            return self._time
+
+        if name in self._injected:
+            return self._injected[name]
+
+        # Allow MDF internals; don't treat them as signals
+        if name in ("groups", "channels", "version", "attachments"):
+            return super().__getattribute__(name)
+
+        # Try normal attribute/method first
+        try:
+            return super().__getattribute__(name)
+        except AttributeError:
+            pass
+
+        # Fallback: treat as signal name
+        try:
+            return self.get(name).samples.flatten()
+        except Exception:
+            warnings.warn(f"⚠️ Missing signal {name} in MDF file")
+            return np.array([])
+
+
+    def __setattr__(self, name, value):
+        if isinstance(value, (np.ndarray, list)) and not name.startswith("_"):
+            self._injected[name] = np.asarray(value)
+        else:
+            super().__setattr__(name, value)
+
+
+# ------------------------------------------------------------------ #
+# Threshold container
+# ------------------------------------------------------------------ #
 @dataclass
 class Thresholds:
-    steer_ang_th: float 
+    steer_ang_th: float
     steer_ang_rate_th: float
     pedal_pos_inc_th: float
     yaw_rate_susp_th: float
     lat_accel_th: float
 
-class KPIExtractor:
-    """
-    KPIExtractor for processing MDF (*.mf4) chunks and calculating KPIs
-    """
 
-    PB_TGT_DECEL    = -6.0      # unit: m/s^2
-    FB_TGT_DECEL    = -15.0     # unit: m/s^2
-    TGT_TOL         = 0.2       # unit: m/s^2
-    AEB_END_THD     = -4.9      # unit: m/s^2
-    TIME_IDX_OFFSET = 300       # time indices to advance to account for preconditions
-    CUTOFF_FREQ     = 10        # cut off frequency used in butterworth filter
+# ------------------------------------------------------------------ #
+# KPI Extractor
+# ------------------------------------------------------------------ #
+class KPIExtractor:
+    PB_TGT_DECEL    = -6.0
+    FB_TGT_DECEL    = -15.0
+    TGT_TOL         = 0.2
+    AEB_END_THD     = -4.9
+    TIME_IDX_OFFSET = 300
+    CUTOFF_FREQ     = 10
 
     def __init__(self, config, event_detector):
         if config is None or event_detector is None:
@@ -51,18 +152,14 @@ class KPIExtractor:
             raise TypeError("event_detector must have path_to_mdf_chunks attribute.")
 
         self.path_to_chunks = event_detector.path_to_mdf_chunks
-        self.file_list = [
-            f for f in os.listdir(self.path_to_chunks) if f.endswith(".mf4")
-        ]
+        self.file_list = [f for f in os.listdir(self.path_to_chunks) if f.endswith(".mf4")]
         if not self.file_list:
             raise FileNotFoundError(f"No .mf4 files in {self.path_to_chunks}")
 
         # KPI table
-        self.kpi_table = create_kpi_table_from_df(
-            config.kpi_spec, len(self.file_list)
-        )
+        self.kpi_table = create_kpi_table_from_df(config.kpi_spec, len(self.file_list))
 
-        # --- Calibratables with safe mapping ---
+        # Load calibratables safely
         expected_keys = {
             "SteeringWheelAngle_Th": "SteeringWheelAngle_Th",
             "AEB_SteeringAngleRate_Override": "AEB_SteeringAngleRate_Override",
@@ -76,9 +173,7 @@ class KPIExtractor:
             if cfg_key in config.calibratables:
                 self.calibratables[internal_name] = config.calibratables[cfg_key]
             else:
-                warnings.warn(
-                    f"⚠️ Missing calibratable '{cfg_key}' in config. Using empty DataFrame."
-                )
+                warnings.warn(f"⚠️ Missing calibratable '{cfg_key}' in config.")
                 self.calibratables[internal_name] = pd.DataFrame()
 
         # Scale pedal threshold (×100) if possible
@@ -86,159 +181,147 @@ class KPIExtractor:
             val = self.calibratables["PedalPosProIncrease_Th"]
             if isinstance(val, dict) and "y" in val:
                 val["y"] = [yy * 100 for yy in val["y"] if yy is not None]
-            else:
-                warnings.warn("⚠️ PedalPosProIncrease_Th is not in expected dict format.")
 
     # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):
-        """Process all .mf4 files and calculate KPIs"""
+        """Process all .mf4 chunk files and calculate KPIs"""
         for i, fname in enumerate(self.file_list):
             fpath = os.path.join(self.path_to_chunks, fname)
             print(f"🔍 Processing {fname}")
 
-            # --- Save file name into KPI table for traceability ---
-            if "label" in self.kpi_table.columns:
-                self.kpi_table.loc[i, "label"] = fname
-            else:
-                # fallback if schema doesn't define "label"
+            if "label" not in self.kpi_table.columns:
                 self.kpi_table.insert(0, "label", "")
-                self.kpi_table.loc[i, "label"] = fname
+            self.kpi_table.loc[i, "label"] = fname
 
             try:
-                mdf = MDF(fpath)
+                mdf = SignalMDF(fpath)
             except Exception as e:
                 warnings.warn(f"⚠️ Failed to read {fname}: {e}")
                 continue
 
-            # --- Robust handling of time channel ---
-            try:
-                # Try group 0 by default
-                time = mdf.get("time", group=0).samples
-            except Exception as e:
-                warnings.warn(f"⚠️ Could not fetch 'time' channel directly: {e}")
-                # fallback: use master time of first group
+            # Time
+            time = mdf.time
+            if time is None or len(time) == 0:
                 try:
-                    time = mdf.get_channel_group(0).get_master().samples
+                    # fallback to master of group 0
+                    time = mdf.get_master(0).flatten()
                 except Exception:
-                    # last resort: synthesize a time vector
-                    n = len(mdf.get(list(mdf.channels_db.keys())[0]).samples)
-                    time = np.arange(n, dtype=float)
-                    warnings.warn("⚠️ Synthesized time vector (equidistant).")
-
-                signal_chunk = {}
-                for sig_name in [
-                    "time",
-                    "egoSpeed",
-                    "longActAccel",
-                    "latActAccel",
-                    "throttleValue",
-                    "brakePedalPressed",
-                    "yawRate",
-                    "steerWheelAngle",
-                    "steerWheelAngleSpeed",
-                    "aebTargetDecel",
-                ]:
                     try:
-                        signal_chunk[sig_name] = mdf.get(sig_name).samples.flatten()
+                        n = len(mdf.groups[0].channels[0].samples)
                     except Exception:
-                        warnings.warn(f"⚠️ Missing signal {sig_name} in {fname}")
-                        signal_chunk[sig_name] = np.full_like(time, np.nan, dtype=float)
+                        n = 0
+                    time = np.arange(n, dtype=float)
+                warnings.warn("⚠️ Synthesized time vector (equidistant).")
 
-                signal_chunk["time"] = time
 
-                # --- Preprocess ---
-                signal_chunk["egoSpeed"] *= 3.6         # m/s → km/h
-                signal_chunk["longActAccelFlt"] = accel_filter(
-                    signal_chunk["time"], signal_chunk["longActAccel"], self.CUTOFF_FREQ
+            # Signals
+            ego_speed     = mdf.egoSpeed * 3.6   # m/s → km/h
+            long_accel    = mdf.longActAccel
+            lat_accel     = mdf.latActAccel
+            aeb_tgt_decel = mdf.aebTargetDecel
+
+            # Filters (with padding check)
+            if len(long_accel) > 15:
+                long_accel_flt = accel_filter(time, long_accel, self.CUTOFF_FREQ)
+            else:
+                long_accel_flt = long_accel
+                warnings.warn("⚠️ long_accel too short for filter, using raw signal")
+
+            if len(lat_accel) > 15:
+                lat_accel_flt = accel_filter(time, lat_accel, self.CUTOFF_FREQ)
+            else:
+                lat_accel_flt = lat_accel
+                warnings.warn("⚠️ lat_accel too short for filter, using raw signal")
+
+            mdf.longActAccelFlt = long_accel_flt
+            mdf.latActAccelFlt  = lat_accel_flt
+
+            # KPI event detection
+            aeb_start_idx, aeb_start_time = find_aeb_intv_start(
+                {"aebTargetDecel": aeb_tgt_decel, "time": time}, self.PB_TGT_DECEL
+            )
+            is_veh_stopped, aeb_end_idx, aeb_end_time = find_aeb_intv_end(
+                {"egoSpeed": ego_speed, "aebTargetDecel": aeb_tgt_decel, "time": time},
+                aeb_start_idx,
+                self.AEB_END_THD,
+            )
+
+            # --- 🔍 DEBUG START ---
+            print(f"\n[DEBUG] File {fname}")
+            print(f"  aeb_start_idx: {aeb_start_idx}")
+            print(f"  aeb_start_time: {aeb_start_time}")
+            print(f"  aeb_end_idx: {aeb_end_idx}")
+            print(f"  aeb_end_time: {aeb_end_time}")
+            print(f"  ego_speed len: {len(ego_speed)}, long_accel len: {len(long_accel)}, aeb_tgt_decel len: {len(aeb_tgt_decel)}")
+            print(f"  PB_TGT_DECEL threshold: {self.PB_TGT_DECEL}, AEB_END_THD: {self.AEB_END_THD}")
+
+            if aeb_start_idx is None:
+                print("  ⚠️  AEB start not found! Possible reasons:")
+                print("     - aebTargetDecel signal missing or flat (check mdf.aebTargetDecel[:20])")
+                print("     - PB_TGT_DECEL threshold too strict")
+                print("     - Time vector mismatch")
+            # --- 🔍 DEBUG END ---
+
+            # Save intervention info
+            self.kpi_table.loc[i, "logTime"]         = safe_scalar(aeb_start_time)
+            self.kpi_table.loc[i, "aebIntvStartTime"] = safe_scalar(aeb_start_time)
+            self.kpi_table.loc[i, "isVehStopped"]    = bool(is_veh_stopped)
+            self.kpi_table.loc[i, "aebIntvEndTime"]  = safe_scalar(aeb_end_time)
+            if np.isfinite(safe_scalar(aeb_start_time)) and np.isfinite(safe_scalar(aeb_end_time)):
+                self.kpi_table.loc[i, "intvDur"] = round(
+                    float(aeb_end_time) - float(aeb_start_time), 2
                 )
-                signal_chunk["latActAccelFlt"] = accel_filter(
-                    signal_chunk["time"], signal_chunk["latActAccel"], self.CUTOFF_FREQ
-                )
 
-                t0 = float(signal_chunk["time"][0])
-                if "logTime" in self.kpi_table.columns:
-                    self.kpi_table.loc[i, "logTime"] = round(t0, 2) if np.isfinite(t0) else np.nan
+            # Vehicle speed at start
+            veh_spd = np.nan
+            if aeb_start_idx is not None and aeb_start_idx < len(ego_speed):
+                veh_spd = safe_scalar(ego_speed[aeb_start_idx])
+            self.kpi_table.loc[i, "vehSpd"] = veh_spd
 
-                # --- KPI calculations ---
-                aeb_start_idx, M0 = find_aeb_intv_start(signal_chunk, self.PB_TGT_DECEL)
-                is_veh_stopped, aeb_end_idx, M2 = find_aeb_intv_end(
-                    signal_chunk, aeb_start_idx, self.AEB_END_THD
-                )
+            # Thresholds
+            thd = Thresholds(
+                steer_ang_th      = interpolate_threshold_clamped(self.calibratables["SteeringWheelAngle_Th"], veh_spd),
+                steer_ang_rate_th = interpolate_threshold_clamped(self.calibratables["AEB_SteeringAngleRate_Override"], veh_spd),
+                pedal_pos_inc_th  = interpolate_threshold_clamped(self.calibratables["PedalPosProIncrease_Th"], veh_spd),
+                yaw_rate_susp_th  = interpolate_threshold_clamped(self.calibratables["YawrateSuspension_Th"], veh_spd),
+                lat_accel_th      = interpolate_threshold_clamped(self.calibratables["LateralAcceleration_th"], veh_spd),
+            )
 
-                self.kpi_table.loc[i, "aebIntvStartTime"] = round(float(M0), 2) if np.isfinite(M0) else np.nan
-                self.kpi_table.loc[i, "isVehStopped"] = is_veh_stopped
-                self.kpi_table.loc[i, "aebIntvEndTime"] = round(float(M2), 2) if np.isfinite(M2) else np.nan
-                if np.isfinite(M0) and np.isfinite(M2):
-                    self.kpi_table.loc[i, "intvDur"] = round(float(M2) - float(M0), 2)
+            # Save thresholds
+            self.kpi_table.loc[i, "steerAngTh"]     = safe_scalar(thd.steer_ang_th)
+            self.kpi_table.loc[i, "steerAngRateTh"] = safe_scalar(thd.steer_ang_rate_th)
+            self.kpi_table.loc[i, "pedalPosIncTh"]  = safe_scalar(thd.pedal_pos_inc_th)
+            self.kpi_table.loc[i, "yawRateSuspTh"]  = safe_scalar(thd.yaw_rate_susp_th)
+            self.kpi_table.loc[i, "latAccelTh"]     = safe_scalar(thd.lat_accel_th)
 
-                veh_spd = signal_chunk["egoSpeed"][aeb_start_idx]
-                self.kpi_table.loc[i, "vehSpd"] = veh_spd
+            # KPI metrics
+            kpi_distance(mdf, self.kpi_table, i, aeb_start_idx, aeb_end_idx)
+            kpi_throttle(mdf, self.kpi_table, i, aeb_start_idx, thd.pedal_pos_inc_th)
+            kpi_steering_wheel(mdf, self.kpi_table, i, aeb_start_idx, thd.steer_ang_th, thd.steer_ang_rate_th, self.TIME_IDX_OFFSET)
+            kpi_lat_accel(mdf, self.kpi_table, i, aeb_start_idx, thd.lat_accel_th, self.TIME_IDX_OFFSET)
+            kpi_yaw_rate(mdf, self.kpi_table, i, aeb_start_idx, thd.yaw_rate_susp_th, self.TIME_IDX_OFFSET)
+            kpi_brake_mode(mdf, self.kpi_table, i, aeb_start_idx, self.PB_TGT_DECEL, self.FB_TGT_DECEL, self.TGT_TOL)
+            kpi_latency(mdf, self.kpi_table, i, aeb_start_idx, self.CUTOFF_FREQ)
 
-                # --- Interpolated calibratables bundled into Thresholds dataclass ---
-                thd = Thresholds(
-                    steer_ang_th = interpolate_threshold_clamped(
-                        self.calibratables["SteeringWheelAngle_Th"], veh_spd
-                    ),
-                    steer_ang_rate_th = interpolate_threshold_clamped(
-                        self.calibratables["AEB_SteeringAngleRate_Override"], veh_spd
-                    ),
-                    pedal_pos_inc_th = interpolate_threshold_clamped(
-                        self.calibratables["PedalPosProIncrease_Th"], veh_spd
-                    ),
-                    yaw_rate_susp_th = interpolate_threshold_clamped(
-                        self.calibratables["YawrateSuspension_Th"], veh_spd
-                    ),
-                    lat_accel_th = interpolate_threshold_clamped(
-                        self.calibratables["LateralAcceleration_th"], veh_spd
-                    ),
-                )
-
-                # Save into KPI table
-                self.kpi_table.loc[i, "steerAngTh"]       = thd.steer_ang_th
-                self.kpi_table.loc[i, "steerAngRateTh"]  = thd.steer_ang_rate_th
-                self.kpi_table.loc[i, "pedalPosIncTh"]   = thd.pedal_pos_inc_th
-                self.kpi_table.loc[i, "yawRateSuspTh"]   = thd.yaw_rate_susp_th
-                self.kpi_table.loc[i, "latAccelTh"]       = thd.lat_accel_th
-
-
-                # KPI metrics
-                kpi_distance(self, i, aeb_start_idx, aeb_end_idx)
-                kpi_throttle(self, i, aeb_start_idx, thd.pedal_pos_inc_th)
-                kpi_steering_wheel(self, i, aeb_start_idx, thd.steer_ang_th, thd.steer_ang_rate_th)
-                kpi_lat_accel(self, i, aeb_start_idx, thd.lat_accel_th)
-                kpi_yaw_rate(self, i, aeb_start_idx, thd.yaw_rate_susp_th)
-                kpi_brake_mode(self, i, aeb_start_idx)
-                kpi_latency(self, i, aeb_start_idx)
+            # Round numeric
+            self.kpi_table = self.kpi_table.round(2)
 
     # ------------------------------------------------------------------ #
     def export_to_csv(self):
-        """Export KPI table to CSV with units in the header"""
         output_filename = os.path.join(self.path_to_chunks, "AEB_KPI_Results.csv")
         try:
             df = self.kpi_table.copy()
-
-            # Drop rows without label (only if label exists)
             if "label" in df.columns:
                 df = df.dropna(subset=["label"])
-
-            # Sort by speed if available
             if "vehSpd" in df.columns:
                 df = df.sort_values("vehSpd")
 
-            # Build header with display names (fall back to colname if missing)
             display_map = df.attrs.get("display_names", {})
             renamed = {col: display_map.get(col, col) for col in df.columns}
-
-            # Always force "label" to stay plain
             renamed["label"] = "label"
 
-            # Rename for export
             df = df.rename(columns=renamed)
-
-            # Export
             df.to_csv(output_filename, index=False, encoding="utf-8-sig")
             print(f"✅ Exported KPI results to {output_filename}")
-
         except Exception as e:
             warnings.warn(f"⚠️ Failed to export KPI results: {e}")
-

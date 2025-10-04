@@ -94,66 +94,40 @@ class Config:
 
     @staticmethod
     def _load_calibratables(calib_file, sheet_map):
-        """
-        Load calibration ranges from Excel using openpyxl directly (like MATLAB's readtable with Range).
-        - If range is 2×N → stored as {"x": [...], "y": [...]}
-        - If 1 row or >2 rows → stored as DataFrame
-        - If truly empty → stored as None
-        """
         file_path = Path(calib_file)
         if not file_path.exists():
             raise FileNotFoundError(f"Calibration file not found: {file_path}")
 
-        wb = load_workbook(file_path, data_only=True)  # open once
+        wb = load_workbook(file_path, data_only=True)
         calibratables = {}
 
         for sheet, cal_defs in sheet_map.items():
-            sheet_result = {}
             if sheet not in wb.sheetnames:
                 warnings.warn(f'Sheet "{sheet}" not found in calibration file.')
-                calibratables[sheet] = {}
                 continue
 
             ws = wb[sheet]
 
             for cal_name, rng in cal_defs.items():
                 try:
-                    # Grab the cell range (e.g. "M7:X8")
                     cells = ws[rng]
-
-                    # Convert to DataFrame
                     data = [[cell.value for cell in row] for row in cells]
-                    df = pd.DataFrame(data)
+                    df = pd.DataFrame(data).reset_index(drop=True)
 
-                    # Reset index (keep all values)
-                    df = df.reset_index(drop=True)
-
-                    # ✅ If all values None, mark as empty
                     if df.isna().all().all():
-                        print("[DEBUG] All values are None → treat as empty")
-                        sheet_result[cal_name] = None
+                        calibratables[cal_name] = None
+                    elif df.shape[0] == 2:
+                        x = [v if v is not None else float("nan") for v in df.iloc[0].tolist()]
+                        y = [v if v is not None else float("nan") for v in df.iloc[1].tolist()]
+                        calibratables[cal_name] = {"x": x, "y": y}
                     else:
-                        # ✅ If exactly 2 rows, interpret as lookup table
-                        if df.shape[0] == 2:
-                            x = [v if v is not None else float("nan") for v in df.iloc[0].tolist()]
-                            y = [v if v is not None else float("nan") for v in df.iloc[1].tolist()]
-                            sheet_result[cal_name] = {"x": x, "y": y}
-                        else:
-                            # Store as DataFrame (e.g., thresholds with 1 row or multi-row tables)
-                            sheet_result[cal_name] = df
+                        calibratables[cal_name] = df
 
                 except Exception as e:
                     warnings.warn(
                         f'Failed to load "{cal_name}" from sheet "{sheet}" range "{rng}": {e}'
                     )
-                    sheet_result[cal_name] = None
-
-            calibratables[sheet] = sheet_result
+                    calibratables[cal_name] = None
 
         wb.close()
         return calibratables
-
-
-
-
-    

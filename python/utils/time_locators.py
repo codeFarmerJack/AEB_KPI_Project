@@ -176,7 +176,7 @@ def find_aeb_intv_start(signal_chunk, pb_tgt_decel):
     -------
     aeb_start_idx : int or None
         Index of AEB request event, or None if not found.
-    m0 : scalar or None
+    aeb_start_time : scalar or None
         Timestamp of AEB intervention start.
     """
     if "aebTargetDecel" not in signal_chunk:
@@ -191,8 +191,8 @@ def find_aeb_intv_start(signal_chunk, pb_tgt_decel):
     )
 
     if first_idx is not None:
-        m0 = signal_chunk["time"][first_idx]
-        return first_idx, m0
+        aeb_start_time = signal_chunk["time"][first_idx]
+        return first_idx, aeb_start_time
     else:
         return None, None
 
@@ -200,57 +200,43 @@ def find_aeb_intv_start(signal_chunk, pb_tgt_decel):
 def find_aeb_intv_end(signal_chunk, aeb_start_idx, aeb_end_thd):
     """
     Detect the end of an AEB intervention.
-
-    Parameters
-    ----------
-    signal_chunk : dict-like or object with attributes
-        Must contain:
-          - time (array-like)
-          - egoSpeed (array-like)
-          - aebTargetDecel (array-like)
-    aeb_start_idx : int
-        Index of AEB request event.
-    aeb_end_thd : float
-        Threshold for AEB intervention end.
-
-    Returns
-    -------
-    is_veh_stopped : bool
-        True if vehicle stopped during intervention.
-    aeb_end_idx : int
-        Index of AEB intervention end.
-    m2 : scalar
-        Timestamp of AEB intervention end.
     """
-    time = np.asarray(signal_chunk["time"])
-    ego_speed = np.asarray(signal_chunk["egoSpeed"])
-    aeb_target_decel = np.asarray(signal_chunk["aebTargetDecel"])
+    time = np.asarray(signal_chunk.get("time", []))
+    ego_speed = np.asarray(signal_chunk.get("egoSpeed", []))
+    aeb_target_decel = np.asarray(signal_chunk.get("aebTargetDecel", []))
 
-    # slice from intervention start
+    # --- Defensive guards ---
+    if len(time) == 0 or aeb_start_idx is None or aeb_start_idx < 0 or aeb_start_idx >= len(time):
+        return False, None, np.nan
+
+    # Slice from intervention start
     decel_slice = aeb_target_decel[aeb_start_idx:]
     speed_slice = ego_speed[aeb_start_idx:]
 
-    # 1. Check if intervention end condition (decel threshold crossed) occurs
+    # 1. Intervention end condition
     intv_end_rel_idx = np.argmax(decel_slice > aeb_end_thd) if np.any(decel_slice > aeb_end_thd) else None
-    is_intv_end = intv_end_rel_idx is not None
 
-    # 2. Check if vehicle stops in the window
+    # 2. Vehicle stop condition
     veh_stop_rel_idx = np.argmax(speed_slice == 0) if np.any(speed_slice == 0) else None
     is_veh_stopped = veh_stop_rel_idx is not None
 
     # 3. Determine final end index
-    if is_intv_end and is_veh_stopped:
-        aeb_end_idx = min(
-            aeb_start_idx + intv_end_rel_idx,
-            aeb_start_idx + veh_stop_rel_idx,
-        )
-    elif not is_intv_end and is_veh_stopped:
+    if intv_end_rel_idx is not None and is_veh_stopped:
+        aeb_end_idx = min(aeb_start_idx + intv_end_rel_idx,
+                          aeb_start_idx + veh_stop_rel_idx)
+    elif intv_end_rel_idx is None and is_veh_stopped:
         aeb_end_idx = aeb_start_idx + veh_stop_rel_idx
-    elif is_intv_end and not is_veh_stopped:
+    elif intv_end_rel_idx is not None and not is_veh_stopped:
         aeb_end_idx = aeb_start_idx + intv_end_rel_idx
     else:
-        aeb_end_idx = len(time) - 1  # default: last timestamp
+        # fallback: last sample only if time is not empty
+        aeb_end_idx = len(time) - 1 if len(time) > 0 else None
 
-    m2 = time[aeb_end_idx]
+    # 4. Resolve end time
+    if aeb_end_idx is None or aeb_end_idx < 0 or aeb_end_idx >= len(time):
+        return is_veh_stopped, None, np.nan
 
-    return is_veh_stopped, aeb_end_idx, m2
+    aeb_end_time = float(time[aeb_end_idx])
+    return is_veh_stopped, aeb_end_idx, aeb_end_time
+
+
