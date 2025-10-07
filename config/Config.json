@@ -1,0 +1,25 @@
+{
+    "SignalMap_KPI_PlotSpec": {
+        "FilePath": "/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_kpi_extractor/python/config/SignalMap_KPI_PlotSpec.xlsx",
+        "Sheets": ["vbRcSignals", "graphSpec", "lineColors","markerShapes","KPI"]
+    },
+    "Calibration": {
+        "FilePath": "/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_kpi_extractor/Active_Safety_Long_Calibration_Plan.xlsx",
+        "Sheets": {
+            "steering_precond_abrt_aeb": {
+                "SteeringWheelAngle_Th": "M7:X8",
+                "AEB_SteeringAngleRate_Override": "M13:X14"
+            },
+            "throttle_abrt_aeb": {
+                "PedalPosProIncrease_Th": "L12:P13",
+                "PedalPosPro_Override": "L10:P11"
+            },
+            "lat_accel": {
+                "LateralAcceleration_th": "I6:N7"
+            },
+            "yaw_rate": {
+                "YawrateSuspension_Th": "K6:P7"
+            }
+        }			
+    }
+}
