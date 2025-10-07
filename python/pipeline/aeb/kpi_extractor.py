@@ -246,27 +246,11 @@ class KPIExtractor:
                 self.AEB_END_THD,
             )
 
-            # --- 🔍 DEBUG START ---
-            print(f"\n[DEBUG] File {fname}")
-            print(f"  aeb_start_idx: {aeb_start_idx}")
-            print(f"  aeb_start_time: {aeb_start_time}")
-            print(f"  aeb_end_idx: {aeb_end_idx}")
-            print(f"  aeb_end_time: {aeb_end_time}")
-            print(f"  ego_speed len: {len(ego_speed)}, long_accel len: {len(long_accel)}, aeb_tgt_decel len: {len(aeb_tgt_decel)}")
-            print(f"  PB_TGT_DECEL threshold: {self.PB_TGT_DECEL}, AEB_END_THD: {self.AEB_END_THD}")
-
-            if aeb_start_idx is None:
-                print("  ⚠️  AEB start not found! Possible reasons:")
-                print("     - aebTargetDecel signal missing or flat (check mdf.aebTargetDecel[:20])")
-                print("     - PB_TGT_DECEL threshold too strict")
-                print("     - Time vector mismatch")
-            # --- 🔍 DEBUG END ---
-
             # Save intervention info
-            self.kpi_table.loc[i, "logTime"]         = safe_scalar(aeb_start_time)
+            self.kpi_table.loc[i, "logTime"]          = safe_scalar(aeb_start_time)
             self.kpi_table.loc[i, "aebIntvStartTime"] = safe_scalar(aeb_start_time)
-            self.kpi_table.loc[i, "isVehStopped"]    = bool(is_veh_stopped)
-            self.kpi_table.loc[i, "aebIntvEndTime"]  = safe_scalar(aeb_end_time)
+            self.kpi_table.loc[i, "isVehStopped"]     = bool(is_veh_stopped)
+            self.kpi_table.loc[i, "aebIntvEndTime"]   = safe_scalar(aeb_end_time)
             if np.isfinite(safe_scalar(aeb_start_time)) and np.isfinite(safe_scalar(aeb_end_time)):
                 self.kpi_table.loc[i, "intvDur"] = round(
                     float(aeb_end_time) - float(aeb_start_time), 2

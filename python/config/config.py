@@ -42,11 +42,42 @@ class Config:
         if cfg.signal_map is not None:
             cfg.signal_map.columns = cfg.signal_map.columns.str.strip().str.lower()
 
+        # --- Normalize and clean line_colors sheet ---
+        if cfg.line_colors is not None and not cfg.line_colors.empty:
+            # Normalize column names
+            cfg.line_colors.columns = cfg.line_colors.columns.str.strip().str.lower()
+
+            # Filter to only columns that look like RGB numeric data
+            rgb_cols = [c for c in cfg.line_colors.columns if c in ["r", "g", "b"]]
+            if len(rgb_cols) == 3:
+                try:
+                    # Extract RGB values, convert to float, clip to [0, 1]
+                    cfg.line_colors = (
+                        cfg.line_colors[rgb_cols]
+                        .astype(float)
+                        .clip(0, 1)
+                        .to_numpy()
+                        .tolist()
+                    )
+                    print(f"🎨 Loaded {len(cfg.line_colors)} RGB color entries from lineColors.")
+                except Exception as e:
+                    warnings.warn(f"⚠️ Failed to parse RGB colors from lineColors: {e}")
+            else:
+                warnings.warn("⚠️ No valid R,G,B columns found in lineColors sheet.")
+
         # --- Calibration ---
         calib_cfg           = config_struct["Calibration"]
         calib_file          = calib_cfg["FilePath"]
         sheet_defs          = calib_cfg["Sheets"]
         cfg.calibratables   = cls._load_calibratables(calib_file, sheet_defs)
+
+        # Scale PedalPosProIncrease_Th y-values to percentage (multiply by 100)
+        if 'PedalPosProIncrease_Th' in cfg.calibratables:
+            lim = cfg.calibratables['PedalPosProIncrease_Th']
+            if isinstance(lim, dict) and "y" in lim:
+                lim["y"] = [v * 100 for v in lim["y"]]
+
+        cfg.graph_spec.columns = cfg.graph_spec.columns.str.strip().str.lower()
 
         return cfg
 
@@ -84,12 +115,25 @@ class Config:
         result = {}
         for sheet_name in sheet_list:
             try:
-                df = pd.read_excel(file_path, sheet_name=sheet_name)
-                # ✅ normalize column headers
+                # Try to detect the header row by reading first few rows
+                preview = pd.read_excel(file_path, sheet_name=sheet_name, nrows=5, header=None)
+                header_row = 0
+                for i in range(len(preview)):
+                    # A valid header row should contain at least 3 non-null cells
+                    non_na = preview.iloc[i].notna().sum()
+                    if non_na >= 3:
+                        header_row = i
+                        break
+
+                # Load the actual sheet using the detected header row
+                df = pd.read_excel(file_path, sheet_name=sheet_name, header=header_row)
                 df.columns = df.columns.str.strip().str.lower()
                 result[sheet_name] = df
+
+                print(f"✅ Loaded '{sheet_name}' (header at row {header_row+1}) — shape {df.shape}")
+
             except Exception as e:
-                warnings.warn(f'Failed to read sheet "{sheet_name}": {e}')
+                warnings.warn(f'⚠️ Failed to read sheet "{sheet_name}": {e}')
         return result
 
     @staticmethod
