@@ -2,7 +2,23 @@ import os
 import warnings
 import pandas as pd
 import numpy as np
+import plotly.io as pio
+
+
+# --- Configure Matplotlib backend (safe for macOS & virtualenvs) ---
+import matplotlib
+try:
+    matplotlib.use("TkAgg")  # Preferred for interactive plots
+except Exception:
+    matplotlib.use("MacOSX")  # Fallback for native macOS GUI backend
+
 import matplotlib.pyplot as plt
+
+# --- For interactive HTML export (Plotly bridge) ---
+try:
+    from plotly.tools import mpl_to_plotly
+except ImportError:
+    from plotly.matplotlylib import mpl_to_plotly
 
 
 def scatter_plotter(obj, graph_idx):
@@ -127,34 +143,87 @@ def scatter_plotter(obj, graph_idx):
         else:
             ax.scatter(x_vals, y_vals, marker=marker, color=color, label=legend_name)
 
-    # === Save only once per group === #
+    # === Save or show === #
     if is_last:
-        # ✅ FIX: Add calibration limits for ALL enabled rows in the group (not just last)
         for row in enabled_rows:
             group_cal_limit = str(graph_spec.loc[row, "calibration_lim"]).strip().lower()
             if group_cal_limit not in ["none", "nan", ""]:
                 _add_calibration_limit(group_cal_limit, calibratables, ax)
         if ax.get_legend_handles_labels()[1]:
             ax.legend(fontsize=8, loc="upper right")
-        # ✅ Use group counter for sequential ID starting from 1
+
         try:
             group_id = next(obj._group_counter)
         except AttributeError:
-            # Fallback if not initialized
             if not hasattr(obj, '_group_id'):
                 obj._group_id = 0
             obj._group_id += 1
             group_id = obj._group_id
+
         out_name = f"Fig_{group_id:02d} - {title}.png"
         out_path = os.path.join(path_to_csv, out_name)
-        fig.savefig(out_path, dpi=400, bbox_inches="tight")
-        plt.close(fig)
+
+        out_name_html = f"Fig_{group_id:02d} - {title}.html"
+        out_path_html = os.path.join(path_to_csv, out_name_html)
+
+        try:
+            print(f"🌐 Exporting interactive responsive HTML for '{title}' ...")
+            plotly_fig = mpl_to_plotly(fig)
+
+            # 🧩 Force responsive scaling (critical fix)
+            plotly_fig.layout.width = None
+            plotly_fig.layout.height = None
+            plotly_fig.update_layout(autosize=True)
+
+            # 🧭 Improve layout defaults (responsive margins and legend)
+            plotly_fig.update_layout(
+                margin=dict(l=60, r=60, t=80, b=60),
+                font=dict(size=14),
+                legend=dict(
+                    x=0.98, y=0.98,
+                    xanchor="right", yanchor="top",
+                    bgcolor="rgba(255,255,255,0.8)",
+                    bordercolor="lightgray", borderwidth=1
+                ),
+                template="plotly_white"
+            )
+
+            # 🧠 Export using Plotly’s modern I/O API
+            pio.write_html(
+                plotly_fig,
+                file=out_path_html,
+                full_html=True,
+                include_plotlyjs="cdn",
+                config={"responsive": True},
+                auto_open=False,
+                default_width="100%",
+                default_height="100%",
+            )
+            print(f"✅ Saved responsive interactive HTML → {out_name_html}")
+
+        except Exception as e:
+            warnings.warn(f"⚠️ Failed to export Plotly HTML: {e}")
+            fig.savefig(out_path, dpi=400, bbox_inches="tight")
+            print(f"💾 Fallback PNG saved → {out_name}")
+
+
+
+
+        # === Conditional interactivity === #
+        if getattr(obj, "interactive", False):
+            print("🧭 Interactive mode: opening figure window...")
+            _enable_click_annotations(fig, ax)
+            plt.show(block=True)  # fully interactive zoom/pan mode
+        else:
+            plt.close(fig)
+            print(f"💾 Non-interactive mode: figure saved only.")
+
         if title in obj._fig_cache:
             del obj._fig_cache[title]
         print(f"✅ Saved merged figure for '{title}' → {out_name}")
 
-# =============== Helper Functions =============== #
 
+# =============== Helper Functions =============== #
 def _extract_marker_shapes(marker_df):
     if isinstance(marker_df, pd.DataFrame):
         col_candidates = [c for c in marker_df.columns if c.strip().lower() == "shapes"]
@@ -175,11 +244,9 @@ def _apply_calibrations(calibratables):
         lim = calibratables["PedalPosProIncrease_Th"]
         if isinstance(lim, dict) and "y" in lim:
             y_vals = lim["y"]
-            # Check if values are small fractions (0–1 range)
             if all(0 <= v <= 1 for v in y_vals):
                 calibratables["PedalPosProIncrease_Th"]["y"] = [v * 100 for v in y_vals]
             else:
-                # Already in percentage, no scaling
                 calibratables["PedalPosProIncrease_Th"]["y"] = y_vals
     return calibratables
 
@@ -215,17 +282,9 @@ def _resolve_filter(plot_enabled, data, filename):
 
 
 def _select_marker_and_color(marker_shapes, line_colors, group_rows, row_in_group):
-    """
-    Select marker shape and RGB color for plotting.
-    Accepts a DataFrame from Excel ('lineColors' sheet) with columns [R, G, B].
-    """
-    # --- Handle marker shapes ---
     m_idx = row_in_group % len(marker_shapes)
     marker = marker_shapes[m_idx]
-
-    # --- Handle line colors ---
     if isinstance(line_colors, pd.DataFrame):
-        # Normalize columns and ensure [R, G, B] exist
         rgb_cols = [c.strip().lower() for c in line_colors.columns]
         if all(col in rgb_cols for col in ["r", "g", "b"]):
             line_colors.columns = rgb_cols
@@ -236,13 +295,10 @@ def _select_marker_and_color(marker_shapes, line_colors, group_rows, row_in_grou
             warnings.warn("⚠️ line_colors sheet missing R/G/B columns — using default palette.")
             color = plt.cm.tab10(row_in_group % 10)
     elif isinstance(line_colors, (list, np.ndarray)):
-        # Already a list of RGB tuples
         c_idx = row_in_group % len(line_colors)
         color = line_colors[c_idx]
     else:
-        # Fallback to matplotlib’s default color cycle
         color = plt.cm.tab10(row_in_group % 10)
-
     return marker, color
 
 
@@ -255,20 +311,70 @@ def _resolve_connect_flag(cp_raw):
 def _add_calibration_limit(cal_limit, calibratables, ax):
     if not cal_limit or str(cal_limit).lower() == "none":
         return
-
     cal_key = next((k for k in calibratables.keys() if k.lower() == cal_limit.lower()), None)
     if not cal_key:
         warnings.warn(f"⚠️ Calibration limit '{cal_limit}' not found.")
         return
-
     lim = calibratables[cal_key]
     if not (isinstance(lim, dict) and "x" in lim and "y" in lim):
         warnings.warn(f"⚠️ Calibration {cal_limit} found but not in (x,y) format.")
         return
-
-    # Only add if not already in legend
     existing_labels = [lbl.get_text() for lbl in ax.get_legend().get_texts()] if ax.get_legend() else []
     if cal_key not in existing_labels:
         ax.plot(lim["x"], lim["y"], "r--", linewidth=1.5, label=f"{cal_key}")
         ax.relim()
         ax.autoscale_view()
+
+def _enable_click_annotations(fig, ax):
+    """
+    Attach interactive click annotations to both scatter and line plots.
+    Works like MATLAB's data cursor — click to see (x, y).
+    """
+    annotation = ax.annotate(
+        "", xy=(0, 0), xytext=(15, 15),
+        textcoords="offset points",
+        bbox=dict(boxstyle="round,pad=0.3", fc="yellow", alpha=0.7),
+        arrowprops=dict(arrowstyle="->", connectionstyle="arc3,rad=0"),
+    )
+    annotation.set_visible(False)
+
+    def on_click(event):
+        if event.inaxes != ax:
+            return
+
+        # === 1️⃣ Check scatter plots ===
+        for coll in ax.collections:
+            cont, ind = coll.contains(event)
+            if cont:
+                idx = ind["ind"][0]
+                x, y = coll.get_offsets().data[idx]
+                annotation.xy = (x, y)
+                annotation.set_text(f"x={x:.2f}\ny={y:.2f}")
+                annotation.set_visible(True)
+                fig.canvas.draw_idle()
+                return
+
+        # === 2️⃣ Check line plots (Line2D) ===
+        for line in ax.lines:
+            xdata, ydata = line.get_xdata(), line.get_ydata()
+            if len(xdata) == 0:
+                continue
+            # Compute distance from click to each point
+            d = np.hypot(xdata - event.xdata, ydata - event.ydata)
+            if len(d) == 0:
+                continue
+            idx = np.argmin(d)
+            if d[idx] < 0.05 * (ax.get_xlim()[1] - ax.get_xlim()[0]):  # sensitivity threshold
+                x, y = xdata[idx], ydata[idx]
+                annotation.xy = (x, y)
+                annotation.set_text(f"x={x:.2f}\ny={y:.2f}")
+                annotation.set_visible(True)
+                fig.canvas.draw_idle()
+                return
+
+        # === Clicked on empty space → hide annotation ===
+        annotation.set_visible(False)
+        fig.canvas.draw_idle()
+
+    fig.canvas.mpl_connect("button_press_event", on_click)
+

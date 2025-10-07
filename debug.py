@@ -82,6 +82,11 @@ def main():
     print("\n🧩 Initializing Visualizer...\n")
     viz = Visualizer(cfg, kpi)
 
+    # --- Optional: enable interactive plots ---
+    # 👉 Set this to True if you want zoomable pop-ups.
+    #    You can also make this conditional on environment if desired.
+    viz.interactive = True
+
     # --- Debug printouts ---
     print(f"📘 graph_spec shape: {viz.graph_spec.shape}")
     print(f"📘 line_colors shape: {viz.line_colors.shape if isinstance(viz.line_colors, pd.DataFrame) else len(viz.line_colors)}")
@@ -102,6 +107,7 @@ def main():
         raise
 
     print("\n✅ Visualization pipeline finished successfully.\n")
+
 
 
 if __name__ == "__main__":
