@@ -11,28 +11,28 @@ def scatter_plotter(obj, graph_idx):
     Combines multiple rows with same Title into one figure.
     """
 
-    graph_spec = obj.graph_spec
-    line_colors = obj.line_colors.values if isinstance(obj.line_colors, pd.DataFrame) else obj.line_colors
-    marker_shapes = _extract_marker_shapes(obj.marker_shapes)
-    calibratables = _apply_calibrations(obj.calibratables)
-    path_to_csv = obj.path_to_chunks  # Output dir
-    kpi_spec = obj.kpi_spec
+    graph_spec      = obj.graph_spec
+    line_colors     = obj.line_colors.values if isinstance(obj.line_colors, pd.DataFrame) else obj.line_colors
+    marker_shapes   = _extract_marker_shapes(obj.marker_shapes)
+    calibratables   = _apply_calibrations(obj.calibratables)
+    path_to_csv     = obj.path_to_chunks  # Output dir
+    kpi_spec        = obj.kpi_spec
 
     if not os.path.isdir(path_to_csv):
         warnings.warn(f"⚠️ Invalid path_to_csv: {path_to_csv}")
         return
 
     # --- KPI variable names ---
-    var_names = kpi_spec["name"].astype(str).tolist()
-    display_names = [
+    var_names       = kpi_spec["name"].astype(str).tolist()
+    display_names   = [
         f"{row['name']} [{row['unit']}]" if pd.notna(row.get("unit")) else str(row["name"])
         for _, row in kpi_spec.iterrows()
     ]
 
     # --- Group by Title ---
-    title = graph_spec.loc[graph_idx, "title"]
+    title           = graph_spec.loc[graph_idx, "title"]
     same_title_rows = graph_spec.index[graph_spec["title"] == title].tolist()
-    enabled_rows = [
+    enabled_rows    = [
         r for r in same_title_rows
         if str(graph_spec.loc[r, "plotenabled"]).strip().lower() not in ["false", "na", ""]
     ]
@@ -41,7 +41,7 @@ def scatter_plotter(obj, graph_idx):
         return
 
     first_row, last_row = enabled_rows[0], enabled_rows[-1]
-    is_first, is_last = graph_idx == first_row, graph_idx == last_row
+    is_first, is_last   = graph_idx == first_row, graph_idx == last_row
 
     # --- Skip disabled row ---
     plot_enabled = str(graph_spec.loc[graph_idx, "plotenabled"]).strip().lower()
@@ -54,7 +54,7 @@ def scatter_plotter(obj, graph_idx):
         ax.set_title(title)
         ax.grid(True, which="both", linestyle="--", alpha=0.5)
         # X-axis: always from row 0 (vehSpd)
-        x_var = str(graph_spec.loc[0, "reference"])
+        x_var   = str(graph_spec.loc[0, "reference"])
         x_label = str(graph_spec.loc[0, "axis_name"])
         ax.set_xlim(
             float(graph_spec.loc[0, "min_axis_value"]),
@@ -68,11 +68,11 @@ def scatter_plotter(obj, graph_idx):
         print(f"🔁 Reusing existing figure for '{title}'")
 
     # === Current variable === #
-    y_var = str(graph_spec.loc[graph_idx, "reference"])
-    y_label = str(graph_spec.loc[graph_idx, "axis_name"])
-    cal_limit = str(graph_spec.loc[graph_idx, "calibration_lim"])
-    legend_name = str(graph_spec.loc[graph_idx, "legend"])
-    connect_flag = _resolve_connect_flag(graph_spec.loc[graph_idx, "connectpoints"])
+    y_var         = str(graph_spec.loc[graph_idx, "reference"])
+    y_label       = str(graph_spec.loc[graph_idx, "axis_name"])
+    cal_limit     = str(graph_spec.loc[graph_idx, "calibration_lim"])
+    legend_name   = str(graph_spec.loc[graph_idx, "legend"])
+    connect_flag  = _resolve_connect_flag(graph_spec.loc[graph_idx, "connectpoints"])
 
     ax.set_ylabel(y_label.replace("_", " "))
 
@@ -82,7 +82,7 @@ def scatter_plotter(obj, graph_idx):
         y_max = float(graph_spec.loc[first_row, "max_axis_value"])
         ax.set_ylim(y_min, y_max)
 
-    row_in_group = same_title_rows.index(graph_idx)
+    row_in_group  = same_title_rows.index(graph_idx)
     marker, color = _select_marker_and_color(marker_shapes, line_colors, same_title_rows, row_in_group)
 
     # === Iterate CSV files (assuming single CSV as per logs) === #
@@ -111,7 +111,7 @@ def scatter_plotter(obj, graph_idx):
 
         # Apply filter if defined
         plot_enabled_col = str(graph_spec.loc[graph_idx, "plotenabled"]).strip()
-        filt_mask = _resolve_filter(plot_enabled_col, data, csv_file)
+        filt_mask        = _resolve_filter(plot_enabled_col, data, csv_file)
 
         # Extract arrays
         x_vals = data.loc[filt_mask, x_col].to_numpy()
@@ -174,7 +174,13 @@ def _apply_calibrations(calibratables):
     if "PedalPosProIncrease_Th" in calibratables:
         lim = calibratables["PedalPosProIncrease_Th"]
         if isinstance(lim, dict) and "y" in lim:
-            calibratables["PedalPosProIncrease_Th"]["y"] = [v * 100 for v in lim["y"]]
+            y_vals = lim["y"]
+            # Check if values are small fractions (0–1 range)
+            if all(0 <= v <= 1 for v in y_vals):
+                calibratables["PedalPosProIncrease_Th"]["y"] = [v * 100 for v in y_vals]
+            else:
+                # Already in percentage, no scaling
+                calibratables["PedalPosProIncrease_Th"]["y"] = y_vals
     return calibratables
 
 
@@ -249,12 +255,20 @@ def _resolve_connect_flag(cp_raw):
 def _add_calibration_limit(cal_limit, calibratables, ax):
     if not cal_limit or str(cal_limit).lower() == "none":
         return
+
     cal_key = next((k for k in calibratables.keys() if k.lower() == cal_limit.lower()), None)
-    if cal_key:
-        lim = calibratables[cal_key]
-        if isinstance(lim, dict) and "x" in lim and "y" in lim:
-            ax.plot(lim["x"], lim["y"], "r--", label=f"{cal_key}")
-        else:
-            warnings.warn(f"⚠️ Calibration {cal_limit} found but not in (x,y) format.")
-    else:
+    if not cal_key:
         warnings.warn(f"⚠️ Calibration limit '{cal_limit}' not found.")
+        return
+
+    lim = calibratables[cal_key]
+    if not (isinstance(lim, dict) and "x" in lim and "y" in lim):
+        warnings.warn(f"⚠️ Calibration {cal_limit} found but not in (x,y) format.")
+        return
+
+    # Only add if not already in legend
+    existing_labels = [lbl.get_text() for lbl in ax.get_legend().get_texts()] if ax.get_legend() else []
+    if cal_key not in existing_labels:
+        ax.plot(lim["x"], lim["y"], "r--", linewidth=1.5, label=f"{cal_key}")
+        ax.relim()
+        ax.autoscale_view()

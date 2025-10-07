@@ -71,12 +71,6 @@ class Config:
         sheet_defs          = calib_cfg["Sheets"]
         cfg.calibratables   = cls._load_calibratables(calib_file, sheet_defs)
 
-        # Scale PedalPosProIncrease_Th y-values to percentage (multiply by 100)
-        if 'PedalPosProIncrease_Th' in cfg.calibratables:
-            lim = cfg.calibratables['PedalPosProIncrease_Th']
-            if isinstance(lim, dict) and "y" in lim:
-                lim["y"] = [v * 100 for v in lim["y"]]
-
         cfg.graph_spec.columns = cfg.graph_spec.columns.str.strip().str.lower()
 
         return cfg
