@@ -168,14 +168,63 @@ def scatter_plotter(obj, graph_idx):
 
         try:
             print(f"🌐 Exporting interactive responsive HTML for '{title}' ...")
-            plotly_fig = mpl_to_plotly(fig)
 
-            # 🧩 Force responsive scaling (critical fix)
+            # --- Use safer Plotly conversion ---
+            from plotly.tools import mpl_to_plotly
+            plotly_fig = mpl_to_plotly(fig, strip_style=True)
+
+            # 🧩 Force responsive scaling (ignore Matplotlib fixed size)
             plotly_fig.layout.width = None
             plotly_fig.layout.height = None
             plotly_fig.update_layout(autosize=True)
 
-            # 🧭 Improve layout defaults (responsive margins and legend)
+            # ---------- Robust legend mapping (keep all traces, correct names) ----------
+            # 1) Build lists we expect
+            data_labels = [str(obj.graph_spec.loc[row, "legend"]) for row in enabled_rows]
+
+            # calibration keys (case-insensitive map)
+            cal_key_map = {k.lower(): k for k in obj.calibratables.keys()}
+
+            # 2) First pass: keep calibration names if converter already preserved them
+            #    and assign data labels only to generic/unnamed traces.
+            data_idx = 0
+            for tr in plotly_fig.data:
+                tname = getattr(tr, "name", None)
+                tnamel = tname.lower() if isinstance(tname, str) else None
+
+                # If this trace is a calibration line, keep its name (normalize case)
+                if isinstance(tname, str) and tnamel in cal_key_map:
+                    tr.name = cal_key_map[tnamel]   # canonical calibration name
+                    continue
+
+                # If converter already put a correct data label, leave it as-is and mark used
+                if isinstance(tname, str) and tname in data_labels:
+                    data_labels.remove(tname)
+                    continue
+
+                # Otherwise, assign the next data label (if any)
+                if data_idx < len(data_labels):
+                    tr.name = data_labels[data_idx]
+                    data_idx += 1
+                else:
+                    # fallback: leave whatever name it had (e.g., "trace 4")
+                    pass
+
+            # 3) Show each label only once in the legend (do NOT remove traces)
+            seen = set()
+            for tr in plotly_fig.data:
+                nm = getattr(tr, "name", "")
+                if nm in seen:
+                    tr.showlegend = False
+                else:
+                    tr.showlegend = True
+                    seen.add(nm)
+
+            # Optional: keep legend order as traces appear
+            plotly_fig.update_layout(legend=dict(traceorder="normal"))
+
+
+            # --- Improve layout ---
             plotly_fig.update_layout(
                 margin=dict(l=60, r=60, t=80, b=60),
                 font=dict(size=14),
@@ -185,10 +234,12 @@ def scatter_plotter(obj, graph_idx):
                     bgcolor="rgba(255,255,255,0.8)",
                     bordercolor="lightgray", borderwidth=1
                 ),
-                template="plotly_white"
+                template="plotly_white",
+                autosize=True
             )
 
-            # 🧠 Export using Plotly’s modern I/O API
+            # --- Export HTML ---
+            import plotly.io as pio
             pio.write_html(
                 plotly_fig,
                 file=out_path_html,
@@ -199,20 +250,20 @@ def scatter_plotter(obj, graph_idx):
                 default_width="100%",
                 default_height="100%",
             )
+
             print(f"✅ Saved responsive interactive HTML → {out_name_html}")
 
         except Exception as e:
+            import traceback
             warnings.warn(f"⚠️ Failed to export Plotly HTML: {e}")
+            traceback.print_exc()
             fig.savefig(out_path, dpi=400, bbox_inches="tight")
             print(f"💾 Fallback PNG saved → {out_name}")
-
-
 
 
         # === Conditional interactivity === #
         if getattr(obj, "interactive", False):
             print("🧭 Interactive mode: opening figure window...")
-            _enable_click_annotations(fig, ax)
             plt.show(block=True)  # fully interactive zoom/pan mode
         else:
             plt.close(fig)
@@ -324,57 +375,3 @@ def _add_calibration_limit(cal_limit, calibratables, ax):
         ax.plot(lim["x"], lim["y"], "r--", linewidth=1.5, label=f"{cal_key}")
         ax.relim()
         ax.autoscale_view()
-
-def _enable_click_annotations(fig, ax):
-    """
-    Attach interactive click annotations to both scatter and line plots.
-    Works like MATLAB's data cursor — click to see (x, y).
-    """
-    annotation = ax.annotate(
-        "", xy=(0, 0), xytext=(15, 15),
-        textcoords="offset points",
-        bbox=dict(boxstyle="round,pad=0.3", fc="yellow", alpha=0.7),
-        arrowprops=dict(arrowstyle="->", connectionstyle="arc3,rad=0"),
-    )
-    annotation.set_visible(False)
-
-    def on_click(event):
-        if event.inaxes != ax:
-            return
-
-        # === 1️⃣ Check scatter plots ===
-        for coll in ax.collections:
-            cont, ind = coll.contains(event)
-            if cont:
-                idx = ind["ind"][0]
-                x, y = coll.get_offsets().data[idx]
-                annotation.xy = (x, y)
-                annotation.set_text(f"x={x:.2f}\ny={y:.2f}")
-                annotation.set_visible(True)
-                fig.canvas.draw_idle()
-                return
-
-        # === 2️⃣ Check line plots (Line2D) ===
-        for line in ax.lines:
-            xdata, ydata = line.get_xdata(), line.get_ydata()
-            if len(xdata) == 0:
-                continue
-            # Compute distance from click to each point
-            d = np.hypot(xdata - event.xdata, ydata - event.ydata)
-            if len(d) == 0:
-                continue
-            idx = np.argmin(d)
-            if d[idx] < 0.05 * (ax.get_xlim()[1] - ax.get_xlim()[0]):  # sensitivity threshold
-                x, y = xdata[idx], ydata[idx]
-                annotation.xy = (x, y)
-                annotation.set_text(f"x={x:.2f}\ny={y:.2f}")
-                annotation.set_visible(True)
-                fig.canvas.draw_idle()
-                return
-
-        # === Clicked on empty space → hide annotation ===
-        annotation.set_visible(False)
-        fig.canvas.draw_idle()
-
-    fig.canvas.mpl_connect("button_press_event", on_click)
-
