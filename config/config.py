@@ -13,6 +13,7 @@ class Config:
         self.line_colors    = None       # lineColors sheet
         self.marker_shapes  = None       # markerShapes sheet
         self.calibratables  = {}         # calibratables 
+        self.params         = None       # params sheet 
 
     @classmethod
     def from_json(cls, json_config_path):
@@ -37,6 +38,35 @@ class Config:
         cfg.line_colors     = sheet_map.get("linecolors")
         cfg.marker_shapes   = sheet_map.get("markershapes")
         cfg.kpi_spec        = sheet_map.get("kpi")
+        cfg.params          = sheet_map.get("params")
+        
+        if cfg.params is not None and not cfg.params.empty:
+            cfg.params.columns = cfg.params.columns.str.strip().str.lower()
+
+            # Extract {PARAMETER: VALUE} dictionary in UPPERCASE
+            try:
+                param_dict = (
+                    cfg.params
+                    .dropna(subset=["parameter", "value"])
+                    .assign(parameter=lambda df: df["parameter"].astype(str).str.strip().str.upper())
+                    .set_index("parameter")["value"]
+                    .to_dict()
+                )
+
+                # Convert to numeric where possible
+                for k, v in param_dict.items():
+                    try:
+                        param_dict[k] = float(v)
+                    except Exception:
+                        pass
+
+                cfg.params = param_dict
+                print(f"⚙️ Loaded {len(cfg.params)} parameters from 'params' sheet.")
+                # Optional: print example keys
+                print("   ➝ Keys:", ", ".join(list(cfg.params.keys())[:6]), "...")
+            except Exception as e:
+                warnings.warn(f"⚠️ Failed to parse params sheet: {e}")
+
 
         # ✅ normalize signal_map column headers
         if cfg.signal_map is not None:
@@ -70,6 +100,9 @@ class Config:
         calib_file          = calib_cfg["FilePath"]
         sheet_defs          = calib_cfg["Sheets"]
         cfg.calibratables   = cls._load_calibratables(calib_file, sheet_defs)
+
+        # Apply scaling logic centrally
+        cfg._apply_calibration_scaling()
 
         cfg.graph_spec.columns = cfg.graph_spec.columns.str.strip().str.lower()
 
@@ -169,3 +202,24 @@ class Config:
 
         wb.close()
         return calibratables
+
+    # --------------------
+    # Calibration post-processing
+    # --------------------
+    def _apply_calibration_scaling(self):
+        """
+        Apply scaling or normalization logic to certain calibratables.
+        """
+        # Example: scale PedalPosProIncrease_Th from 0–1 → 0–100 range
+        key = "PedalPosProIncrease_Th"
+        if key in self.calibratables:
+            val = self.calibratables[key]
+            if isinstance(val, dict) and "y" in val:
+                y_vals = val["y"]
+                if all(isinstance(v, (int, float)) for v in y_vals if v is not None):
+                    # Only scale if in 0–1 range
+                    if all(0 <= v <= 1 for v in y_vals):
+                        self.calibratables[key]["y"] = [
+                            v * 100 if v is not None else None for v in y_vals
+                        ]
+                        print(f"📏 Scaled '{key}' ×100 (0–1 → 0–100).")

@@ -1,7 +1,7 @@
 {
     "SignalMap_KPI_PlotSpec": {
         "FilePath": "/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_kpi_extractor/python/config/SignalMap_KPI_PlotSpec.xlsx",
-        "Sheets": ["vbRcSignals", "graphSpec", "lineColors","markerShapes","KPI"]
+        "Sheets": ["vbRcSignals", "graphSpec", "lineColors","markerShapes","KPI","params"]
     },
     "Calibration": {
         "FilePath": "/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_kpi_extractor/Active_Safety_Long_Calibration_Plan.xlsx",

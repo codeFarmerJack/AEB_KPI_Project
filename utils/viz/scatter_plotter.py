@@ -31,7 +31,7 @@ def scatter_plotter(obj, graph_idx):
     graph_spec      = obj.graph_spec
     line_colors     = obj.line_colors.values if isinstance(obj.line_colors, pd.DataFrame) else obj.line_colors
     marker_shapes   = _extract_marker_shapes(obj.marker_shapes)
-    calibratables   = _apply_calibrations(obj.calibratables)
+    calibratables   = obj.calibratables
     kpi_spec        = obj.kpi_spec
     data            = obj.kpi_data
 
@@ -233,15 +233,6 @@ def _extract_marker_shapes(marker_df):
         shapes = ['o', 's', '^', 'D']
     return shapes or ['o']
 
-
-def _apply_calibrations(calibratables):
-    if "PedalPosProIncrease_Th" in calibratables:
-        lim = calibratables["PedalPosProIncrease_Th"]
-        if isinstance(lim, dict) and "y" in lim:
-            y_vals = lim["y"]
-            if all(0 <= v <= 1 for v in y_vals):
-                calibratables["PedalPosProIncrease_Th"]["y"] = [v * 100 for v in y_vals]
-    return calibratables
 
 
 def _resolve_xy_columns(x_var, y_var, var_names, display_names, data, source):

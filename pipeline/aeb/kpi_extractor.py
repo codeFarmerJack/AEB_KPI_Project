@@ -137,12 +137,12 @@ class Thresholds:
 # KPI Extractor
 # ------------------------------------------------------------------ #
 class KPIExtractor:
-    PB_TGT_DECEL    = -6.0
-    FB_TGT_DECEL    = -15.0
-    TGT_TOL         = 0.2
-    AEB_END_THD     = -4.9
-    TIME_IDX_OFFSET = 300
-    CUTOFF_FREQ     = 10
+    PB_TGT_DECEL    = -6.0      # m/s²
+    FB_TGT_DECEL    = -15.0     # m/s²
+    TGT_TOL         = 0.2       # m/s²
+    AEB_END_THD     = -4.9      # m/s²
+    TIME_IDX_OFFSET = 300       # samples (~3s at 0.01s rate)
+    CUTOFF_FREQ     = 10        # Hz    
 
     def __init__(self, config, event_detector):
         if config is None or event_detector is None:
@@ -175,12 +175,6 @@ class KPIExtractor:
             else:
                 warnings.warn(f"⚠️ Missing calibratable '{cfg_key}' in config.")
                 self.calibratables[internal_name] = pd.DataFrame()
-
-        # Scale pedal threshold (×100) if possible
-        if "PedalPosProIncrease_Th" in self.calibratables:
-            val = self.calibratables["PedalPosProIncrease_Th"]
-            if isinstance(val, dict) and "y" in val:
-                val["y"] = [yy * 100 for yy in val["y"] if yy is not None]
 
     # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):
