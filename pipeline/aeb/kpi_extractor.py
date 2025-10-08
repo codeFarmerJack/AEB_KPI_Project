@@ -291,21 +291,33 @@ class KPIExtractor:
             self.kpi_table = self.kpi_table.round(2)
 
     # ------------------------------------------------------------------ #
-    def export_to_csv(self):
-        output_filename = os.path.join(self.path_to_chunks, "AEB_KPI_Results.csv")
+    def export_to_excel(self):
+        # Define Excel filename
+        output_filename = os.path.join(self.path_to_chunks, "AS-Long_KPI_Results.xlsx")
+
         try:
             df = self.kpi_table.copy()
+
+            # Drop rows with missing labels (if present)
             if "label" in df.columns:
                 df = df.dropna(subset=["label"])
+
+            # Sort by vehicle speed (if available)
             if "vehSpd" in df.columns:
                 df = df.sort_values("vehSpd")
 
+            # Apply display names if defined
             display_map = df.attrs.get("display_names", {})
             renamed = {col: display_map.get(col, col) for col in df.columns}
             renamed["label"] = "label"
-
             df = df.rename(columns=renamed)
-            df.to_csv(output_filename, index=False, encoding="utf-8-sig")
-            print(f"✅ Exported KPI results to {output_filename}")
+
+            # === Export to Excel ===
+            with pd.ExcelWriter(output_filename, engine="openpyxl", mode="w") as writer:
+                df.to_excel(writer, sheet_name="aeb", index=False)
+
+            print(f"✅ Exported KPI results to Excel → {output_filename} (sheet: 'aeb')")
+
         except Exception as e:
             warnings.warn(f"⚠️ Failed to export KPI results: {e}")
+

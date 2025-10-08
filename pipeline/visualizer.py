@@ -30,33 +30,34 @@ class Visualizer:
 
         # --- Validate KPIExtractor ---
         if not hasattr(kpi_extractor, "path_to_chunks"):
-            raise TypeError("kpi_extractor must have attribute 'path_to_chunks' (directory of CSVs).")
+            raise TypeError("kpi_extractor must have attribute 'path_to_chunks' (directory of KPI outputs).")
 
         # --- Core fields ---
-        self.graph_spec = config.graph_spec
-        self.line_colors = config.line_colors
-        self.marker_shapes = config.marker_shapes
-        self.calibratables = config.calibratables
-        self.kpi_spec = config.kpi_spec
+        self.graph_spec     = config.graph_spec
+        self.line_colors    = config.line_colors
+        self.marker_shapes  = config.marker_shapes
+        self.calibratables  = config.calibratables
+        self.kpi_spec       = config.kpi_spec
         self.path_to_kpi_schema = getattr(config, "kpi_schema_path", None)
 
-        # --- Directories & CSVs ---
+        # --- Directories & File Paths ---
         self.path_to_chunks = kpi_extractor.path_to_chunks
-        self.path_to_csv = os.path.join(self.path_to_chunks, "AEB_KPI_Results.csv")
+        self.path_to_excel  = os.path.join(self.path_to_chunks, "AS-Long_KPI_Results.xlsx")
         self.path_to_output = self.path_to_chunks
-        # ✅ FIX: Initialize group counter for sequential figure numbering starting from 1
-        self._group_counter = iter(range(1, 101))  # Generator: 1, 2, 3, ...
 
-        # --- Load KPI data (optional but useful) ---
-        if os.path.isfile(self.path_to_csv):
+        # ✅ Sequential figure numbering (1 → 100)
+        self._group_counter = iter(range(1, 101))
+
+        # --- Load KPI data from Excel (aeb sheet) ---
+        if os.path.isfile(self.path_to_excel):
             try:
-                self.kpi_data = pd.read_csv(self.path_to_csv)
-                print(f"📄 Loaded KPI data from {self.path_to_csv}")
+                self.kpi_data = pd.read_excel(self.path_to_excel, sheet_name="aeb")
+                print(f"📘 Loaded KPI data from 'aeb' tab in {self.path_to_excel}")
             except Exception as e:
-                warnings.warn(f"⚠️ Failed to read {self.path_to_csv}: {e}")
+                warnings.warn(f"⚠️ Failed to read 'aeb' sheet from {self.path_to_excel}: {e}")
                 self.kpi_data = getattr(kpi_extractor, "kpi_table", pd.DataFrame())
         else:
-            warnings.warn(f"⚠️ CSV not found at {self.path_to_csv}. Using in-memory KPI table.")
+            warnings.warn(f"⚠️ Excel file not found at {self.path_to_excel}. Using in-memory KPI table.")
             self.kpi_data = getattr(kpi_extractor, "kpi_table", pd.DataFrame())
 
         # --- Validate ---
@@ -103,7 +104,6 @@ class Visualizer:
                     warnings.warn(f"⚙️ Pie plot at row {j} not yet implemented.")
                 else:
                     warnings.warn(f"⚠️ Unsupported plot type '{plot_type}' at row {j}. Skipping.")
-
             except Exception as e:
                 warnings.warn(f"⚠️ Plotting failed for row {j}: {e}")
 

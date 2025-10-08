@@ -67,7 +67,7 @@ class AEBPipeline:
         try:
             self.KPIExtractor = KPIExtractor(self.Config, self.EventDetector)
             self.KPIExtractor.process_all_mat_files()
-            self.KPIExtractor.export_to_csv()
+            self.KPIExtractor.export_to_excel()
             print("    ✅ KPIs extracted and exported to CSV successfully.")
         except Exception as e:
             print(f"  ❌ Failed to extract KPIs or export to CSV: {e}")

@@ -76,7 +76,7 @@ def main():
     # --- KPI Extraction ---
     kpi = KPIExtractor(cfg, event)
     kpi.process_all_mdf_files()
-    kpi.export_to_csv()
+    kpi.export_to_excel()
 
     # --- Instantiate Visualizer (debug mode) ---
     print("\n🧩 Initializing Visualizer...\n")
@@ -92,7 +92,7 @@ def main():
     print(f"📘 line_colors shape: {viz.line_colors.shape if isinstance(viz.line_colors, pd.DataFrame) else len(viz.line_colors)}")
     print(f"📘 marker_shapes: {viz.marker_shapes.shape if isinstance(viz.marker_shapes, pd.DataFrame) else len(viz.marker_shapes)}")
     print(f"📘 calibratables keys: {list(viz.calibratables.keys())[:5]}")
-    print(f"📘 path_to_csv: {viz.path_to_csv}")
+    print(f"📘 path_to_excel: {viz.path_to_excel}")
 
     # --- Optional: Inspect graphSpec columns ---
     print("\n🧾 GraphSpec Columns:", list(viz.graph_spec.columns))
