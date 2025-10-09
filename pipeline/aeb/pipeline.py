@@ -105,15 +105,6 @@ class AebPipeline:
         try:
             self.viz = Visualizer(self.cfg, self.kpi)
             self.viz.interactive = True  # enable zoomable interactive plots
-
-            print(f"📘 graph_spec shape: {getattr(self.viz.graph_spec, 'shape', 'N/A')}")
-            print(f"📘 line_colors entries: {len(self.viz.line_colors)}")
-            print(f"📘 marker_shapes entries: {len(self.viz.marker_shapes)}")
-            print(f"📘 calibratables keys (first 5): {list(self.viz.calibratables.keys())[:5]}")
-            print(f"📘 path_to_excel: {self.viz.path_to_excel}")
-
-            print("\n🎨 Launching visualization...\n")
             self.viz.plot()
-            print("✅ Visualization completed successfully.")
         except Exception as e:
             raise RuntimeError(f"❌ Visualization failed: {e}")
