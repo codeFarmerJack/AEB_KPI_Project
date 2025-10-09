@@ -1,170 +1,119 @@
 import os
-import sys
 import warnings
-from pathlib import Path
-import numpy as np
 import pandas as pd
-from asammdf import MDF
+from pathlib import Path
 
 from config.config import Config
 from pipeline.input_handler import InputHandler
 from pipeline.aeb.event_detector import EventDetector
-from pipeline.aeb.kpi_extractor import KPIExtractor
+from pipeline.aeb.kpi_extractor import KpiExtractor
 from pipeline.visualizer import Visualizer
 
 
-class AEBPipeline:
+class AebPipeline:
     """
-    AEBPipeline
-    -----------
-    Orchestrates the full AEB data processing pipeline.
+    AebPipeline
+    ------------
+    High-level orchestrator for the AEB KPI processing pipeline.
 
     Steps:
       1. Load configuration (JSON)
-      2. Process MF4 files (resample & extract)
+      2. Process MF4 files (resample + signal extraction)
       3. Detect AEB events
-      4. Extract KPIs
+      4. Extract KPIs and export to Excel
       5. Visualize results (interactive or static)
     """
 
-    def __init__(
-        self,
-        config_path: str,
-        mf4_path: str,
-        resample_rate: float = 0.01,
-        pre_time: float      = 6.0,
-        post_time: float     = 3.0,
-    ):
-        self.config_path     = Path(config_path)
-        self.mf4_path        = Path(mf4_path)
-        self.resample_rate   = resample_rate
-        self.pre_time        = pre_time
-        self.post_time       = post_time
-
-        if not self.config_path.exists():
-            raise FileNotFoundError(f"⚠️ Config file not found: {self.config_path}")
-
-        print(f"\n📁 Using configuration: {self.config_path}")
-        print(f"📂 Raw data path: {self.mf4_path}")
-        print(f"⚙️ Resample rate: {self.resample_rate} s | Pre: {self.pre_time}s | Post: {self.post_time}s\n")
-
-        # --- Initialize components ---
-        self.cfg    = None
-        self.ih     = None
-        self.event  = None
-        self.kpi    = None
-        self.viz    = None
+    def __init__(self, config_path: Path):
+        self.config_path = Path(config_path)
+        self.cfg         = None
+        self.ih          = None
+        self.event       = None
+        self.kpi         = None
+        self.viz         = None
 
     # ------------------------------------------------------------------ #
     def run(self):
-        """Run the complete AEB processing pipeline."""
+        """Run the entire AEB pipeline sequentially."""
         print("\n🚀 Starting AEB Processing Pipeline...\n")
 
-        # Step 1: Load config
-        print("➡️ [1/6] Loading Config...")
-        try:
-            self.cfg = Config.from_json(self.config_path)
-            print("✅ Config loaded successfully.")
-        except Exception as e:
-            sys.exit(f"❌ Failed to load Config: {e}")
+        # 1️⃣ Load configuration
+        self._load_config()
 
-        # Step 2: Display KPI and calibration summary
-        self._print_config_summaries()
+        # 2️⃣ Process MF4 files
+        self._process_mf4_files()
 
-        # Step 3: Process MF4 files
-        print("\n➡️ [2/6] Processing MF4 files...")
+        # 3️⃣ Run event detection
+        self._detect_events()
+
+        # 4️⃣ Extract KPIs
+        self._extract_kpis()
+
+        # 5️⃣ Visualize results
+        self._visualize_results()
+
+        print("\n🎉 AEB Pipeline finished successfully.\n")
+
+    # ------------------------------------------------------------------ #
+    def _load_config(self):
+        """Step 1: Load Config JSON."""
+        print("➡️ [1/5] Loading configuration...")
+        if not self.config_path.exists():
+            raise FileNotFoundError(f"⚠️ Config file not found: {self.config_path}")
+        self.cfg = Config.from_json(self.config_path)
+        print(f"✅ Config loaded: {self.config_path}")
+
+    # ------------------------------------------------------------------ #
+    def _process_mf4_files(self):
+        """Step 2: Process MF4 files using InputHandler."""
+        print("\n➡️ [2/5] Processing MF4 files...")
         try:
             self.ih = InputHandler(self.cfg)
-            self.ih.process_mf4_files(resample_rate=self.resample_rate)
+            self.ih.process_mf4_files()
             print("✅ MF4 files processed successfully.")
         except Exception as e:
-            sys.exit(f"❌ Failed during MF4 processing: {e}")
+            raise RuntimeError(f"❌ MF4 processing failed: {e}")
 
-        # Step 4: Inspect extracted MF4s
-        self._inspect_mf4_files()
-
-        # Step 5: Run event detection
-        print("\n➡️ [3/6] Detecting AEB events...")
+    # ------------------------------------------------------------------ #
+    def _detect_events(self):
+        """Step 4: Detect AEB events."""
+        print("\n➡️ [3/5] Detecting AEB events...")
         try:
-            self.event = EventDetector(self.ih, pre_time=self.pre_time, post_time=self.post_time)
+            self.event = EventDetector(self.ih, self.cfg)
+            print("🚦 Running event detection...\n")
             self.event.process_all_files()
-            print("✅ Event detection completed.")
+            print("✅ Event detection finished.\n")
         except Exception as e:
-            sys.exit(f"❌ Failed during event detection: {e}")
+            raise RuntimeError(f"❌ Event detection failed: {e}")
 
-        # Step 6: Extract KPIs
-        print("\n➡️ [4/6] Extracting KPIs...")
+    # ------------------------------------------------------------------ #
+    def _extract_kpis(self):
+        """Step 5: Extract KPIs and export to Excel."""
+        print("\n➡️ [4/5] Extracting KPIs...")
         try:
-            self.kpi = KPIExtractor(self.cfg, self.event)
+            self.kpi = KpiExtractor(self.cfg, self.event)
             self.kpi.process_all_mdf_files()
             self.kpi.export_to_excel()
-            print("✅ KPI extraction & Excel export done.")
+            print("✅ KPI extraction and Excel export done.")
         except Exception as e:
-            sys.exit(f"❌ Failed during KPI extraction: {e}")
+            raise RuntimeError(f"❌ KPI extraction failed: {e}")
 
-        # Step 7: Visualization
-        print("\n➡️ [5/6] Launching visualization...")
+    # ------------------------------------------------------------------ #
+    def _visualize_results(self):
+        """Step 6: Visualization."""
+        print("\n➡️ [5/5] Launching visualization...\n")
         try:
             self.viz = Visualizer(self.cfg, self.kpi)
-            self.viz.interactive = True  # enable zoomable pop-ups
-            self._print_visualizer_summary()
+            self.viz.interactive = True  # enable zoomable interactive plots
+
+            print(f"📘 graph_spec shape: {getattr(self.viz.graph_spec, 'shape', 'N/A')}")
+            print(f"📘 line_colors entries: {len(self.viz.line_colors)}")
+            print(f"📘 marker_shapes entries: {len(self.viz.marker_shapes)}")
+            print(f"📘 calibratables keys (first 5): {list(self.viz.calibratables.keys())[:5]}")
+            print(f"📘 path_to_excel: {self.viz.path_to_excel}")
+
+            print("\n🎨 Launching visualization...\n")
             self.viz.plot()
             print("✅ Visualization completed successfully.")
         except Exception as e:
-            sys.exit(f"❌ Visualization failed: {e}")
-
-        print("\n🎉 AEB pipeline finished successfully!\n")
-
-    # ------------------------------------------------------------------ #
-    def _print_config_summaries(self):
-        """Helper: print summaries of KPI spec and calibratables."""
-        print("\n📑 KPI Specification (cfg.kpi_spec):")
-        if isinstance(self.cfg.kpi_spec, pd.DataFrame):
-            print(f"   ➝ Shape: {self.cfg.kpi_spec.shape}")
-            print(self.cfg.kpi_spec.head(8).to_string(index=False))
-            print("🔎 Columns:", list(self.cfg.kpi_spec.columns))
-        else:
-            print(f"⚠️ Unexpected type for cfg.kpi_spec: {type(self.cfg.kpi_spec)}")
-
-        print("\n⚙️ Calibratables Summary:")
-        for cal_name, val in self.cfg.calibratables.items():
-            print(f"   ➝ {cal_name}:")
-            if isinstance(val, dict):
-                print(f"      Type: dict ({list(val.keys())})")
-            elif isinstance(val, pd.DataFrame):
-                print(f"      Type: DataFrame {val.shape}, Columns: {list(val.columns)}")
-            else:
-                print(f"      {type(val)}: {val}")
-
-    # ------------------------------------------------------------------ #
-    def _inspect_mf4_files(self):
-        """Inspect extracted MF4 files after InputHandler processing."""
-        mdf_files = list(self.mf4_path.glob("*_extracted.mf4"))
-        print(f"\n📂 Found {len(mdf_files)} extracted MF4 files.")
-        if not mdf_files:
-            warnings.warn("⚠️ No extracted MF4 files found — check InputHandler output path.")
-            return
-
-        try:
-            first_file = MDF(mdf_files[0])
-            print(f"🧾 Example MF4: {mdf_files[0].name}")
-            print(f"   ➝ Channels: {len(first_file.channels_db)}")
-        except Exception as e:
-            warnings.warn(f"⚠️ Could not inspect MF4 file: {e}")
-
-    # ------------------------------------------------------------------ #
-    def _print_visualizer_summary(self):
-        """Print visualizer debug info."""
-        if not self.viz:
-            return
-        print(f"\n📘 graph_spec shape: {getattr(self.viz.graph_spec, 'shape', 'N/A')}")
-        if isinstance(self.viz.line_colors, pd.DataFrame):
-            print(f"📘 line_colors shape: {self.viz.line_colors.shape}")
-        else:
-            print(f"📘 line_colors entries: {len(self.viz.line_colors)}")
-        if isinstance(self.viz.marker_shapes, pd.DataFrame):
-            print(f"📘 marker_shapes shape: {self.viz.marker_shapes.shape}")
-        else:
-            print(f"📘 marker_shapes entries: {len(self.viz.marker_shapes)}")
-        print(f"📘 calibratables keys (first 5): {list(self.viz.calibratables.keys())[:5]}")
-        print(f"📘 path_to_excel: {self.viz.path_to_excel}")
+            raise RuntimeError(f"❌ Visualization failed: {e}")

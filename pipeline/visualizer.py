@@ -15,12 +15,12 @@ class Visualizer:
 
     Works with:
       - Config (graphSpec, lineColors, markerShapes, calibratables, etc.)
-      - KPIExtractor (path_to_chunks, kpi_table, etc.)
+      - KpiExtractor (path_to_chunks, kpi_table, etc.)
     """
 
     def __init__(self, config, kpi_extractor):
         if config is None or kpi_extractor is None:
-            raise ValueError("Visualizer requires both Config and KPIExtractor instances.")
+            raise ValueError("Visualizer requires both Config and KpiExtractor instances.")
 
         # --- Validate Config structure ---
         required_cfg_attrs = ["graph_spec", "line_colors", "marker_shapes", "calibratables", "kpi_spec"]
@@ -28,7 +28,7 @@ class Visualizer:
             if not hasattr(config, attr):
                 raise AttributeError(f"Config missing required attribute: {attr}")
 
-        # --- Validate KPIExtractor ---
+        # --- Validate KpiExtractor ---
         if not hasattr(kpi_extractor, "path_to_chunks"):
             raise TypeError("kpi_extractor must have attribute 'path_to_chunks' (directory of KPI outputs).")
 

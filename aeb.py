@@ -3,18 +3,14 @@ from pathlib import Path
 from config.config import Config
 from pipeline.input_handler import InputHandler
 from pipeline.aeb.event_detector import EventDetector
-from pipeline.aeb.kpi_extractor import KPIExtractor
+from pipeline.aeb.kpi_extractor import KpiExtractor
 from pipeline.visualizer import Visualizer
 from asammdf import MDF
 import pandas as pd
 
 
 # --- User parameters ---
-mf4_path = Path("/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_matlab/01_kpi_extractor/rawdata")
 config_path = Path("/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_kpi_extractor/python/config/Config.json")
-resample_rate = 0.01   # 100 Hz
-pre_time = 6.0
-post_time = 3.0
 
 
 def main():
@@ -55,26 +51,16 @@ def main():
     ih = InputHandler(cfg)
 
     # --- Process MF4 files ---
-    ih.process_mf4_files(resample_rate=resample_rate)
-
-    # --- Inspect extracted MF4 files ---
-    mdf_files = list(mf4_path.glob("*_extracted.mf4"))
-    print(f"\n📂 Found {len(mdf_files)} extracted MF4 files\n")
-
-    # Print short summary for debugging
-    if mdf_files:
-        first_file = MDF(mdf_files[0])
-        print(f"🧾 Example MF4: {mdf_files[0].name}")
-        print(f"   ➝ {len(first_file.channels_db)} channels detected.")
+    ih.process_mf4_files()
 
     # --- Create EventDetector ---
-    event = EventDetector(ih, pre_time=pre_time, post_time=post_time)
+    event = EventDetector(ih, cfg)
     print("\n🚦 Running event detection...\n")
     event.process_all_files()
     print("✅ Event detection finished.\n")
 
     # --- KPI Extraction ---
-    kpi = KPIExtractor(cfg, event)
+    kpi = KpiExtractor(cfg, event)
     kpi.process_all_mdf_files()
     kpi.export_to_excel()
 

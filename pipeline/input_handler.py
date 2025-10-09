@@ -1,4 +1,5 @@
 import os
+import warnings
 from typing import List
 from utils.mf4_extractor import mf4_extractor
 
@@ -9,8 +10,16 @@ from tkinter import filedialog
 
 class InputHandler:
     """
-    InputHandler: Handles input configuration and processing of MF4 files
+    InputHandler
+    -------------
+    Handles input configuration and processing of MF4 files.
+
+    Loads RESAMPLE_RATE from config (if available),
+    and processes all MF4 files in the selected folder.
     """
+
+    # --- Fallback default (used only if not defined in config) ---
+    RESAMPLE_RATE = 0.01  # seconds (100 Hz)
 
     def __init__(self, config):
         """
@@ -25,16 +34,30 @@ class InputHandler:
 
         self.signal_map = config.signal_map
 
-        # --- Always prompt user for MF4 folder ---
+        # --- Load resample rate from config if available ---
+        if config is not None and hasattr(config, "params"):
+            try:
+                params = config.params or {}
+                self.resample_rate = float(params.get("RESAMPLE_RATE", self.RESAMPLE_RATE))
+                print(f"📈 Using RESAMPLE_RATE={self.resample_rate:.3f}s from config.")
+            except Exception as e:
+                warnings.warn(f"⚠️ Failed to load RESAMPLE_RATE from config: {e}")
+                self.resample_rate = self.RESAMPLE_RATE
+        else:
+            self.resample_rate = self.RESAMPLE_RATE
+            print(f"⚙️ Using default RESAMPLE_RATE={self.resample_rate:.3f}s")
+
+        # --- Prompt user for MF4 folder ---
         print("📂 Please select the MF4 folder...")
         root = tk.Tk()
-        root.withdraw()  # hide the root window
+        root.withdraw()  # hide main window
         folder = filedialog.askdirectory(title="Select MF4 Folder")
         if not folder:
             raise ValueError("No MF4 folder selected. Aborting.")
         self.path_to_raw_data = os.path.abspath(folder)
 
-    def process_mf4_files(self, resample_rate: float = 0.01) -> None:
+    # -------------------- Public API -------------------- #
+    def process_mf4_files(self) -> None:
         """
         Process MF4 files: extract specified signals,
         save to new MF4 + spec file (via mf4_extractor).
@@ -47,12 +70,11 @@ class InputHandler:
             print(f"    > Processing file: {full_path}")
 
             try:
-                # Call mf4_extractor (it will handle saving + spec file)
                 data, m, sigs, summary, used, raster, mods = mf4_extractor(
                     dat_path=full_path,
                     signal_database=self.signal_map,
                     req=None,
-                    resample=resample_rate,
+                    resample=self.resample_rate,
                     convert_to_tact_unit=True,
                 )
 

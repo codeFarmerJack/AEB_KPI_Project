@@ -134,14 +134,14 @@ class Thresholds:
 
 
 # ------------------------------------------------------------------ #
-# KPI Extractor
+# AEB KPI Extractor
 # ------------------------------------------------------------------ #
-class KPIExtractor:
-    PB_TGT_DECEL    = -5.9      # m/s²
-    FB_TGT_DECEL    = -14.9     # m/s²
+class KpiExtractor:
+    PB_TGT_DECEL    = -6.0      # m/s²
+    FB_TGT_DECEL    = -15.0     # m/s²
     TGT_TOL         = 0.2       # m/s²
-    AEB_END_THD     = -4.8      # m/s²
-    TIME_IDX_OFFSET = 290       # samples (~3s at 0.01s rate)
+    AEB_END_THD     = -4.9      # m/s²
+    TIME_IDX_OFFSET = 300       # samples (~3s at 0.01s rate)
     CUTOFF_FREQ     = 10        # Hz    
 
     def __init__(self, config, event_detector):

@@ -3,20 +3,23 @@ import numpy as np
 import pandas as pd
 from asammdf import MDF
 import gc
+import warnings
 
 
 class EventDetector:
     """
-    EventDetector: detects AEB events in MF4 files and extracts chunks.
+    EventDetector
+    -------------
+    Detects AEB events in MF4 files and extracts event chunks.
 
     Each MF4 file must contain a signal 'aebTargetDecel'.
     """
 
-    # --- Class-level defaults (constants) ---
-    PRE_TIME = 6.0   # seconds before event
-    POST_TIME = 3.0  # seconds after event
+    # --- Fallback defaults (used only if not defined in config) ---
+    PRE_TIME  = 6.0   # seconds before event
+    POST_TIME = 3.0   # seconds after event
 
-    def __init__(self, input_handler, pre_time: float = None, post_time: float = None):
+    def __init__(self, input_handler, config=None):
         if input_handler is None or not hasattr(input_handler, "path_to_raw_data"):
             raise TypeError("EventDetector requires an InputHandler instance.")
 
@@ -26,10 +29,22 @@ class EventDetector:
         if not os.path.exists(self.path_to_mdf_chunks):
             os.makedirs(self.path_to_mdf_chunks)
 
-        # Use instance values if provided, else fall back to class defaults
-        self.pre_time = float(pre_time if pre_time is not None else self.PRE_TIME)
-        self.post_time = float(post_time if post_time is not None else self.POST_TIME)
-
+        # --- Load timing parameters from config if available ---
+        if config is not None and hasattr(config, "params"):
+            try:
+                params = config.params or {}
+                self.pre_time = float(params.get("PRE_TIME", self.PRE_TIME))
+                self.post_time = float(params.get("POST_TIME", self.POST_TIME))
+                print(f"⏱ Using PRE_TIME={self.pre_time}s, POST_TIME={self.post_time}s from config.")
+            except Exception as e:
+                warnings.warn(f"⚠️ Failed to load PRE/POST_TIME from config: {e}")
+                self.pre_time = self.PRE_TIME
+                self.post_time = self.POST_TIME
+        else:
+            # Fall back to class defaults
+            self.pre_time = self.PRE_TIME
+            self.post_time = self.POST_TIME
+            print(f"⚙️ Using default PRE_TIME={self.pre_time}s, POST_TIME={self.post_time}s")
     # -------------------- Public API -------------------- #
 
     def process_all_files(self, pre_time: float = None, post_time: float = None):
