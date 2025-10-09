@@ -137,11 +137,11 @@ class Thresholds:
 # KPI Extractor
 # ------------------------------------------------------------------ #
 class KPIExtractor:
-    PB_TGT_DECEL    = -6.0      # m/s²
-    FB_TGT_DECEL    = -15.0     # m/s²
+    PB_TGT_DECEL    = -5.9      # m/s²
+    FB_TGT_DECEL    = -14.9     # m/s²
     TGT_TOL         = 0.2       # m/s²
-    AEB_END_THD     = -4.9      # m/s²
-    TIME_IDX_OFFSET = 300       # samples (~3s at 0.01s rate)
+    AEB_END_THD     = -4.8      # m/s²
+    TIME_IDX_OFFSET = 290       # samples (~3s at 0.01s rate)
     CUTOFF_FREQ     = 10        # Hz    
 
     def __init__(self, config, event_detector):
@@ -159,7 +159,7 @@ class KPIExtractor:
         # KPI table
         self.kpi_table = create_kpi_table_from_df(config.kpi_spec, len(self.file_list))
 
-        # Load calibratables safely
+        # --- Load calibratables safely ---
         expected_keys = {
             "SteeringWheelAngle_Th": "SteeringWheelAngle_Th",
             "AEB_SteeringAngleRate_Override": "AEB_SteeringAngleRate_Override",
@@ -175,6 +175,30 @@ class KPIExtractor:
             else:
                 warnings.warn(f"⚠️ Missing calibratable '{cfg_key}' in config.")
                 self.calibratables[internal_name] = pd.DataFrame()
+
+        # --- Apply parameter overrides from Config.params ---
+        if hasattr(config, "params") and isinstance(config.params, dict):
+            print("⚙️ Applying parameter overrides from config.params")
+
+            # Match class constants with Config keys (all uppercase)
+            param_map = [
+                "PB_TGT_DECEL",
+                "FB_TGT_DECEL",
+                "TGT_TOL",
+                "AEB_END_THD",
+                "TIME_IDX_OFFSET",
+                "CUTOFF_FREQ"
+            ]
+
+            for key in param_map:
+                if key in config.params:
+                    setattr(self, key, config.params[key])
+                    print(f"🔧 Overriding {key} = {config.params[key]}")
+
+        # --- Debug print summary ---
+        print("\n📊 KPI Parameter Summary:")
+        for key in ["PB_TGT_DECEL", "FB_TGT_DECEL", "TGT_TOL", "AEB_END_THD", "TIME_IDX_OFFSET", "CUTOFF_FREQ"]:
+            print(f"   {key:<16} = {getattr(self, key)}")
 
     # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):

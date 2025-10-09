@@ -43,30 +43,43 @@ class Config:
         if cfg.params is not None and not cfg.params.empty:
             cfg.params.columns = cfg.params.columns.str.strip().str.lower()
 
-            # Extract {PARAMETER: VALUE} dictionary in UPPERCASE
             try:
-                param_dict = (
-                    cfg.params
-                    .dropna(subset=["parameter", "value"])
-                    .assign(parameter=lambda df: df["parameter"].astype(str).str.strip().str.upper())
-                    .set_index("parameter")["value"]
-                    .to_dict()
-                )
+                df = cfg.params.dropna(subset=["parameter", "value"]).copy()
+                df["parameter"] = df["parameter"].astype(str).str.strip().str.upper()
 
-                # Convert to numeric where possible
-                for k, v in param_dict.items():
+                param_dict = {}
+                type_dict  = {}
+
+                for _, row in df.iterrows():
+                    name  = row["parameter"]
+                    value = row["value"]
+                    ptype = str(row.get("type", "")).strip().lower()
+
+                    # --- Type-aware conversion ---
                     try:
-                        param_dict[k] = float(v)
+                        if ptype in ("int", "integer"):
+                            cast_val = int(float(value))
+                        elif ptype in ("float", "double", "numeric"):
+                            cast_val = float(value)
+                        elif ptype in ("bool", "boolean"):
+                            cast_val = bool(value)
+                        elif ptype in ("str", "string"):
+                            cast_val = str(value)
+                        else:
+                            # fallback: try float, else raw
+                            cast_val = float(value)
                     except Exception:
-                        pass
+                        cast_val = value
+
+                    param_dict[name] = cast_val
+                    type_dict[name]  = ptype or type(cast_val).__name__
 
                 cfg.params = param_dict
+                cfg.param_types = type_dict   # ✅ store metadata
                 print(f"⚙️ Loaded {len(cfg.params)} parameters from 'params' sheet.")
-                # Optional: print example keys
                 print("   ➝ Keys:", ", ".join(list(cfg.params.keys())[:6]), "...")
             except Exception as e:
                 warnings.warn(f"⚠️ Failed to parse params sheet: {e}")
-
 
         # ✅ normalize signal_map column headers
         if cfg.signal_map is not None:
