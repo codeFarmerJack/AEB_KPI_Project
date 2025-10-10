@@ -70,7 +70,7 @@ class EventDetector:
 
     def process_all_files(self, pre_time: float = None, post_time: float = None):
         if pre_time is not None:
-            self.pre_time = float(pre_time)
+            self.pre_time  = float(pre_time)
         if post_time is not None:
             self.post_time = float(post_time)
 
@@ -84,7 +84,7 @@ class EventDetector:
 
         for fname in mdf_files:
             file_path = os.path.join(self.path_to_mdf, fname)
-            name, _ = os.path.splitext(fname)
+            name, _   = os.path.splitext(fname)
 
             try:
                 print(f"🔍 Reading MF4 file: {fname}")
@@ -95,7 +95,7 @@ class EventDetector:
                     continue
 
                 sig = mdf.get("aebTargetDecel")
-                df = pd.DataFrame({"time": sig.timestamps, "aebTargetDecel": sig.samples})
+                df  = pd.DataFrame({"time": sig.timestamps, "aebTargetDecel": sig.samples})
 
                 start_times, end_times = self.detect_events(df)
                 print(f"   ➝ Detected {len(start_times)} events")
@@ -112,22 +112,22 @@ class EventDetector:
 
     def detect_events(self, df: pd.DataFrame):
         """Detect start and end times of AEB events."""
-        time = df["time"].values
+        time             = df["time"].values
         aeb_target_decel = df["aebTargetDecel"].values
-        decel_delta = np.diff(aeb_target_decel)
+        decel_delta      = np.diff(aeb_target_decel)
 
         # Start events
-        locate_start = np.where(np.diff(decel_delta < self.start_decel_delta))[0]
-        start_mask = aeb_target_decel[locate_start + 1] <= self.pb_tgt_decel
-        start_times = time[locate_start][start_mask]
+        locate_start     = np.where(np.diff(decel_delta < self.start_decel_delta))[0]
+        start_mask       = aeb_target_decel[locate_start + 1] <= self.pb_tgt_decel
+        start_times      = time[locate_start][start_mask]
 
         # End events
         locate_end = np.where(decel_delta > self.end_decel_delta)[0]
-        end_times = time[locate_end]
+        end_times  = time[locate_end]
 
         if len(end_times) == 0 and len(start_times) > 0:
             buffer_time = max(1.0, self.post_time + 4)
-            end_times = start_times + buffer_time
+            end_times   = start_times + buffer_time
 
         return start_times, end_times
 
