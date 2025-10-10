@@ -87,7 +87,8 @@ class InputHandler:
         Process MF4 files:
         1. Extract specified signals using mf4_extractor()
         2. Filter longActAccel & latActAccel
-        3. Save to a single '_extracted.mf4' file
+        3. Convert egoSpeed (m/s → km/h)
+        4. Save all signals to '_extracted.mf4'
         """
 
         mf4_files = [f for f in os.listdir(self.path_to_raw_data) if f.lower().endswith(".mf4")]
@@ -130,8 +131,17 @@ class InputHandler:
                             warnings.warn(f"⚠️ Failed to filter {sig}: {e}")
                     else:
                         warnings.warn(f"⚠️ Signal '{sig}' not found in extracted data.")
+                # --- 3️⃣ Convert egoSpeed from m/s to km/h ---
+                if "egoSpeed" in data.columns:
+                    try:
+                        data["egoSpeedKph"] = data["egoSpeed"] * 3.6
+                        print("   ✅ Converted egoSpeed → egoSpeedKph (m/s → km/h)")
+                    except Exception as e:
+                        warnings.warn(f"⚠️ Failed to convert egoSpeed: {e}")
+                else:
+                    warnings.warn("⚠️ Signal 'egoSpeed' not found in extracted data.")
 
-                # --- 3️⃣ Save both raw + filtered signals to new MDF ---
+                # --- 4️⃣ Save both raw + filtered signals to new MDF ---
                 new_mdf = MDF()
                 for col in data.columns:
                     try:

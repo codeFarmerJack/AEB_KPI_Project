@@ -256,7 +256,7 @@ class KpiExtractor:
                 warnings.warn("⚠️ Synthesized time vector (equidistant).")
 
             # --- Signals ---
-            ego_speed     = mdf.egoSpeed * 3.6   # m/s → km/h
+            ego_speed     = mdf.egoSpeedKph   
             aeb_tgt_decel = mdf.aebTargetDecel
 
             # --- KPI event detection ---
