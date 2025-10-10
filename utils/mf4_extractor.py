@@ -277,60 +277,14 @@ def mf4_extractor(
     if not data_out.empty and data_out.isna().any().any():
         data_out = data_out.interpolate(method="linear")
 
-    # --- Save signals into a new MF4 file ---
-    if not data_out.empty and signal_database is not None:
-        mf4_file = os.path.splitext(dat_path)[0] + "_extracted.mf4"
-        try:
-            new_mdf = MDF()
-            category_specs = {}
-
-            mapped_names = signal_database["genericname"].str.strip().unique().tolist()
-            for col in data_out.columns:
-                if col in mapped_names:
-                    valid_name = col.replace(".", "_").replace("-", "_").replace(" ", "_")
-
-                    # Get tact unit if available
-                    row_idx = signal_database[
-                        signal_database["genericname"].str.lower() == col.lower()
-                    ].index
-                    tact_unit = (
-                        signal_database.at[row_idx[0], "tactunit"]
-                        if not row_idx.empty and "tactunit" in signal_database.columns
-                        else ""
-                    )
-
-                    series = data_out[col]
-                    samples = series.values
-                    timestamps = series.index.values
-
-                    if np.issubdtype(series.dtype, np.number):
-                        sig = Signal(samples=samples, timestamps=timestamps, name=valid_name, unit=tact_unit)
-                    else:
-                        categories, encoded = np.unique(samples.astype(str), return_inverse=True)
-                        sig = Signal(samples=encoded, timestamps=timestamps, name=valid_name, unit=tact_unit)
-                        category_specs[valid_name] = {int(i): cat for i, cat in enumerate(categories)}
-
-                    new_mdf.append(sig)
-
-            if len(new_mdf.channels_db) > 0:
-                new_mdf.save(mf4_file, overwrite=True)
-                print(f"✅ Saved mapped signals to {mf4_file}")
-
-                if category_specs:
-                    spec_file = mf4_file.replace(".mf4", "_spec.json")
-                    import json
-
-                    with open(spec_file, "w", encoding="utf-8") as f:
-                        json.dump(category_specs, f, indent=2, ensure_ascii=False)
-                    print(f"📄 Saved category spec to {spec_file}")
-            else:
-                print("⚠️ No mapped signals found to save in MF4 file.")
-
-        except Exception as e:
-            print(f"❌ Error saving MF4 file: {e}")
+    # --- Do NOT save to MF4 here ---
+    # Just return the extracted signals for further processing (e.g., filtering + combining)
+    if not data_out.empty:
+        print(f"✅ Extracted {len(data_out.columns)} signal(s) from {os.path.basename(dat_path)}")
+    else:
+        print(f"⚠️ No valid signals extracted from {os.path.basename(dat_path)}")
 
     return data_out, m, sigs["ChannelName"].tolist(), summary, used, raster, mods
-
 
 # --- CLI Interface ---
 if __name__ == "__main__":

@@ -6,7 +6,6 @@ from asammdf import MDF
 
 # --- Local utils imports ---
 from utils.create_kpi_table import create_kpi_table_from_df
-from utils.signal_filters import accel_filter
 from utils.time_locators import find_aeb_intv_start, find_aeb_intv_end
 from utils.process_calibratables import interpolate_threshold_clamped
 
@@ -258,25 +257,7 @@ class KpiExtractor:
 
             # --- Signals ---
             ego_speed     = mdf.egoSpeed * 3.6   # m/s → km/h
-            long_accel    = mdf.longActAccel
-            lat_accel     = mdf.latActAccel
             aeb_tgt_decel = mdf.aebTargetDecel
-
-            # --- Filtering ---
-            if len(long_accel) > 15:
-                long_accel_flt = accel_filter(time, long_accel, self.cutoff_freq)
-            else:
-                long_accel_flt = long_accel
-                warnings.warn("⚠️ long_accel too short for filter, using raw signal")
-
-            if len(lat_accel) > 15:
-                lat_accel_flt = accel_filter(time, lat_accel, self.cutoff_freq)
-            else:
-                lat_accel_flt = lat_accel
-                warnings.warn("⚠️ lat_accel too short for filter, using raw signal")
-
-            mdf.longActAccelFlt = long_accel_flt
-            mdf.latActAccelFlt  = lat_accel_flt
 
             # --- KPI event detection ---
             aeb_start_idx, aeb_start_time = find_aeb_intv_start(
