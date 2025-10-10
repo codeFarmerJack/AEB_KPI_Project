@@ -15,7 +15,7 @@ class Visualizer:
 
     Works with:
       - Config (graphSpec, lineColors, markerShapes, calibratables, etc.)
-      - KpiExtractor (path_to_chunks, kpi_table, etc.)
+      - KpiExtractor (path_to_results, kpi_table, etc.)
     """
 
     def __init__(self, config, kpi_extractor):
@@ -29,8 +29,8 @@ class Visualizer:
                 raise AttributeError(f"Config missing required attribute: {attr}")
 
         # --- Validate KpiExtractor ---
-        if not hasattr(kpi_extractor, "path_to_chunks"):
-            raise TypeError("kpi_extractor must have attribute 'path_to_chunks' (directory of KPI outputs).")
+        if not hasattr(kpi_extractor, "path_to_results"):
+            raise TypeError("kpi_extractor must have attribute 'path_to_results' (directory of KPI outputs).")
 
         # --- Core fields ---
         self.graph_spec     = config.graph_spec
@@ -41,9 +41,9 @@ class Visualizer:
         self.path_to_kpi_schema = getattr(config, "kpi_schema_path", None)
 
         # --- Directories & File Paths ---
-        self.path_to_chunks = kpi_extractor.path_to_chunks
-        self.path_to_excel  = os.path.join(self.path_to_chunks, "AS-Long_KPI_Results.xlsx")
-        self.path_to_output = self.path_to_chunks
+        self.path_to_results = kpi_extractor.path_to_results
+        self.path_to_excel  = os.path.join(self.path_to_results, "AS-Long_KPI_Results.xlsx")
+        self.path_to_output = self.path_to_results
 
         # ✅ Sequential figure numbering (1 → 100)
         self._group_counter = iter(range(1, 101))

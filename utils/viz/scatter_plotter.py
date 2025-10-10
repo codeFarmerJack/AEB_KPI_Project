@@ -143,8 +143,8 @@ def scatter_plotter(obj, graph_idx):
 
         out_name = f"Fig_{group_id:02d} - {title}.png"
         out_name_html = f"Fig_{group_id:02d} - {title}.html"
-        out_path = os.path.join(obj.path_to_chunks, out_name)
-        out_path_html = os.path.join(obj.path_to_chunks, out_name_html)
+        out_path = os.path.join(obj.path_to_results, out_name)
+        out_path_html = os.path.join(obj.path_to_results, out_name_html)
 
         # --- Export to interactive HTML ---
         try:

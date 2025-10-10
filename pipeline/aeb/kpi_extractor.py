@@ -154,8 +154,15 @@ class KpiExtractor:
             raise TypeError("event_detector must have path_to_mdf_chunks attribute.")
 
         # --- Setup paths ---
-        self.path_to_chunks = event_detector.path_to_mdf_chunks
-        self.file_list = [f for f in os.listdir(self.path_to_chunks) if f.endswith(".mf4")]
+        self.path_to_mdf     = event_detector.path_to_mdf
+        self.path_to_results = os.path.join(self.path_to_mdf, "analysis_results")
+        
+        if not os.path.exists(self.path_to_results):
+            os.makedirs(self.path_to_results)
+       
+        self.path_to_chunks  = event_detector.path_to_mdf_chunks
+        self.file_list       = [f for f in os.listdir(self.path_to_chunks) if f.endswith(".mf4")]
+
         if not self.file_list:
             raise FileNotFoundError(f"No .mf4 files in {self.path_to_chunks}")
 
@@ -328,7 +335,7 @@ class KpiExtractor:
     # ------------------------------------------------------------------ #
     def export_to_excel(self):
         """Export KPI results to Excel (sheet: 'aeb')."""
-        output_filename = os.path.join(self.path_to_chunks, "AS-Long_KPI_Results.xlsx")
+        output_filename = os.path.join(self.path_to_results, "AS-Long_KPI_Results.xlsx")
 
         try:
             df = self.kpi_table.copy()

@@ -27,7 +27,7 @@ class EventDetector:
             raise TypeError("EventDetector requires an InputHandler instance.")
 
         self.path_to_mdf = input_handler.path_to_raw_data
-        self.path_to_mdf_chunks = os.path.join(self.path_to_mdf, "PostProcessing")
+        self.path_to_mdf_chunks = os.path.join(self.path_to_mdf, "mdf_chunks")
 
         if not os.path.exists(self.path_to_mdf_chunks):
             os.makedirs(self.path_to_mdf_chunks)
@@ -135,7 +135,7 @@ class EventDetector:
     # -------------------- Event Extraction -------------------- #
 
     def extract_aeb_events(self, mdf: MDF, start_times, end_times, name: str):
-        """Extract AEB event chunks and save into PostProcessing folder (MF4 only)."""
+        """Extract AEB event chunks and save into mdf_chunks folder (MF4 only)."""
 
         if len(start_times) == 0:
             print(f"⚠️ No events detected for {name}")
