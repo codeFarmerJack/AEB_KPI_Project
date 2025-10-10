@@ -29,7 +29,7 @@ def kpi_latency(mdf, kpi_table, row_idx, aeb_start_idx, cutoff_freq):
             kpi_table[col] = pd.Series([np.nan] * len(kpi_table), dtype="float")
 
     time = np.asarray(mdf.time)
-    long_accel = np.asarray(mdf.longActAccel)
+    long_accel_flt = np.asarray(mdf.longActAccelFlt)
 
     # Validate data range (look 30 samples ahead after AEB start)
     start_idx = aeb_start_idx
@@ -46,9 +46,8 @@ def kpi_latency(mdf, kpi_table, row_idx, aeb_start_idx, cutoff_freq):
     # --- Detect kneepoint in deceleration ---
     knee_idx, knee_time, _ = detect_kneepoint(
         time=time[start_idx:end_idx + 1],
-        acc=long_accel[start_idx:end_idx + 1],
+        accel=long_accel_flt[start_idx:end_idx + 1],
         direction="negative",
-        cutoff_freq=cutoff_freq,
         method="curvature",
     )
 

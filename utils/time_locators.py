@@ -33,7 +33,7 @@ def find_closest_time(time_vector, target_time):
     return val, idx
 
 
-def detect_kneepoint(time, acc, direction="positive", cutoff_freq=5.0, method="curvature"):
+def detect_kneepoint(time, accel, direction="positive", method="curvature"):
     """
     Detect knee point in acceleration data (Python version of detectKneepoint_v4.m).
 
@@ -41,12 +41,10 @@ def detect_kneepoint(time, acc, direction="positive", cutoff_freq=5.0, method="c
     ----------
     time : array-like
         Time vector (numeric seconds or datetime64).
-    acc : array-like
-        Acceleration values.
+    accel : array-like
+        Acceleration values (already filtered).
     direction : str, optional
         "positive" or "negative". Determines slope/curvature direction to consider.
-    cutoff_freq : float, optional
-        Cutoff frequency for low-pass Butterworth filter (Hz).
     method : str, optional
         "curvature" or "slope". Detection method.
 
@@ -59,8 +57,9 @@ def detect_kneepoint(time, acc, direction="positive", cutoff_freq=5.0, method="c
     knee_value : float
         Acceleration at knee point.
     """
+    # Convert inputs to numpy arrays
     time = np.asarray(time).ravel()
-    acc = np.asarray(acc).ravel()
+    accel = np.asarray(accel).ravel()
 
     # Convert datetime64 → seconds if needed
     if np.issubdtype(time.dtype, np.datetime64):
@@ -68,48 +67,41 @@ def detect_kneepoint(time, acc, direction="positive", cutoff_freq=5.0, method="c
     else:
         time_sec = time
 
-    # Sampling frequency
+    # Compute time step and first/second derivatives
     dt = np.mean(np.diff(time_sec))
-    fs = 1.0 / dt
+    d_accel = np.gradient(accel, dt)
+    dd_accel = np.gradient(d_accel, dt)
 
-    # Design Butterworth low-pass filter
-    b, a = butter(4, cutoff_freq / (fs / 2), btype="low")
-    acc_filtered = filtfilt(b, a, acc)
-
-    # First and second derivatives
-    d_acc = np.gradient(acc_filtered, dt)
-    dd_acc = np.gradient(d_acc, dt)
-
-    # Detect turning points (local minima/maxima in first derivative)
-    local_max_idx = argrelextrema(d_acc, np.greater)[0]
-    local_min_idx = argrelextrema(d_acc, np.less)[0]
+    # Find local extrema (turning points in first derivative)
+    local_max_idx = argrelextrema(d_accel, np.greater)[0]
+    local_min_idx = argrelextrema(d_accel, np.less)[0]
     turning_point_idx = np.unique(np.concatenate([local_max_idx, local_min_idx]))
 
-    # Apply direction filter
+    # Apply direction filters
     if direction.lower() == "positive":
-        slope_mask = d_acc > 0
-        curvature_mask = dd_acc > 0
+        slope_mask = d_accel > 0
+        curvature_mask = dd_accel > 0
     elif direction.lower() == "negative":
-        slope_mask = d_acc < 0
-        curvature_mask = dd_acc < 0
+        slope_mask = d_accel < 0
+        curvature_mask = dd_accel < 0
     else:
         raise ValueError('direction must be either "positive" or "negative".')
 
     # Select detection method
     if method.lower() == "curvature":
-        dd_acc_filtered = np.abs(dd_acc).copy()
-        dd_acc_filtered[~curvature_mask] = -np.inf
-        knee_idx = int(np.argmax(dd_acc_filtered))
+        dd_accel_filtered = np.abs(dd_accel).copy()
+        dd_accel_filtered[~curvature_mask] = -np.inf
+        knee_idx = int(np.argmax(dd_accel_filtered))
     elif method.lower() == "slope":
-        d_acc_filtered = np.abs(d_acc).copy()
-        d_acc_filtered[~slope_mask] = -np.inf
-        knee_idx = int(np.argmax(d_acc_filtered))
+        d_accel_filtered = np.abs(d_accel).copy()
+        d_accel_filtered[~slope_mask] = -np.inf
+        knee_idx = int(np.argmax(d_accel_filtered))
     else:
         raise ValueError('method must be either "curvature" or "slope".')
 
-    # Extract knee time and value
+    # Extract knee point info
     knee_time = time[knee_idx]
-    knee_value = acc[knee_idx]
+    knee_value = accel[knee_idx]
 
     return knee_idx, knee_time, knee_value
 
