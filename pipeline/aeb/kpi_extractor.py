@@ -2,9 +2,9 @@ import os
 import warnings
 import numpy as np
 import pandas as pd
-from asammdf import MDF
 
 # --- Local utils imports ---
+from utils.signal_mdf import SignalMDF
 from utils.create_kpi_table import create_kpi_table_from_df
 from utils.time_locators import find_aeb_intv_start, find_aeb_intv_end
 from utils.process_calibratables import interpolate_threshold_clamped
@@ -38,86 +38,6 @@ def safe_scalar(x):
         return float(x)
     except Exception:
         return np.nan
-
-
-# ------------------------------------------------------------------ #
-# Subclass MDF to allow dot-access for signals
-# ------------------------------------------------------------------ #
-class SignalMDF(MDF):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._injected = {}
-        self._time = self._resolve_time()
-
-    def _resolve_time(self):
-        """Resolve a safe time vector, even if multiple masters exist."""
-        # 1) Try the master of group 0
-        try:
-            master = self.get_master(0)              # returns np.ndarray for group 0
-            if master is not None and master.size:
-                return master.flatten()
-        except Exception:
-            pass
-
-        # 2) Try every "time" occurrence (select may return tuples or Signal objects)
-        try:
-            candidates = self.select("time")
-            if candidates:
-                for item in candidates:
-                    try:
-                        if isinstance(item, tuple) and len(item) == 2:
-                            gp, ch = item
-                            arr = self.get("time", group=gp, index=ch).samples
-                        else:
-                            # item is likely a Signal-like object
-                            arr = getattr(item, "samples", np.array([]))
-                        arr = np.asarray(arr).ravel()
-                        if arr.size > 0:
-                            return arr
-                    except Exception:
-                        continue
-        except Exception:
-            pass
-
-        # 3) Last resort: synthesize equidistant time based on first group's first channel length
-        try:
-            n = len(self.groups[0].channels[0].samples)
-        except Exception:
-            n = 0
-        warnings.warn("⚠️ Synthesized time vector (equidistant).")
-        return np.arange(n, dtype=float)
-
-
-    def __getattr__(self, name):
-        if name == "time":
-            return self._time
-
-        if name in self._injected:
-            return self._injected[name]
-
-        # Allow MDF internals; don't treat them as signals
-        if name in ("groups", "channels", "version", "attachments"):
-            return super().__getattribute__(name)
-
-        # Try normal attribute/method first
-        try:
-            return super().__getattribute__(name)
-        except AttributeError:
-            pass
-
-        # Fallback: treat as signal name
-        try:
-            return self.get(name).samples.flatten()
-        except Exception:
-            warnings.warn(f"⚠️ Missing signal {name} in MDF file")
-            return np.array([])
-
-
-    def __setattr__(self, name, value):
-        if isinstance(value, (np.ndarray, list)) and not name.startswith("_"):
-            self._injected[name] = np.asarray(value)
-        else:
-            super().__setattr__(name, value)
 
 
 # ------------------------------------------------------------------ #

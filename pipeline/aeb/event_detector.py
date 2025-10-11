@@ -1,9 +1,9 @@
 import os
-import numpy as np
-import pandas as pd
-from asammdf import MDF
 import gc
 import warnings
+import numpy as np
+import pandas as pd
+from utils.signal_mdf import SignalMDF
 
 
 class EventDetector:
@@ -88,21 +88,25 @@ class EventDetector:
 
             try:
                 print(f"🔍 Reading MF4 file: {fname}")
-                mdf = MDF(file_path)
+                # ✅ Use SignalMDF instead of raw MDF
+                mdf = SignalMDF(file_path)
 
-                if "aebTargetDecel" not in mdf.channels_db.keys():
+                # ✅ Access via dot-notation
+                if mdf.aebTargetDecel.size == 0:
                     print(f"⚠️ File {fname} missing required signal 'aebTargetDecel' → skipped")
                     continue
 
-                sig = mdf.get("aebTargetDecel")
-                df  = pd.DataFrame({"time": sig.timestamps, "aebTargetDecel": sig.samples})
+                df = pd.DataFrame({
+                    "time": mdf.time,
+                    "aebTargetDecel": mdf.aebTargetDecel
+                })
 
                 start_times, end_times = self.detect_events(df)
                 print(f"   ➝ Detected {len(start_times)} events")
 
                 self.extract_aeb_events(mdf, start_times, end_times, name)
 
-                del mdf, df, sig
+                del mdf, df
                 gc.collect()
 
             except Exception as e:
@@ -131,23 +135,24 @@ class EventDetector:
 
         return start_times, end_times
 
-
     # -------------------- Event Extraction -------------------- #
 
-    def extract_aeb_events(self, mdf: MDF, start_times, end_times, name: str):
+    def extract_aeb_events(self, mdf: SignalMDF, start_times, end_times, name: str):
         """Extract AEB event chunks and save into mdf_chunks folder (MF4 only)."""
 
         if len(start_times) == 0:
             print(f"⚠️ No events detected for {name}")
             return
 
-        # --- Reference time range of this MF4 file ---
-        sig = mdf.get("aebTargetDecel")
-        t_min, t_max = float(sig.timestamps[0]), float(sig.timestamps[-1])
+        sig = mdf.aebTargetDecel
+        if sig.size == 0:
+            print(f"⚠️ Missing 'aebTargetDecel' samples → cannot extract chunks.")
+            return
+
+        t_min, t_max = float(mdf.time[0]), float(mdf.time[-1])
         print(f"   🕒 File time range: {t_min:.3f}s → {t_max:.3f}s")
 
         for j, start_time in enumerate(start_times):
-            # Clamp to valid window
             start_sec = max(start_time - self.pre_time, t_min)
             stop_sec  = (
                 min(end_times[j] + self.post_time, t_max)
@@ -176,7 +181,6 @@ class EventDetector:
 
             except Exception as e:
                 print(f"⚠️ Error saving event {j+1} of {name}: {e}")
-
 
     # -------------------- Helpers -------------------- #
 
