@@ -4,7 +4,7 @@ import warnings
 from utils.time_locators import detect_kneepoint  
 
 
-def kpi_latency(mdf, kpi_table, row_idx, aeb_start_idx, cutoff_freq):
+def kpi_latency(mdf, kpi_table, row_idx, aeb_start_idx):
     """
     Compute AEB system latency KPIs.
     Updates kpi_table in place.
@@ -19,8 +19,6 @@ def kpi_latency(mdf, kpi_table, row_idx, aeb_start_idx, cutoff_freq):
         Row index in kpi_table.
     aeb_start_idx : int
         Index of AEB intervention request (start).
-    cutoff_freq : float
-        Cutoff frequency for filtering in kneepoint detection.
     """
 
     # Ensure required columns exist

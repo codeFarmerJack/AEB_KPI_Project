@@ -143,8 +143,7 @@ class KpiExtractor:
     FB_TGT_DECEL    = -15.0     # m/s²
     TGT_TOL         = 0.2       # m/s²
     AEB_END_THD     = -4.9      # m/s²
-    TIME_IDX_OFFSET = 300       # samples (~3s at 0.01s rate)
-    CUTOFF_FREQ     = 10        # Hz    
+    TIME_IDX_OFFSET = 300       # samples (~3s at 0.01s rate) 
 
     def __init__(self, config, event_detector):
         if config is None or event_detector is None:
@@ -198,7 +197,6 @@ class KpiExtractor:
             self.tgt_tol         = float(params.get("TGT_TOL", self.tgt_tol))
             self.aeb_end_thd     = float(params.get("AEB_END_THD", self.aeb_end_thd))
             self.time_idx_offset = int(params.get("TIME_IDX_OFFSET", self.time_idx_offset))
-            self.cutoff_freq     = float(params.get("CUTOFF_FREQ", self.cutoff_freq))
 
         # --- Debug summary ---
         print(
@@ -208,7 +206,6 @@ class KpiExtractor:
             f"   TGT_TOL         = {self.tgt_tol}\n"
             f"   AEB_END_THD     = {self.aeb_end_thd}\n"
             f"   TIME_IDX_OFFSET = {self.time_idx_offset}\n"
-            f"   CUTOFF_FREQ     = {self.cutoff_freq}\n"
         )
 
     # ------------------------------------------------------------------ #
@@ -219,13 +216,11 @@ class KpiExtractor:
         self.tgt_tol         = self.TGT_TOL
         self.aeb_end_thd     = self.AEB_END_THD
         self.time_idx_offset = self.TIME_IDX_OFFSET
-        self.cutoff_freq     = self.CUTOFF_FREQ
 
         print(
             f"⚙️ Using default parameters: "
             f"PB_TGT_DECEL={self.pb_tgt_decel}, FB_TGT_DECEL={self.fb_tgt_decel}, "
-            f"TGT_TOL={self.tgt_tol}, AEB_END_THD={self.aeb_end_thd}, "
-            f"TIME_IDX_OFFSET={self.time_idx_offset}, CUTOFF_FREQ={self.cutoff_freq}"
+            f"TGT_TOL={self.tgt_tol}, AEB_END_THD={self.aeb_end_thd}"
         )
 
     # ------------------------------------------------------------------ #
@@ -309,7 +304,7 @@ class KpiExtractor:
             kpi_lat_accel(mdf, self.kpi_table, i, aeb_start_idx, thd.lat_accel_th, self.time_idx_offset)
             kpi_yaw_rate(mdf, self.kpi_table, i, aeb_start_idx, thd.yaw_rate_susp_th, self.time_idx_offset)
             kpi_brake_mode(mdf, self.kpi_table, i, aeb_start_idx, self.pb_tgt_decel, self.fb_tgt_decel, self.tgt_tol)
-            kpi_latency(mdf, self.kpi_table, i, aeb_start_idx, self.cutoff_freq)
+            kpi_latency(mdf, self.kpi_table, i, aeb_start_idx)
 
             self.kpi_table = self.kpi_table.round(2)
 
