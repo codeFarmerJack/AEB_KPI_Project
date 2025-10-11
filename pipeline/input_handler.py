@@ -5,6 +5,7 @@ from typing import List
 from asammdf import MDF, Signal
 from utils.mf4_extractor import mf4_extractor
 from utils.signal_filters import accel_filter
+from utils.enum_loader import EnumMapper
 
 # For folder selection
 import tkinter as tk
@@ -142,22 +143,43 @@ class InputHandler:
                     warnings.warn("⚠️ Signal 'egoSpeed' not found in extracted data.")
 
                 # --- 4️⃣ Save both raw + filtered signals to new MDF ---
+
+                mapper = EnumMapper("config/enum_definitions.yaml")
+                
                 new_mdf = MDF()
                 for col in data.columns:
                     try:
                         series = data[col]
-
-                        # --- Handle NaN and object dtype safely ---
                         if series.dtype == object:
-                            # Convert to string, encode categories numerically
-                            categories, encoded = np.unique(series.astype(str), return_inverse=True)
-                            sig = Signal(
-                                samples=encoded.astype(np.int16),
-                                timestamps=data.index.values,
-                                name=col,
-                                unit="u[1]",
-                                comment=f"Categorical mapping: {dict(enumerate(categories))}"
-                            )
+                            enum_name = mapper.get_enum_for_signal(col)
+
+                            if enum_name:
+                                # Use YAML enum mapping
+                                enum_table = mapper.enums.get(enum_name, {})
+                                encoded = series.astype(str).map(lambda v: enum_table.get(v, np.nan))
+                                if encoded.isna().any():
+                                    missing = series[encoded.isna()].unique().tolist()
+                                    print(f"⚠️ Unmapped values in {col}: {missing}")
+                                samples = encoded.fillna(-1).astype(np.int16).to_numpy()
+
+                                sig = Signal(
+                                    samples=samples,
+                                    timestamps=data.index.values,
+                                    name=col,
+                                    unit="u[1]",
+                                    comment=f"Enum mapping: {enum_name}"
+                                )
+                            else:
+                                # fallback categorical encoding
+                                categories, encoded = np.unique(series.astype(str), return_inverse=True)
+                                sig = Signal(
+                                    samples=encoded.astype(np.int16),
+                                    timestamps=data.index.values,
+                                    name=col,
+                                    unit="u[1]",
+                                    comment=f"Categorical mapping: {dict(enumerate(categories))}"
+                                )
+
                         else:
                             sig = Signal(
                                 samples=series.to_numpy(dtype=np.float64),
@@ -169,7 +191,7 @@ class InputHandler:
                         new_mdf.append(sig)
 
                     except Exception as e:
-                        warnings.warn(f"⚠️ Failed to append {col}: {e}")
+                        print(f"⚠️ Failed to append signal {col}: {e}")
 
 
                 extracted_file = os.path.splitext(full_path)[0] + "_extracted.mf4"

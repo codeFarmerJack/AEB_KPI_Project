@@ -1,0 +1,39 @@
+# --- Explicit MDF signal ↔ enum mapping ---
+
+SignalToEnumMap:
+  aebRequest: AutoEmergencyBrakingRequestType
+  fcwRequest: ForwardCollisionWarningRequestType
+  isVehicleStoppedNV: VioVehicleStopped
+  aebFullState: AutoEmergencyBrakingPlannerState
+  aebPartialState: AutoEmergencyBrakingPlannerState
+
+# Enums used to convert symbolic MDF signal values into numeric codes.
+
+ForwardCollisionWarningRequestType:
+  FORWARD_COLLISION_WARNING_REQUEST_NONE: 0    # no activation
+  FORWARD_COLLISION_WARNING_REQUEST_LEVEL_1: 1 # level 1 warning (pre FCW)
+  FORWARD_COLLISION_WARNING_REQUEST_LEVEL_2: 2 # level 2 warning (FCW)
+  FORWARD_COLLISION_WARNING_REQUEST_LEVEL_3: 3 # level 3 warning (FCW + haptical)
+
+AutoEmergencyBrakingRequestType:
+  AUTO_EMERGENCY_BRAKING_REQUEST_NONE: 0       # no type
+  AUTO_EMERGENCY_BRAKING_REQUEST_PARTIAL: 1    # partial braking
+  AUTO_EMERGENCY_BRAKING_REQUEST_FULL: 2       # full braking
+  AUTO_EMERGENCY_BRAKING_REQUEST_HOLD: 3       # hold ego stopped
+  AUTO_EMERGENCY_BRAKING_REQUEST_FCW: 5        # FCW testing
+  AUTO_EMERGENCY_BRAKING_REQUEST_LIMITING: 6   # limiting acceleration
+
+VioVehicleStopped:
+  VIO_VEHICLE_STOPPED_UNKNOWN: 0  # Schroedinger’s vehicle motion
+  VIO_VEHICLE_STOPPED_FALSE: 1    # vehicle moving
+  VIO_VEHICLE_STOPPED_TRUE: 2     # vehicle not moving
+
+AutoEmergencyBrakingPlannerState:
+  AUTO_EMERGENCY_BRAKING_PLANNER_STATE_UNSPECIFIED: 0
+  AUTO_EMERGENCY_BRAKING_PLANNER_STATE_READY: 1
+  AUTO_EMERGENCY_BRAKING_PLANNER_STATE_ACTIVE: 2
+  AUTO_EMERGENCY_BRAKING_PLANNER_STATE_HOLD: 3
+  AUTO_EMERGENCY_BRAKING_PLANNER_STATE_UNAVAILABLE: 4
+  AUTO_EMERGENCY_BRAKING_PLANNER_STATE_DEGRADED: 5
+
+
