@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-def kpi_throttle(mdf, kpi_table, row_idx, aeb_start_idx, pedal_pos_inc_th):
+def throttle(mdf, kpi_table, row_idx, aeb_start_idx, pedal_pos_inc_th):
     """
     Throttle pedal KPIs during an AEB event.
     Updates kpi_table in place.

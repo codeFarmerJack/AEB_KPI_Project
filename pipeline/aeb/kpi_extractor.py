@@ -11,13 +11,13 @@ from utils.process_calibratables import interpolate_threshold_clamped
 
 # ✅ Import all KPI functions directly via __init__.py
 from utils.kpis.aeb import (
-    kpi_distance,
-    kpi_throttle,
-    kpi_steering_wheel,
-    kpi_lat_accel,
-    kpi_yaw_rate,
-    kpi_brake_mode,
-    kpi_latency,
+    brake_mode,
+    distance,
+    lat_accel,
+    latency,
+    steering_wheel,
+    throttle,
+    yaw_rate,
 )
 
 from dataclasses import dataclass
@@ -298,13 +298,13 @@ class KpiExtractor:
             self.kpi_table.loc[i, "latAccelTh"]     = safe_scalar(thd.lat_accel_th)
 
             # --- KPI metrics ---
-            kpi_distance(mdf, self.kpi_table, i, aeb_start_idx, aeb_end_idx)
-            kpi_throttle(mdf, self.kpi_table, i, aeb_start_idx, thd.pedal_pos_inc_th)
-            kpi_steering_wheel(mdf, self.kpi_table, i, aeb_start_idx, thd.steer_ang_th, thd.steer_ang_rate_th, self.time_idx_offset)
-            kpi_lat_accel(mdf, self.kpi_table, i, aeb_start_idx, thd.lat_accel_th, self.time_idx_offset)
-            kpi_yaw_rate(mdf, self.kpi_table, i, aeb_start_idx, thd.yaw_rate_susp_th, self.time_idx_offset)
-            kpi_brake_mode(mdf, self.kpi_table, i, aeb_start_idx, self.pb_tgt_decel, self.fb_tgt_decel, self.tgt_tol)
-            kpi_latency(mdf, self.kpi_table, i, aeb_start_idx)
+            distance(mdf, self.kpi_table, i, aeb_start_idx, aeb_end_idx)
+            throttle(mdf, self.kpi_table, i, aeb_start_idx, thd.pedal_pos_inc_th)
+            steering_wheel(mdf, self.kpi_table, i, aeb_start_idx, thd.steer_ang_th, thd.steer_ang_rate_th, self.time_idx_offset)
+            lat_accel(mdf, self.kpi_table, i, aeb_start_idx, thd.lat_accel_th, self.time_idx_offset)
+            yaw_rate(mdf, self.kpi_table, i, aeb_start_idx, thd.yaw_rate_susp_th, self.time_idx_offset)
+            brake_mode(mdf, self.kpi_table, i, aeb_start_idx, self.pb_tgt_decel, self.fb_tgt_decel, self.tgt_tol)
+            latency(mdf, self.kpi_table, i, aeb_start_idx)
 
             self.kpi_table = self.kpi_table.round(2)
 

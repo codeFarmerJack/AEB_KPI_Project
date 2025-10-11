@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-def kpi_distance(mdf, kpi_table, row_idx, aeb_start_idx, aeb_end_idx):
+def distance(mdf, kpi_table, row_idx, aeb_start_idx, aeb_end_idx):
     """
     Compute distance KPIs during AEB event.
     Updates kpi_table in place.

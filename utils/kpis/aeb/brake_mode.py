@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import warnings
 
-def kpi_brake_mode(mdf, kpi_table, row_idx, aeb_start_idx, pb_tgt_decel, fb_tgt_decel, tgt_tol):
+def brake_mode(mdf, kpi_table, row_idx, aeb_start_idx, pb_tgt_decel, fb_tgt_decel, tgt_tol):
     """
     Determine if PB and FB are activated during AEB event.
     Updates kpi_table in-place.

@@ -4,7 +4,7 @@ import warnings
 from utils.time_locators import detect_kneepoint  
 
 
-def kpi_latency(mdf, kpi_table, row_idx, aeb_start_idx):
+def latency(mdf, kpi_table, row_idx, aeb_start_idx):
     """
     Compute AEB system latency KPIs.
     Updates kpi_table in place.

@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-def kpi_lat_accel(mdf, kpi_table, row_idx, aeb_start_idx, lat_accel_th, time_idx_offset):
+def lat_accel(mdf, kpi_table, row_idx, aeb_start_idx, lat_accel_th, time_idx_offset):
     """
     Compute lateral acceleration KPIs during an AEB event.
     Updates kpi_table in place.

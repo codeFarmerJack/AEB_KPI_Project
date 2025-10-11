@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-def kpi_yaw_rate(mdf, kpi_table, row_idx, aeb_start_idx, yaw_rate_susp_th, time_idx_offset):
+def yaw_rate(mdf, kpi_table, row_idx, aeb_start_idx, yaw_rate_susp_th, time_idx_offset):
     """
     KPI Yaw Rate Analysis during an AEB event.
     Updates kpi_table in place.

@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-def kpi_steering_wheel(mdf, kpi_table, row_idx, aeb_start_idx, steer_ang_th, steer_ang_rate_th, time_idx_offset):
+def steering_wheel(mdf, kpi_table, row_idx, aeb_start_idx, steer_ang_th, steer_ang_rate_th, time_idx_offset):
     """
     Steering wheel analysis during an AEB event.
     Updates kpi_table in place.
