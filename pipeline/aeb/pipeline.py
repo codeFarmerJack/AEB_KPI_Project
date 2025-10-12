@@ -5,7 +5,7 @@ from pathlib import Path
 
 from config.config import Config
 from pipeline.input_handler import InputHandler
-from pipeline.aeb.event_detector import EventDetector
+from pipeline.event_detector import EventDetector
 from pipeline.aeb.kpi_extractor import KpiExtractor
 from pipeline.visualizer import Visualizer
 

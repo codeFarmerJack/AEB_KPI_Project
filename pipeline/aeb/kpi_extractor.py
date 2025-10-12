@@ -85,7 +85,7 @@ class KpiExtractor:
             raise FileNotFoundError(f"No .mf4 files in {self.path_to_chunks}")
 
         # --- KPI table creation ---
-        self.kpi_table = create_kpi_table_from_df(config.kpi_spec, len(self.file_list))
+        self.kpi_table = create_kpi_table_from_df(config.kpi_spec, feature="AEB")
 
         # --- Load calibratables safely ---
         expected_keys = {
