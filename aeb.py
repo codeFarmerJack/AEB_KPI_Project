@@ -3,7 +3,7 @@ from pathlib import Path
 from config.config import Config
 from pipeline.input_handler import InputHandler
 from pipeline.aeb.event_detector import EventDetector
-from pipeline.aeb.kpi_extractor import KpiExtractor
+from pipeline.aeb.kpi_extractor import AebKpiExtractor
 from pipeline.visualizer import Visualizer
 from asammdf import MDF
 import pandas as pd
@@ -60,7 +60,7 @@ def main():
     print("✅ Event detection finished.\n")
 
     # --- KPI Extraction ---
-    kpi = KpiExtractor(cfg, event)
+    kpi = AebKpiExtractor(cfg, event)
     kpi.process_all_mdf_files()
     kpi.export_to_excel()
 

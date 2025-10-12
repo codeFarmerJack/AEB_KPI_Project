@@ -6,7 +6,7 @@ from pathlib import Path
 from config.config import Config
 from pipeline.input_handler import InputHandler
 from pipeline.event_detector import EventDetector
-from pipeline.aeb.kpi_extractor import KpiExtractor
+from pipeline.aeb.kpi_extractor import AebKpiExtractor
 from pipeline.visualizer import Visualizer
 
 
@@ -91,7 +91,7 @@ class AebPipeline:
         """Step 5: Extract KPIs and export to Excel."""
         print("\n➡️ [4/5] Extracting KPIs...")
         try:
-            self.kpi = KpiExtractor(self.cfg, self.event)
+            self.kpi = AebKpiExtractor(self.cfg, self.event)
             self.kpi.process_all_mdf_files()
             self.kpi.export_to_excel()
             print("✅ KPI extraction and Excel export done.")

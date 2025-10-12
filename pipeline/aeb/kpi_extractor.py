@@ -8,36 +8,13 @@ from utils.signal_mdf import SignalMDF
 from utils.create_kpi_table import create_kpi_table_from_df
 from utils.time_locators import find_aeb_intv_start, find_aeb_intv_end
 from utils.process_calibratables import interpolate_threshold_clamped
+from utils.data_utils import safe_scalar
+from utils.exporter import export_kpi_to_excel
 
-# ✅ Import all KPI functions directly via __init__.py
-from utils.kpis.aeb import (
-    brake_mode,
-    distance,
-    lat_accel,
-    latency,
-    steering_wheel,
-    throttle,
-    yaw_rate,
-)
+# Import all KPI functions directly via __init__.py
+from utils.kpis.aeb import *
 
 from dataclasses import dataclass
-
-
-# ------------------------------------------------------------------ #
-# Utility: safe conversion to scalar
-# ------------------------------------------------------------------ #
-def safe_scalar(x):
-    """Convert array-like or weird types to scalar float or NaN."""
-    if x is None:
-        return np.nan
-    if isinstance(x, (list, np.ndarray, pd.Series)):
-        if len(x) == 0:
-            return np.nan
-        return float(np.ravel(x)[0])
-    try:
-        return float(x)
-    except Exception:
-        return np.nan
 
 
 # ------------------------------------------------------------------ #
@@ -55,7 +32,7 @@ class Thresholds:
 # ------------------------------------------------------------------ #
 # AEB KPI Extractor
 # ------------------------------------------------------------------ #
-class KpiExtractor:
+class AebKpiExtractor:
     """Extracts AEB KPI metrics from MF4 chunks."""
 
     # --- Fallback defaults (used if not overridden by config) ---
@@ -230,24 +207,8 @@ class KpiExtractor:
 
     # ------------------------------------------------------------------ #
     def export_to_excel(self):
-        """Export KPI results to Excel (sheet: 'aeb')."""
-        output_filename = os.path.join(self.path_to_results, "AS-Long_KPI_Results.xlsx")
-
+        """Export AEB KPI results to Excel (sheet: 'aeb')."""
         try:
-            df = self.kpi_table.copy()
-            if "label" in df.columns:
-                df = df.dropna(subset=["label"])
-            if "vehSpd" in df.columns:
-                df = df.sort_values("vehSpd")
-
-            display_map = df.attrs.get("display_names", {})
-            renamed = {col: display_map.get(col, col) for col in df.columns}
-            renamed["label"] = "label"
-            df = df.rename(columns=renamed)
-
-            with pd.ExcelWriter(output_filename, engine="openpyxl", mode="w") as writer:
-                df.to_excel(writer, sheet_name="aeb", index=False)
-
-            print(f"✅ Exported KPI results to Excel → {output_filename} (sheet: 'aeb')")
+            export_kpi_to_excel(self.kpi_table, self.path_to_results, sheet_name="aeb")
         except Exception as e:
-            warnings.warn(f"⚠️ Failed to export KPI results: {e}")
+            warnings.warn(f"⚠️ Failed to export AEB KPI results: {e}")
