@@ -16,11 +16,11 @@ class AebEventDetector:
     """
 
     # --- Fallback defaults (used only if not defined in config) ---
-    PRE_TIME          = 6.0    # seconds before event
-    POST_TIME         = 3.0    # seconds after event
-    START_DECEL_DELTA = -30.0  # threshold for large negative change (AEB start)
-    END_DECEL_DELTA   = 29.0   # threshold for positive change (AEB end)
-    PB_TGT_DECEL      = -6.0   # threshold for AEB active state
+    PRE_TIME_AEB          = 6.0    # seconds before event
+    POST_TIME_AEB         = 3.0    # seconds after event
+    START_DECEL_DELTA     = -30.0  # threshold for large negative change (AEB start)
+    END_DECEL_DELTA       = 29.0   # threshold for positive change (AEB end)
+    PB_TGT_DECEL          = -6.0   # threshold for AEB active state
 
     def __init__(self, input_handler, config=None):
         if input_handler is None or not hasattr(input_handler, "path_to_raw_data"):
@@ -37,8 +37,8 @@ class AebEventDetector:
             try:
                 params = config.params or {}
 
-                self.pre_time          = float(params.get("PRE_TIME", self.PRE_TIME))
-                self.post_time         = float(params.get("POST_TIME", self.POST_TIME))
+                self.pre_time          = float(params.get("PRE_TIME_AEB", self.PRE_TIME_AEB))
+                self.post_time         = float(params.get("POST_TIME_AEB", self.POST_TIME_AEB))
                 self.start_decel_delta = float(params.get("START_DECEL_DELTA", self.START_DECEL_DELTA))
                 self.end_decel_delta   = float(params.get("END_DECEL_DELTA", self.END_DECEL_DELTA))
                 self.pb_tgt_decel      = float(params.get("PB_TGT_DECEL", self.PB_TGT_DECEL))
@@ -56,8 +56,8 @@ class AebEventDetector:
 
     def _apply_defaults(self):
         """Fallback to class defaults."""
-        self.pre_time           = self.PRE_TIME
-        self.post_time          = self.POST_TIME
+        self.pre_time           = self.PRE_TIME_AEB
+        self.post_time          = self.POST_TIME_AEB
         self.start_decel_delta  = self.START_DECEL_DELTA
         self.end_decel_delta    = self.END_DECEL_DELTA
         self.pb_tgt_decel       = self.PB_TGT_DECEL
@@ -101,7 +101,7 @@ class AebEventDetector:
                     "aebTargetDecel": mdf.aebTargetDecel
                 })
 
-                start_times, end_times = self.detect_events(df)
+                start_times, end_times = self.detect_aeb_events(df)
                 print(f"   ➝ Detected {len(start_times)} events")
 
                 self.extract_aeb_events(mdf, start_times, end_times, name)
@@ -114,7 +114,7 @@ class AebEventDetector:
 
     # -------------------- Event Detection -------------------- #
 
-    def detect_events(self, df: pd.DataFrame):
+    def detect_aeb_events(self, df: pd.DataFrame):
         """Detect start and end times of AEB events."""
         time             = df["time"].values
         aeb_target_decel = df["aebTargetDecel"].values
@@ -171,7 +171,7 @@ class AebEventDetector:
                     print(f"⚠️ Empty chunk ({start_sec:.2f}s–{stop_sec:.2f}s) → no overlap.")
                     continue
 
-                mf4_name = f"{name}_{j+1}.mf4"
+                mf4_name = f"{name}_aeb_{j+1:02d}.mf4"
                 mf4_path = os.path.join(self.path_to_aeb_chunks, mf4_name)
                 mdf_chunk.save(mf4_path, overwrite=True)
                 print(f"   ✅ Saved event {j+1}: {start_sec:.2f}s → {stop_sec:.2f}s → {mf4_name}")
@@ -182,9 +182,3 @@ class AebEventDetector:
             except Exception as e:
                 print(f"⚠️ Error saving event {j+1} of {name}: {e}")
 
-    # -------------------- Helpers -------------------- #
-
-    @staticmethod
-    def _find_time_index(time_array, target_sec):
-        """Find nearest index in time_array to target_sec."""
-        return int(np.argmin(np.abs(time_array - target_sec)))
