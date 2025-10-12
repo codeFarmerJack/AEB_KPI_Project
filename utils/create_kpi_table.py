@@ -10,7 +10,7 @@ from pathlib import Path
 # ------------------------------------------------------------------ #
 def create_kpi_table_from_df(schema_df: pd.DataFrame, n: int = 0, feature: str | None = None) -> pd.DataFrame:
     """
-    Create KPI DataFrame from DataFrame schema, optionally filtering by Feature column.
+    Create KPI DataFrame from DataFrame schema, automatically including 'Common' KPIs.
 
     Parameters
     ----------
@@ -20,26 +20,71 @@ def create_kpi_table_from_df(schema_df: pd.DataFrame, n: int = 0, feature: str |
     n : int, optional
         Number of rows to initialize (default 0).
     feature : str or None, optional
-        If given (e.g. 'AEB' or 'FCW'), only those feature rows are kept.
+        If given (e.g. 'AEB' or 'FCW'), will include both 'Common' and that feature’s KPIs.
 
     Returns
     -------
     pd.DataFrame
-        Initialized KPI result table.
+        Initialized KPI result table containing merged Common + feature KPIs,
+        with preserved display name mappings for export.
     """
     if not isinstance(schema_df, pd.DataFrame):
         raise TypeError(f"Expected DataFrame, got {type(schema_df)}")
 
-    if feature is not None:
-        if "feature" not in schema_df.columns:
-            raise ValueError("Schema DataFrame must contain column 'feature' to filter by feature name.")
-        filtered = schema_df[schema_df["feature"].str.upper() == feature.upper()]
-        if filtered.empty:
-            warnings.warn(f"⚠️ No rows found for feature '{feature}' — returning empty table.")
-            return pd.DataFrame()
-        schema_df = filtered
+    # --- Normalize column names ---
+    schema_df.columns = schema_df.columns.str.strip().str.lower()
 
-    return _create_kpi_table(schema_df, n)
+    if "feature" not in schema_df.columns:
+        raise ValueError("Schema DataFrame must contain column 'Feature' to filter by feature name.")
+
+    # --- Normalize feature names ---
+    schema_df["feature"] = schema_df["feature"].astype(str).str.strip().str.upper()
+
+    # --- Extract subsets ---
+    common_df = schema_df[schema_df["feature"] == "COMMON"]
+
+    if feature is not None:
+        feature = feature.strip().upper()
+        feature_df = schema_df[schema_df["feature"] == feature]
+
+        if common_df.empty and feature_df.empty:
+            warnings.warn(f"⚠️ No KPIs found for '{feature}' or 'Common' — returning empty table.")
+            return pd.DataFrame()
+
+        # --- Combine Common + feature rows (Common first) ---
+        combined_df = pd.concat([common_df, feature_df], ignore_index=True)
+        print(f"🧩 Combined {len(common_df)} Common + {len(feature_df)} {feature} KPIs")
+
+        # --- Build KPI table ---
+        df = _create_kpi_table(combined_df, n)
+
+        # --- Build and attach display name mapping ---
+        display_names = {
+            str(row["name"]): (
+                f"{row['name']} [{row['unit']}]" if pd.notna(row.get("unit")) and str(row["unit"]).strip() else str(row["name"])
+            )
+            for _, row in combined_df.iterrows()
+        }
+        df.attrs["display_names"] = display_names
+        return df
+
+    # --- No feature specified → Common only ---
+    if common_df.empty:
+        warnings.warn("⚠️ No 'Common' KPIs found in schema.")
+        return pd.DataFrame()
+
+    print(f"🧩 Created KPI table with {len(common_df)} Common KPIs only")
+
+    df = _create_kpi_table(common_df, n)
+    display_names = {
+        str(row["name"]): (
+            f"{row['name']} [{row['unit']}]" if pd.notna(row.get("unit")) and str(row["unit"]).strip() else str(row["name"])
+        )
+        for _, row in common_df.iterrows()
+    }
+    df.attrs["display_names"] = display_names
+    return df
+
 
 
 def create_kpi_table_from_json(json_file, n: int = 0, feature: str | None = None) -> pd.DataFrame:
