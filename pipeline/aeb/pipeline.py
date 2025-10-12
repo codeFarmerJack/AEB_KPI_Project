@@ -5,9 +5,9 @@ from pathlib import Path
 
 from config.config import Config
 from pipeline.input_handler import InputHandler
-from pipeline.event_detector import EventDetector
+from pipeline.aeb.event_detector import AebEventDetector
 from pipeline.aeb.kpi_extractor import AebKpiExtractor
-from pipeline.visualizer import Visualizer
+from pipeline.aeb.visualizer import AebVisualizer
 
 
 class AebPipeline:
@@ -79,7 +79,7 @@ class AebPipeline:
         """Step 4: Detect AEB events."""
         print("\n➡️ [3/5] Detecting AEB events...")
         try:
-            self.event = EventDetector(self.ih, self.cfg)
+            self.event = AebEventDetector(self.ih, self.cfg)
             print("🚦 Running event detection...\n")
             self.event.process_all_files()
             print("✅ Event detection finished.\n")
@@ -103,7 +103,7 @@ class AebPipeline:
         """Step 6: Visualization."""
         print("\n➡️ [5/5] Launching visualization...\n")
         try:
-            self.viz = Visualizer(self.cfg, self.kpi)
+            self.viz = AebVisualizer(self.cfg, self.kpi)
             self.viz.interactive = True  # enable zoomable interactive plots
             self.viz.plot()
         except Exception as e:

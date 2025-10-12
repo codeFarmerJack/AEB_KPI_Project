@@ -6,11 +6,11 @@ from utils.viz.scatter_plotter import scatter_plotter
 # from utils.viz.pie_plotter import pie_plotter
 
 
-class Visualizer:
+class AebVisualizer:
     """
-    Visualizer
+    AebVisualizer
     ----------
-    Python equivalent of MATLAB Visualizer.
+    Python equivalent of MATLAB AebVisualizer.
     Dispatches KPI visualization based on `graph_spec`.
 
     Works with:
@@ -20,7 +20,7 @@ class Visualizer:
 
     def __init__(self, config, kpi_extractor):
         if config is None or kpi_extractor is None:
-            raise ValueError("Visualizer requires both Config and AebKpiExtractor instances.")
+            raise ValueError("AebVisualizer requires both Config and AebKpiExtractor instances.")
 
         # --- Validate Config structure ---
         required_cfg_attrs = ["graph_spec", "line_colors", "marker_shapes", "calibratables", "kpi_spec"]
@@ -43,7 +43,10 @@ class Visualizer:
         # --- Directories & File Paths ---
         self.path_to_results = kpi_extractor.path_to_results
         self.path_to_excel  = os.path.join(self.path_to_results, "AS-Long_KPI_Results.xlsx")
-        self.path_to_output = self.path_to_results
+        self.path_to_output = os.path.join(self.path_to_results, "aeb")
+
+        if not os.path.exists(self.path_to_output):
+            os.makedirs(self.path_to_output)
 
         # ✅ Sequential figure numbering (1 → 100)
         self._group_counter = iter(range(1, 101))

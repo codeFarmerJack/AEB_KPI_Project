@@ -2,9 +2,9 @@ import numpy as np
 from pathlib import Path
 from config.config import Config
 from pipeline.input_handler import InputHandler
-from pipeline.aeb.event_detector import EventDetector
+from pipeline.aeb.event_detector import AebEventDetector
 from pipeline.aeb.kpi_extractor import AebKpiExtractor
-from pipeline.visualizer import Visualizer
+from pipeline.AebVisualizer import AebVisualizer
 from asammdf import MDF
 import pandas as pd
 
@@ -53,8 +53,8 @@ def main():
     # --- Process MF4 files ---
     ih.process_mf4_files()
 
-    # --- Create EventDetector ---
-    event = EventDetector(ih, cfg)
+    # --- Create AebEventDetector ---
+    event = AebEventDetector(ih, cfg)
     print("\n🚦 Running event detection...\n")
     event.process_all_files()
     print("✅ Event detection finished.\n")
@@ -64,9 +64,9 @@ def main():
     kpi.process_all_mdf_files()
     kpi.export_to_excel()
 
-    # --- Instantiate Visualizer (debug mode) ---
-    print("\n🧩 Initializing Visualizer...\n")
-    viz = Visualizer(cfg, kpi)
+    # --- Instantiate AebVisualizer (debug mode) ---
+    print("\n🧩 Initializing AebVisualizer...\n")
+    viz = AebVisualizer(cfg, kpi)
 
     # --- Optional: enable interactive plots ---
     # 👉 Set this to True if you want zoomable pop-ups.

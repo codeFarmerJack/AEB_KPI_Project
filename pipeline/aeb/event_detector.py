@@ -6,9 +6,9 @@ import pandas as pd
 from utils.signal_mdf import SignalMDF
 
 
-class EventDetector:
+class AebEventDetector:
     """
-    EventDetector
+    AebEventDetector
     -------------
     Detects AEB events in MF4 files and extracts event chunks.
 
@@ -24,13 +24,13 @@ class EventDetector:
 
     def __init__(self, input_handler, config=None):
         if input_handler is None or not hasattr(input_handler, "path_to_raw_data"):
-            raise TypeError("EventDetector requires an InputHandler instance.")
+            raise TypeError("AebEventDetector requires an InputHandler instance.")
 
         self.path_to_mdf = input_handler.path_to_raw_data
-        self.path_to_mdf_chunks = os.path.join(self.path_to_mdf, "mdf_chunks")
+        self.path_to_aeb_chunks = os.path.join(self.path_to_mdf, "aeb_chunks")
 
-        if not os.path.exists(self.path_to_mdf_chunks):
-            os.makedirs(self.path_to_mdf_chunks)
+        if not os.path.exists(self.path_to_aeb_chunks):
+            os.makedirs(self.path_to_aeb_chunks)
 
         # --- Load parameters from config if available ---
         if config is not None and hasattr(config, "params"):
@@ -172,7 +172,7 @@ class EventDetector:
                     continue
 
                 mf4_name = f"{name}_{j+1}.mf4"
-                mf4_path = os.path.join(self.path_to_mdf_chunks, mf4_name)
+                mf4_path = os.path.join(self.path_to_aeb_chunks, mf4_name)
                 mdf_chunk.save(mf4_path, overwrite=True)
                 print(f"   ✅ Saved event {j+1}: {start_sec:.2f}s → {stop_sec:.2f}s → {mf4_name}")
 

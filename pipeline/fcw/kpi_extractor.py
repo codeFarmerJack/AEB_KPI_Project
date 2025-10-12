@@ -7,6 +7,7 @@ import pandas as pd
 from utils.signal_mdf import SignalMDF
 from utils.create_kpi_table import create_kpi_table_from_df
 from utils.data_utils import safe_scalar
+from utils.exporter import export_kpi_to_excel
 
 # Import all FCW KPI functions (via __init__.py)
 from utils.kpis.fcw import *
@@ -18,11 +19,15 @@ from utils.kpis.fcw import *
 class FcwKpiExtractor:
     """Extracts FCW KPI metrics from MF4 chunks."""
 
+    # --- Fallback defaults ---
+    WINDOW_S     = 1.0   # seconds for jerk calculation window
+    JERK_THD     = 5.0   # m/s³ threshold for brake jerk detection
+
     def __init__(self, config, event_detector):
         if config is None or event_detector is None:
-            raise ValueError("Config and EventDetector are required.")
-        if not hasattr(event_detector, "path_to_mdf_chunks"):
-            raise TypeError("event_detector must have path_to_mdf_chunks attribute.")
+            raise ValueError("Config and FcwEventDetector are required.")
+        if not hasattr(event_detector, "path_to_fcw_chunks"):
+            raise TypeError("event_detector must have path_to_fcw_chunks attribute.")
 
         # --- Setup paths ---
         self.path_to_mdf     = event_detector.path_to_mdf
@@ -31,7 +36,7 @@ class FcwKpiExtractor:
         if not os.path.exists(self.path_to_results):
             os.makedirs(self.path_to_results)
 
-        self.path_to_chunks  = event_detector.path_to_mdf_chunks
+        self.path_to_chunks  = event_detector.path_to_fcw_chunks
         self.file_list       = [f for f in os.listdir(self.path_to_chunks) if f.endswith(".mf4")]
 
         if not self.file_list:
@@ -40,7 +45,7 @@ class FcwKpiExtractor:
         # --- KPI table creation ---
         self.kpi_table = create_kpi_table_from_df(config.kpi_spec, feature="FCW")
 
-        # --- Initialize parameters ---
+        # --- Initialize default parameters ---
         self._apply_defaults()
 
         # --- Apply overrides from Config.params (if present) ---
@@ -48,35 +53,14 @@ class FcwKpiExtractor:
             params = config.params
             print("⚙️ Applying parameter overrides from config.params")
 
-            self.pb_tgt_decel    = float(params.get("PB_TGT_DECEL", self.pb_tgt_decel))
-            self.fb_tgt_decel    = float(params.get("FB_TGT_DECEL", self.fb_tgt_decel))
-            self.tgt_tol         = float(params.get("TGT_TOL", self.tgt_tol))
-            self.fcw_end_thd     = float(params.get("FCW_END_THD", self.fcw_end_thd))
-            self.time_idx_offset = int(params.get("TIME_IDX_OFFSET", self.time_idx_offset))
+            self.window_s     = float(params.get("WINDOW_S", self.window_s))
+            self.jerk_thd     = float(params.get("JERK_THD", self.jerk_thd))
 
         # --- Debug summary ---
         print(
             f"\n📊 FCW KPI Parameter Summary:\n"
-            f"   PB_TGT_DECEL    = {self.pb_tgt_decel}\n"
-            f"   FB_TGT_DECEL    = {self.fb_tgt_decel}\n"
-            f"   TGT_TOL         = {self.tgt_tol}\n"
-            f"   FCW_END_THD     = {self.fcw_end_thd}\n"
-            f"   TIME_IDX_OFFSET = {self.time_idx_offset}\n"
-        )
-
-    # ------------------------------------------------------------------ #
-    def _apply_defaults(self):
-        """Fallback defaults if Config.params does not override them."""
-        self.pb_tgt_decel    = self.PB_TGT_DECEL
-        self.fb_tgt_decel    = self.FB_TGT_DECEL
-        self.tgt_tol         = self.TGT_TOL
-        self.fcw_end_thd     = self.FCW_END_THD
-        self.time_idx_offset = self.TIME_IDX_OFFSET
-
-        print(
-            f"⚙️ Using default parameters: "
-            f"PB_TGT_DECEL={self.pb_tgt_decel}, FB_TGT_DECEL={self.fb_tgt_decel}, "
-            f"TGT_TOL={self.tgt_tol}, FCW_END_THD={self.fcw_end_thd}"
+            f"   WINDOW_S     = {self.window_s}\n"
+            f"   JERK_THD     = {self.jerk_thd}\n"
         )
 
     # ------------------------------------------------------------------ #
@@ -113,14 +97,7 @@ class FcwKpiExtractor:
             accel         = getattr(mdf, "vehAccel", None)
 
             # --- FCW event detection ---
-            fcw_start_idx, fcw_start_time = find_aeb_intv_start(
-                {"aebTargetDecel": fcw_request, "time": time}, self.pb_tgt_decel
-            )
-            is_veh_stopped, fcw_end_idx, fcw_end_time = find_aeb_intv_end(
-                {"egoSpeed": ego_speed, "aebTargetDecel": fcw_request, "time": time},
-                fcw_start_idx,
-                self.fcw_end_thd,
-            )
+
 
             # --- Save core timings ---
             self.kpi_table.loc[i, "logTime"]         = safe_scalar(fcw_start_time)
@@ -151,43 +128,19 @@ class FcwKpiExtractor:
     # ------------------------------------------------------------------ #
     def export_to_excel(self):
         """Export FCW KPI results to Excel (sheet: 'fcw')."""
-        output_filename = os.path.join(self.path_to_results, "AS-Long_KPI_Results.xlsx")
-
         try:
-            df = self.kpi_table.copy()
-
-            # --- Clean & sort ---
-            if "label" in df.columns:
-                df = df.dropna(subset=["label"])
-            if "vehSpd" in df.columns:
-                df = df.sort_values("vehSpd")
-
-            # --- Apply display names (from schema) ---
-            display_map = df.attrs.get("display_names", {})
-            renamed = {col: display_map.get(col, col) for col in df.columns}
-            renamed["label"] = "label"
-            df = df.rename(columns=renamed)
-
-            # --- Determine write mode ---
-            file_exists = os.path.exists(output_filename)
-
-            if file_exists:
-                # ✅ File exists — append/replace only 'fcw' sheet
-                with pd.ExcelWriter(
-                    output_filename,
-                    engine="openpyxl",
-                    mode="a",
-                    if_sheet_exists="replace",
-                ) as writer:
-                    df.to_excel(writer, sheet_name="fcw", index=False)
-                print(f"🔁 Updated sheet 'fcw' in existing workbook → {output_filename}")
-
-            else:
-                # 🆕 File does not exist — create new workbook
-                with pd.ExcelWriter(output_filename, engine="openpyxl", mode="w") as writer:
-                    df.to_excel(writer, sheet_name="fcw", index=False)
-                print(f"🆕 Created new workbook and exported FCW KPIs → {output_filename}")
-
+            export_kpi_to_excel(self.kpi_table, self.path_to_results, sheet_name="fcw")
         except Exception as e:
             warnings.warn(f"⚠️ Failed to export FCW KPI results: {e}")
 
+# ------------------------------------------------------------------ #
+    def _apply_defaults(self):
+        """Apply default parameter values."""
+        self.window_s    = self.WINDOW_S
+        self.jerk_thd    = self.JERK_THD
+
+        print(
+            f"⚙️ Using default parameters: "
+            f"WINDOW_S={self.window_s}, JERK_THD={self.jerk_thd}, "
+            f"FCW_END_THD={self.fcw_end_thd}, TIME_OFFSET={self.time_offset}"
+        )

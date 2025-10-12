@@ -44,9 +44,9 @@ class AebKpiExtractor:
 
     def __init__(self, config, event_detector):
         if config is None or event_detector is None:
-            raise ValueError("Config and EventDetector are required.")
-        if not hasattr(event_detector, "path_to_mdf_chunks"):
-            raise TypeError("event_detector must have path_to_mdf_chunks attribute.")
+            raise ValueError("Config and AebEventDetector are required.")
+        if not hasattr(event_detector, "path_to_aeb_chunks"):
+            raise TypeError("event_detector must have path_to_aeb_chunks attribute.")
 
         # --- Setup paths ---
         self.path_to_mdf     = event_detector.path_to_mdf
@@ -55,7 +55,7 @@ class AebKpiExtractor:
         if not os.path.exists(self.path_to_results):
             os.makedirs(self.path_to_results)
        
-        self.path_to_chunks  = event_detector.path_to_mdf_chunks
+        self.path_to_chunks  = event_detector.path_to_aeb_chunks
         self.file_list       = [f for f in os.listdir(self.path_to_chunks) if f.endswith(".mf4")]
 
         if not self.file_list:
