@@ -49,10 +49,9 @@ def scatter_plotter(obj, graph_idx):
     # --- Group by Title ---
     title           = graph_spec.loc[graph_idx, "title"]
     same_title_rows = graph_spec.index[graph_spec["title"] == title].tolist()
-    enabled_rows    = [
-        r for r in same_title_rows
-        if str(graph_spec.loc[r, "plotenabled"]).strip().lower() not in ["false", "na", ""]
-    ]
+
+    enabled_rows = [r for r in same_title_rows if _is_row_enabled(graph_spec.loc[r, "plotenabled"])]
+
     if not enabled_rows:
         print(f"⚠️ Skipping '{title}' — no enabled rows.")
         return
@@ -61,7 +60,7 @@ def scatter_plotter(obj, graph_idx):
     is_first, is_last   = graph_idx == first_row, graph_idx == last_row
 
     # --- Skip disabled row ---
-    plot_enabled = str(graph_spec.loc[graph_idx, "plotenabled"]).strip().lower()
+    plot_enabled = str(graph_spec.loc[graph_idx, "plotenabled"]).strip()
     if plot_enabled in ["false", "na", ""]:
         return
 
@@ -110,6 +109,7 @@ def scatter_plotter(obj, graph_idx):
 
     # --- Filter (if needed) ---
     filt_mask = _resolve_filter(plot_enabled, data, "in-memory KPI data")
+    print(f"🔍 {title}: plotEnabled={plot_enabled} → {filt_mask.sum()}/{len(filt_mask)} rows active")
     x_vals = data.loc[filt_mask, x_col].to_numpy()
     y_vals = data.loc[filt_mask, y_col].to_numpy()
 
@@ -246,23 +246,51 @@ def _resolve_xy_columns(x_var, y_var, var_names, display_names, data, source):
         warnings.warn(f"⚠️ X ({x_var}) or Y ({y_var}) not found in {source}")
     return x_col, y_col
 
-
+# --- Determine which rows under this Title are eligible for plotting ---
+def _is_row_enabled(val: str) -> bool:
+    """Return True if this row's plotEnabled allows plotting."""
+    val_str = str(val).strip().lower()
+    # unconditional TRUE
+    if val_str == "true":
+        return True
+    # explicit disable
+    if val_str in ["false", "na", "none", ""]:
+        return False
+    # otherwise a conditional flag (e.g. 'isVehStopped')
+    return True
+    
 def _resolve_filter(plot_enabled, data, source):
-    pe = str(plot_enabled).strip().lower()
-    if pe in ["true", "na", "none", ""]:
+    """
+    Determine which rows to include based on plotEnabled rule.
+
+    - "TRUE"  → always plot all rows.
+    - "FALSE" → skip all rows (no plotting).
+    - other string (e.g., 'isVehStopped') → conditional plot based on that KPI column.
+    """
+    val = str(plot_enabled).strip()
+    low = val.lower()
+
+    # unconditional plot
+    if low == "true":
         return pd.Series(True, index=data.index)
-    elif pe == "false":
+
+    # unconditional skip
+    if low in ["false", "na", "none", ""]:
         return pd.Series(False, index=data.index)
-    if pe not in data.columns:
+
+    # conditional: e.g. "isVehStopped"
+    if val not in data.columns:
+        warnings.warn(f"⚠️ Conditional flag '{val}' not found in {source}; plotting all points.")
         return pd.Series(True, index=data.index)
-    col = data[pe]
+
+    col = data[val]
     if col.dtype == bool:
         mask = col
-    elif col.dtype.kind in "iufc":
-        mask = pd.notna(col) & (col != 0)
+    elif np.issubdtype(col.dtype, np.number):
+        mask = col.fillna(0) != 0
     else:
         mask = col.astype(str).str.lower().isin(["true", "1", "yes", "y"])
-    return mask.astype(bool).reindex(data.index, fill_value=False)
+    return mask.reindex(data.index, fill_value=False)
 
 
 def _select_marker_and_color(marker_shapes, line_colors, group_rows, row_in_group):
