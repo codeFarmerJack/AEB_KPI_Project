@@ -2,7 +2,7 @@ import numpy as np
 from pathlib import Path
 from config.config import Config
 from pipeline.input_handler import InputHandler
-from pipeline.fcw.event_detector import FcwEventDetector
+from pipeline.fcw.fcw_event_detector import FcwEventDetector
 from asammdf import MDF
 import pandas as pd
 

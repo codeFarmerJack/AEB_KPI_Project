@@ -2,7 +2,7 @@ import numpy as np
 from pathlib import Path
 from config.config import Config
 from pipeline.input_handler import InputHandler
-from pipeline.aeb.event_detector import AebEventDetector
+from pipeline.aeb.aeb_event_detector import AebEventDetector
 from pipeline.aeb.kpi_extractor import AebKpiExtractor
 from pipeline.AebVisualizer import AebVisualizer
 from asammdf import MDF
