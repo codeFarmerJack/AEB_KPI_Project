@@ -3,6 +3,7 @@ from pathlib import Path
 from config.config import Config
 from pipeline.input_handler import InputHandler
 from pipeline.fcw.fcw_event_segmenter import FcwEventSegmenter
+from pipeline.fcw.fcw_kpi_extractor import FcwKpiExtractor
 from asammdf import MDF
 import pandas as pd
 
@@ -58,9 +59,9 @@ def main():
     print("✅ Event detection finished.\n")
 
     # --- KPI Extraction ---
-    #kpi = FcwKpiExtractor(cfg, event)
-    #kpi.process_all_mdf_files()
-    #kpi.export_to_excel()
+    kpi = FcwKpiExtractor(cfg, event)
+    kpi.process_all_mdf_files()
+    kpi.export_to_excel()
 
     # --- Instantiate AebVisualizer (debug mode) ---
     #print("\n🧩 Initializing AebVisualizer...\n")

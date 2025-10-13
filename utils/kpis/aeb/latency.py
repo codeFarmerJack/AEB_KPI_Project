@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import warnings
-from utils.time_locators import detect_kneepoint  
+from utils.event_detector.aeb import detect_kneepoint  
 
 
 def latency(mdf, kpi_table, row_idx, aeb_start_idx):
@@ -59,5 +59,5 @@ def latency(mdf, kpi_table, row_idx, aeb_start_idx):
     dead_time_value = float(t_sys_resp - t_request) if np.isfinite(t_sys_resp) and np.isfinite(t_request) else np.nan
 
     # Save into table
-    kpi_table.at[row_idx, "aebSysRespTime"] = round(float(t_sys_resp), 2) if np.isfinite(t_sys_resp) else np.nan
-    kpi_table.at[row_idx, "aebDeadTime"] = round(dead_time_value, 2) if np.isfinite(dead_time_value) else np.nan
+    kpi_table.at[row_idx, "aebSysRespTime"] = round(float(t_sys_resp), 3) if np.isfinite(t_sys_resp) else np.nan
+    kpi_table.at[row_idx, "aebDeadTime"] = round(dead_time_value, 3) if np.isfinite(dead_time_value) else np.nan

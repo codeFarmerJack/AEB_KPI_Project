@@ -1,32 +1,24 @@
-# ====================================================================== #
-# Shared utility functions used across multiple KPI features (AEB, FCW…)
-# ====================================================================== #
-
 import numpy as np
 import pandas as pd
 import warnings
 
-
-# ------------------------------------------------------------------ #
-# Utility: Safe conversion to scalar
-# ------------------------------------------------------------------ #
-def safe_scalar(x):
+def safe_scalar(x, warn: bool = True):
     """
-    Convert array-like or irregular values into a scalar float or NaN.
+    Safely convert any scalar, list, NumPy array, or pandas object into a float scalar or NaN.
 
-    This ensures consistent numeric values when extracting single elements
-    from NumPy arrays, pandas Series, or lists — particularly useful for
-    populating KPI tables or exporting to Excel.
+    This unifies safe_scalar() and safe_float() functionality.
 
     Parameters
     ----------
     x : any
-        The input value (scalar, list, ndarray, Series, None, etc.)
+        Input value — scalar, list, ndarray, Series, or None.
+    warn : bool, optional
+        If True (default), emits a warning on failed conversion.
 
     Returns
     -------
     float
-        A scalar float value or np.nan if conversion fails.
+        A float value or np.nan if conversion is not possible.
 
     Examples
     --------
@@ -41,14 +33,32 @@ def safe_scalar(x):
     >>> safe_scalar("abc")
     nan
     """
+    # 1️⃣ Handle None or empty input
     if x is None:
         return np.nan
     if isinstance(x, (list, np.ndarray, pd.Series)):
         if len(x) == 0:
             return np.nan
-        return float(np.ravel(x)[0])
+        # Flatten & recurse on first element
+        return safe_scalar(np.ravel(x)[0], warn=warn)
+
+    # 2️⃣ Handle numeric and NaN values
+    if isinstance(x, (int, float, np.floating, np.integer)):
+        return np.nan if np.isnan(x) else float(x)
+
+    # 3️⃣ Try to convert strings like "3.14"
+    if isinstance(x, str):
+        try:
+            return float(x)
+        except ValueError:
+            if warn:
+                warnings.warn(f"⚠️ safe_scalar: could not convert string '{x}' to float.")
+            return np.nan
+
+    # 4️⃣ Fallback for unsupported types
     try:
         return float(x)
     except Exception:
-        warnings.warn(f"⚠️ safe_scalar: could not convert {x!r} to float.")
+        if warn:
+            warnings.warn(f"⚠️ safe_scalar: could not convert {x!r} to float.")
         return np.nan

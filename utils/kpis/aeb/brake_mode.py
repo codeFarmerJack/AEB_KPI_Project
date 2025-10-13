@@ -62,7 +62,7 @@ def brake_mode(mdf, kpi_table, row_idx, aeb_start_idx, pb_tgt_decel, fb_tgt_dece
         pb_start = aeb_start_idx + pb_idx[0]
         pb_end   = aeb_start_idx + pb_idx[-1]
         pb_dur   = time[pb_end] - time[pb_start]
-        kpi_table.at[row_idx, "pbDur"] = round(float(pb_dur), 2) if np.isfinite(pb_dur) else 0.0
+        kpi_table.at[row_idx, "pbDur"] = round(float(pb_dur), 3) if np.isfinite(pb_dur) else 0.0
     else:
         kpi_table.at[row_idx, "pbDur"] = 0.0
 
@@ -71,7 +71,7 @@ def brake_mode(mdf, kpi_table, row_idx, aeb_start_idx, pb_tgt_decel, fb_tgt_dece
         fb_start = aeb_start_idx + fb_idx[0]
         fb_end   = aeb_start_idx + fb_idx[-1]
         fb_dur   = time[fb_end] - time[fb_start]
-        kpi_table.at[row_idx, "fbDur"] = round(float(fb_dur), 2) if np.isfinite(fb_dur) else 0.0
+        kpi_table.at[row_idx, "fbDur"] = round(float(fb_dur), 3) if np.isfinite(fb_dur) else 0.0
     else:
         kpi_table.at[row_idx, "fbDur"] = 0.0
 

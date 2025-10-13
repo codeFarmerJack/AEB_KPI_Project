@@ -1,5 +1,6 @@
 import numpy as np
 from pipeline.base.base_event_segmenter import BaseEventSegmenter
+from utils.event_detector.aeb import detect_aeb_events
 
 
 class AebEventSegmenter(BaseEventSegmenter):
@@ -34,21 +35,16 @@ class AebEventSegmenter(BaseEventSegmenter):
             self.pb_tgt_decel      = self.PB_TGT_DECEL
 
     # -------------------- AEB-specific detection -------------------- #
-
     def detect_events(self, df):
-        time = df["time"].values
-        decel = df[self.signal_name].values
-        delta = np.diff(decel)
+        """Wrapper calling the shared detection function."""
+        if "time" not in df or self.signal_name not in df:
+            raise KeyError(f"DataFrame must contain 'time' and '{self.signal_name}' columns.")
 
-        locate_start = np.where(np.diff(delta < self.start_decel_delta))[0]
-        start_mask = decel[locate_start + 1] <= self.pb_tgt_decel
-        start_times = time[locate_start][start_mask]
-
-        locate_end = np.where(delta > self.end_decel_delta)[0]
-        end_times = time[locate_end]
-
-        if len(end_times) == 0 and len(start_times) > 0:
-            buffer_time = max(1.0, self.post_time + 4)
-            end_times = start_times + buffer_time
-
-        return start_times, end_times
+        return detect_aeb_events(
+            time=df["time"].values,
+            aeb_target_decel=df[self.signal_name].values,
+            start_decel_delta=self.start_decel_delta,
+            end_decel_delta=self.end_decel_delta,
+            pb_tgt_decel=self.pb_tgt_decel,
+            post_time=self.post_time,
+        )

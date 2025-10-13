@@ -8,6 +8,7 @@ from utils.signal_mdf import SignalMDF
 from utils.create_kpi_table import create_kpi_table_from_df
 from utils.data_utils import safe_scalar
 from utils.exporter import export_kpi_to_excel
+from utils.event_detector.fcw import detect_fcw_events
 
 # Import all FCW KPI functions (via __init__.py)
 from utils.kpis.fcw import *
@@ -19,49 +20,61 @@ from utils.kpis.fcw import *
 class FcwKpiExtractor:
     """Extracts FCW KPI metrics from MF4 chunks."""
 
-    # --- Fallback defaults ---
-    WINDOW_S     = 1.0   # seconds for jerk calculation window
-    JERK_THD     = 5.0   # m/s³ threshold for brake jerk detection
+    # --- Default fallback parameters ---
+    WINDOW_S             = 1.0     # seconds for jerk calculation window
+    JERK_NEG_THD         = -20.0   # m/s³ threshold for negative jerk
+    JERK_POS_THD         = 20.0    # m/s³ threshold for positive jerk
+    BRAKEJERK_MIN_SPEED  = 30.0    # minimum valid vehicle speed (kph)
+    BRAKEJERK_MAX_SPEED  = 130.0   # maximum valid vehicle speed (kph)
 
     def __init__(self, config, event_detector):
         if config is None or event_detector is None:
-            raise ValueError("Config and FcwEventSegmenter are required.")
+            raise ValueError("Config and EventDetector are required.")
         if not hasattr(event_detector, "path_to_fcw_chunks"):
             raise TypeError("event_detector must have path_to_fcw_chunks attribute.")
 
         # --- Setup paths ---
         self.path_to_mdf     = event_detector.path_to_mdf
         self.path_to_results = os.path.join(self.path_to_mdf, "analysis_results")
-
-        if not os.path.exists(self.path_to_results):
-            os.makedirs(self.path_to_results)
+        os.makedirs(self.path_to_results, exist_ok=True)
 
         self.path_to_chunks  = event_detector.path_to_fcw_chunks
         self.file_list       = [f for f in os.listdir(self.path_to_chunks) if f.endswith(".mf4")]
-
         if not self.file_list:
-            raise FileNotFoundError(f"No .mf4 files in {self.path_to_chunks}")
+            raise FileNotFoundError(f"No .mf4 files found in {self.path_to_chunks}")
 
-        # --- KPI table creation ---
+        # --- Create KPI table ---
         self.kpi_table = create_kpi_table_from_df(config.kpi_spec, feature="FCW")
 
-        # --- Initialize default parameters ---
+        # --- Initialize defaults and apply overrides ---
         self._apply_defaults()
-
-        # --- Apply overrides from Config.params (if present) ---
-        if hasattr(config, "params") and isinstance(config.params, dict):
-            params = config.params
-            print("⚙️ Applying parameter overrides from config.params")
-
-            self.window_s     = float(params.get("WINDOW_S", self.window_s))
-            self.jerk_thd     = float(params.get("JERK_THD", self.jerk_thd))
+        self._load_params_from_config(config)
 
         # --- Debug summary ---
         print(
             f"\n📊 FCW KPI Parameter Summary:\n"
-            f"   WINDOW_S     = {self.window_s}\n"
-            f"   JERK_THD     = {self.jerk_thd}\n"
+            f"   WINDOW_S             = {self.window_s}\n"
+            f"   JERK_NEG_THD         = {self.jerk_neg_thd}\n"
+            f"   JERK_POS_THD         = {self.jerk_pos_thd}\n"
+            f"   BRAKEJERK_MIN_SPEED  = {self.brakejerk_min_speed}\n"
+            f"   BRAKEJERK_MAX_SPEED  = {self.brakejerk_max_speed}\n"
         )
+
+    # ------------------------------------------------------------------ #
+    def _load_params_from_config(self, config):
+        """
+        Load parameter overrides from Excel Config.params sheet (if available).
+        """
+        if hasattr(config, "params") and isinstance(config.params, dict):
+            params = config.params
+
+            self.jerk_neg_thd        = float(params.get("JERK_NEG_THD", self.jerk_neg_thd))
+            self.jerk_pos_thd        = float(params.get("JERK_POS_THD", self.jerk_pos_thd))
+            self.window_s            = float(params.get("WINDOW_S", self.window_s))
+            self.brakejerk_min_speed = float(params.get("BRAKEJERK_MIN_SPEED", self.brakejerk_min_speed))
+            self.brakejerk_max_speed = float(params.get("BRAKEJERK_MAX_SPEED", self.brakejerk_max_speed))
+
+            print("⚙️ Loaded overrides from Config.params sheet")
 
     # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):
@@ -75,46 +88,44 @@ class FcwKpiExtractor:
                 self.kpi_table.insert(0, "label", "")
             self.kpi_table.loc[i, "label"] = fname
 
+            # --- Load MDF file ---
             try:
                 mdf = SignalMDF(fpath)
             except Exception as e:
                 warnings.warn(f"⚠️ Failed to read {fname}: {e}")
                 continue
 
-            # --- Extract key signals ---
-            time          = mdf.time
-            ego_speed     = mdf.egoSpeedKph
-            fcw_request   = mdf.fcwRequest
-            accel         = mdf.longAccelFilt
+            # --- Extract signals ---
+            time        = mdf.time
+            accel       = mdf.longActAccelFlt
+            fcw_request = mdf.fcwRequest
+            ego_speed   = mdf.egoSpeedKph
 
             if accel is None or fcw_request is None:
                 warnings.warn(f"⚠️ Missing accel or fcwRequest in {fname} → skipped.")
                 continue
 
             # --- FCW event detection ---
-            brake_jerk(mdf, self.kpi_table, i, window_s=self.window_s, jerk_thresh=self.jerk_thd)
+            start_times, end_times = detect_fcw_events(time, fcw_request)
+            if len(start_times) == 0:
+                print(f"⚠️ No FCW events detected in {fname}")
+                continue
 
-            # --- Save core timings ---
-            self.kpi_table.loc[i, "logTime"]         = safe_scalar(fcw_start_time)
+            # --- Use first FCW event ---
+            fcw_start_time = start_times[0]
+            fcw_end_time   = end_times[0] if len(end_times) > 0 else np.nan
+            self.kpi_table.loc[i, "logTime"] = safe_scalar(fcw_start_time)
 
-            if np.isfinite(safe_scalar(fcw_start_time)) and np.isfinite(safe_scalar(fcw_end_time)):
-                self.kpi_table.loc[i, "fcwDur"] = round(
-                    float(fcw_end_time) - float(fcw_start_time), 2
-                )
-
-            # --- Vehicle speed at start ---
+            # --- Vehicle speed at FCW start ---
+            fcw_start_idx = int(np.argmin(np.abs(time - fcw_start_time)))
             veh_spd = np.nan
-            if fcw_start_idx is not None and fcw_start_idx < len(ego_speed):
+            if ego_speed is not None and fcw_start_idx < len(ego_speed):
                 veh_spd = safe_scalar(ego_speed[fcw_start_idx])
             self.kpi_table.loc[i, "vehSpd"] = veh_spd
 
             # --- KPI metric calculations ---
-            # (Each subfunction updates kpi_table in place)
-            brake_jerk(mdf, self.kpi_table, i, fcw_start_idx)
-            # Add other FCW KPIs here (placeholders)
-            # e.g. peakDecel(), peakJerk(), fcw_latency()
+            brake_jerk(self, mdf, i)
 
-            # Round final KPI table for export
             self.kpi_table = self.kpi_table.round(3)
 
     # ------------------------------------------------------------------ #
@@ -125,13 +136,20 @@ class FcwKpiExtractor:
         except Exception as e:
             warnings.warn(f"⚠️ Failed to export FCW KPI results: {e}")
 
-# ------------------------------------------------------------------ #
+    # ------------------------------------------------------------------ #
     def _apply_defaults(self):
         """Apply default parameter values."""
-        self.window_s    = self.WINDOW_S
-        self.jerk_thd    = self.JERK_THD
+        self.window_s            = self.WINDOW_S
+        self.jerk_neg_thd        = self.JERK_NEG_THD
+        self.jerk_pos_thd        = self.JERK_POS_THD
+        self.brakejerk_min_speed = self.BRAKEJERK_MIN_SPEED
+        self.brakejerk_max_speed = self.BRAKEJERK_MAX_SPEED
 
         print(
             f"⚙️ Using default parameters: "
-            f"WINDOW_S={self.window_s}, JERK_THD={self.jerk_thd}, "
+            f"WINDOW_S={self.window_s}, "
+            f"JERK_NEG_THD={self.jerk_neg_thd}, "
+            f"JERK_POS_THD={self.jerk_pos_thd}, "
+            f"BRAKEJERK_MIN_SPEED={self.brakejerk_min_speed}, "
+            f"BRAKEJERK_MAX_SPEED={self.brakejerk_max_speed}"
         )

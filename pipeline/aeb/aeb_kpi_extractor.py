@@ -6,7 +6,7 @@ import pandas as pd
 # --- Local utils imports ---
 from utils.signal_mdf import SignalMDF
 from utils.create_kpi_table import create_kpi_table_from_df
-from utils.time_locators import find_aeb_intv_start, find_aeb_intv_end
+from utils.event_detector.aeb import find_aeb_intv_start, find_aeb_intv_end
 from utils.process_calibratables import interpolate_threshold_clamped
 from utils.data_utils import safe_scalar
 from utils.exporter import export_kpi_to_excel
@@ -106,21 +106,6 @@ class AebKpiExtractor:
         )
 
     # ------------------------------------------------------------------ #
-    def _apply_defaults(self):
-        """Fallback defaults if Config.params does not override them."""
-        self.pb_tgt_decel    = self.PB_TGT_DECEL
-        self.fb_tgt_decel    = self.FB_TGT_DECEL
-        self.tgt_tol         = self.TGT_TOL
-        self.aeb_end_thd     = self.AEB_END_THD
-        self.time_idx_offset = self.TIME_IDX_OFFSET
-
-        print(
-            f"⚙️ Using default parameters: "
-            f"PB_TGT_DECEL={self.pb_tgt_decel}, FB_TGT_DECEL={self.fb_tgt_decel}, "
-            f"TGT_TOL={self.tgt_tol}, AEB_END_THD={self.aeb_end_thd}"
-        )
-
-    # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):
         """Process all .mf4 chunk files and calculate KPIs."""
         for i, fname in enumerate(self.file_list):
@@ -169,7 +154,7 @@ class AebKpiExtractor:
 
             if np.isfinite(safe_scalar(aeb_start_time)) and np.isfinite(safe_scalar(aeb_end_time)):
                 self.kpi_table.loc[i, "intvDur"] = round(
-                    float(aeb_end_time) - float(aeb_start_time), 2
+                    float(aeb_end_time) - float(aeb_start_time), 3
                 )
 
             # --- Vehicle speed at start ---
@@ -212,3 +197,18 @@ class AebKpiExtractor:
             export_kpi_to_excel(self.kpi_table, self.path_to_results, sheet_name="aeb")
         except Exception as e:
             warnings.warn(f"⚠️ Failed to export AEB KPI results: {e}")
+
+    # ------------------------------------------------------------------ #
+    def _apply_defaults(self):
+        """Fallback defaults if Config.params does not override them."""
+        self.pb_tgt_decel    = self.PB_TGT_DECEL
+        self.fb_tgt_decel    = self.FB_TGT_DECEL
+        self.tgt_tol         = self.TGT_TOL
+        self.aeb_end_thd     = self.AEB_END_THD
+        self.time_idx_offset = self.TIME_IDX_OFFSET
+
+        print(
+            f"⚙️ Using default parameters: "
+            f"PB_TGT_DECEL={self.pb_tgt_decel}, FB_TGT_DECEL={self.fb_tgt_decel}, "
+            f"TGT_TOL={self.tgt_tol}, AEB_END_THD={self.aeb_end_thd}"
+        )
