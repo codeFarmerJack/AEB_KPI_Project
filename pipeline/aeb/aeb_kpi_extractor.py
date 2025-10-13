@@ -44,7 +44,7 @@ class AebKpiExtractor:
 
     def __init__(self, config, event_detector):
         if config is None or event_detector is None:
-            raise ValueError("Config and AebEventDetector are required.")
+            raise ValueError("Config and AebEventSegmenter are required.")
         if not hasattr(event_detector, "path_to_aeb_chunks"):
             raise TypeError("event_detector must have path_to_aeb_chunks attribute.")
 
@@ -203,7 +203,7 @@ class AebKpiExtractor:
             brake_mode(mdf, self.kpi_table, i, aeb_start_idx, self.pb_tgt_decel, self.fb_tgt_decel, self.tgt_tol)
             latency(mdf, self.kpi_table, i, aeb_start_idx)
 
-            self.kpi_table = self.kpi_table.round(2)
+            self.kpi_table = self.kpi_table.round(3)
 
     # ------------------------------------------------------------------ #
     def export_to_excel(self):

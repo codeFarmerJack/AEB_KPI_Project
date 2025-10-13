@@ -2,8 +2,8 @@ import numpy as np
 from pathlib import Path
 from config.config import Config
 from pipeline.input_handler import InputHandler
-from pipeline.aeb.aeb_event_detector import AebEventDetector
-from pipeline.aeb.kpi_extractor import AebKpiExtractor
+from pipeline.aeb.aeb_event_segmenter import AebEventSegmenter
+from pipeline.aeb.aeb_kpi_extractor import AebKpiExtractor
 from pipeline.AebVisualizer import AebVisualizer
 from asammdf import MDF
 import pandas as pd
@@ -53,8 +53,8 @@ def main():
     # --- Process MF4 files ---
     ih.process_mf4_files()
 
-    # --- Create AebEventDetector ---
-    event = AebEventDetector(ih, cfg)
+    # --- Create AebEventSegmenter ---
+    event = AebEventSegmenter(ih, cfg)
     print("\n🚦 Running event detection...\n")
     event.process_all_files()
     print("✅ Event detection finished.\n")

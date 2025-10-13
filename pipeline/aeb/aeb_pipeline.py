@@ -4,9 +4,8 @@ import pandas as pd
 from pathlib import Path
 
 from config.config import Config
-from pipeline.input_handler import InputHandler
-from pipeline.aeb.aeb_event_detector import AebEventDetector
-from pipeline.aeb.kpi_extractor import AebKpiExtractor
+from pipeline.aeb.aeb_event_segmenter import AebEventSegmenter
+from pipeline.aeb.aeb_kpi_extractor import AebKpiExtractor
 from pipeline.aeb.visualizer import AebVisualizer
 
 
@@ -24,24 +23,27 @@ class AebPipeline:
       5. Visualize results (interactive or static)
     """
 
-    def __init__(self, config_path: Path):
+    def __init__(self, config_path: Path, input_handler=None):
         self.config_path = Path(config_path)
         self.cfg         = None
-        self.ih          = None
+        self.ih          = input_handler   # can be injected externally
         self.event       = None
         self.kpi         = None
         self.viz         = None
 
     # ------------------------------------------------------------------ #
-    def run(self):
+    def run(self, skip_mf4_processing: bool = False):
         """Run the entire AEB pipeline sequentially."""
         print("\n🚀 Starting AEB Processing Pipeline...\n")
 
         # 1️⃣ Load configuration
         self._load_config()
 
-        # 2️⃣ Process MF4 files
-        self._process_mf4_files()
+        # 2️⃣ Process MF4 files (skip if external handler already provided)
+        if self.ih is None and not skip_mf4_processing:
+            self._process_mf4_files()
+        else:
+            print("🪄 Using external InputHandler instance.")
 
         # 3️⃣ Run event detection
         self._detect_events()
@@ -67,6 +69,7 @@ class AebPipeline:
     def _process_mf4_files(self):
         """Step 2: Process MF4 files using InputHandler."""
         print("\n➡️ [2/5] Processing MF4 files...")
+        from pipeline.input_handler import InputHandler  # imported only when needed
         try:
             self.ih = InputHandler(self.cfg)
             self.ih.process_mf4_files()
@@ -76,10 +79,10 @@ class AebPipeline:
 
     # ------------------------------------------------------------------ #
     def _detect_events(self):
-        """Step 4: Detect AEB events."""
+        """Step 3: Detect AEB events."""
         print("\n➡️ [3/5] Detecting AEB events...")
         try:
-            self.event = AebEventDetector(self.ih, self.cfg)
+            self.event = AebEventSegmenter(self.ih, self.cfg)
             print("🚦 Running event detection...\n")
             self.event.process_all_files()
             print("✅ Event detection finished.\n")
@@ -88,7 +91,7 @@ class AebPipeline:
 
     # ------------------------------------------------------------------ #
     def _extract_kpis(self):
-        """Step 5: Extract KPIs and export to Excel."""
+        """Step 4: Extract KPIs and export to Excel."""
         print("\n➡️ [4/5] Extracting KPIs...")
         try:
             self.kpi = AebKpiExtractor(self.cfg, self.event)
@@ -100,7 +103,7 @@ class AebPipeline:
 
     # ------------------------------------------------------------------ #
     def _visualize_results(self):
-        """Step 6: Visualization."""
+        """Step 5: Visualization."""
         print("\n➡️ [5/5] Launching visualization...\n")
         try:
             self.viz = AebVisualizer(self.cfg, self.kpi)

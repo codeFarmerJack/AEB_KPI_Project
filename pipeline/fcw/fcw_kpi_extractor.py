@@ -25,7 +25,7 @@ class FcwKpiExtractor:
 
     def __init__(self, config, event_detector):
         if config is None or event_detector is None:
-            raise ValueError("Config and FcwEventDetector are required.")
+            raise ValueError("Config and FcwEventSegmenter are required.")
         if not hasattr(event_detector, "path_to_fcw_chunks"):
             raise TypeError("event_detector must have path_to_fcw_chunks attribute.")
 
@@ -81,29 +81,21 @@ class FcwKpiExtractor:
                 warnings.warn(f"⚠️ Failed to read {fname}: {e}")
                 continue
 
-            # --- Time vector ---
-            time = mdf.time
-            if time is None or len(time) == 0:
-                try:
-                    time = mdf.get_master(0).flatten()
-                except Exception:
-                    n = len(mdf.groups[0].channels[0].samples) if mdf.groups else 0
-                    time = np.arange(n, dtype=float)
-                warnings.warn("⚠️ Synthesized time vector (equidistant).")
-
             # --- Extract key signals ---
+            time          = mdf.time
             ego_speed     = mdf.egoSpeedKph
             fcw_request   = mdf.fcwRequest
-            accel         = getattr(mdf, "vehAccel", None)
+            accel         = mdf.longAccelFilt
+
+            if accel is None or fcw_request is None:
+                warnings.warn(f"⚠️ Missing accel or fcwRequest in {fname} → skipped.")
+                continue
 
             # --- FCW event detection ---
-
+            brake_jerk(mdf, self.kpi_table, i, window_s=self.window_s, jerk_thresh=self.jerk_thd)
 
             # --- Save core timings ---
             self.kpi_table.loc[i, "logTime"]         = safe_scalar(fcw_start_time)
-            self.kpi_table.loc[i, "fcwStartTime"]    = safe_scalar(fcw_start_time)
-            self.kpi_table.loc[i, "isVehStopped"]    = bool(is_veh_stopped)
-            self.kpi_table.loc[i, "fcwEndTime"]      = safe_scalar(fcw_end_time)
 
             if np.isfinite(safe_scalar(fcw_start_time)) and np.isfinite(safe_scalar(fcw_end_time)):
                 self.kpi_table.loc[i, "fcwDur"] = round(
@@ -123,7 +115,7 @@ class FcwKpiExtractor:
             # e.g. peakDecel(), peakJerk(), fcw_latency()
 
             # Round final KPI table for export
-            self.kpi_table = self.kpi_table.round(2)
+            self.kpi_table = self.kpi_table.round(3)
 
     # ------------------------------------------------------------------ #
     def export_to_excel(self):
@@ -142,5 +134,4 @@ class FcwKpiExtractor:
         print(
             f"⚙️ Using default parameters: "
             f"WINDOW_S={self.window_s}, JERK_THD={self.jerk_thd}, "
-            f"FCW_END_THD={self.fcw_end_thd}, TIME_OFFSET={self.time_offset}"
         )

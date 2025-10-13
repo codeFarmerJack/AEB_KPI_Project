@@ -2,7 +2,7 @@ import numpy as np
 from pathlib import Path
 from config.config import Config
 from pipeline.input_handler import InputHandler
-from pipeline.fcw.fcw_event_detector import FcwEventDetector
+from pipeline.fcw.fcw_event_segmenter import FcwEventSegmenter
 from asammdf import MDF
 import pandas as pd
 
@@ -51,8 +51,8 @@ def main():
     # --- Process MF4 files ---
     ih.process_mf4_files()
 
-    # --- Create FcwEventDetector ---
-    event = FcwEventDetector(ih, cfg)
+    # --- Create FcwEventSegmenter ---
+    event = FcwEventSegmenter(ih, cfg)
     print("\n🚦 Running event detection...\n")
     event.process_all_files()
     print("✅ Event detection finished.\n")

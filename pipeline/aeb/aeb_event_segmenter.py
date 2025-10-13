@@ -1,8 +1,8 @@
 import numpy as np
-from pipeline.base.base_event_detector import BaseEventDetector
+from pipeline.base.base_event_segmenter import BaseEventSegmenter
 
 
-class AebEventDetector(BaseEventDetector):
+class AebEventSegmenter(BaseEventSegmenter):
     """Detects AEB events and extracts event chunks."""
 
     signal_name = "aebTargetDecel"

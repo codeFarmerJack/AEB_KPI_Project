@@ -1,12 +1,11 @@
 import os
 import gc
 import warnings
-import numpy as np
 import pandas as pd
 from utils.signal_mdf import SignalMDF
 
 
-class BaseEventDetector:
+class BaseEventSegmenter:
     """Base class for all event detectors (AEB, FCW, etc.)."""
 
     # --- Default pre/post timing (subclasses may override) ---
