@@ -27,8 +27,9 @@ class BaseEventSegmenter:
         if input_handler is None or not hasattr(input_handler, "path_to_raw_data"):
             raise TypeError(f"{self.__class__.__name__} requires an InputHandler instance.")
 
-        self.event_name = event_name.lower()
-        self.path_to_mdf = input_handler.path_to_raw_data
+        self.event_name         = event_name.lower()
+        self.path_to_mdf        = input_handler.path_to_raw_data
+        self.path_to_extracted  = input_handler.path_to_extracted
 
         # --- Set folder for extracted chunks ---
         self.path_to_chunks = os.path.join(self.path_to_mdf, f"{self.event_name}_chunks")
@@ -43,15 +44,15 @@ class BaseEventSegmenter:
 
     def process_all_files(self):
         """Loop over all *_extracted.mf4 files and detect/extract events."""
-        mdf_files = [f for f in os.listdir(self.path_to_mdf) if f.endswith("_extracted.mf4")]
-        print(f"\n📂 Found {len(mdf_files)} extracted MF4 files in {self.path_to_mdf}\n")
+        mdf_files = [f for f in os.listdir(self.path_to_extracted) if f.endswith("_extracted.mf4")]
+        print(f"\n📂 Found {len(mdf_files)} extracted MF4 files in {self.path_to_extracted}\n")
 
         if not mdf_files:
             print("⚠️ No extracted MF4 files found. Did you run InputHandler.process_mf4_files first?")
             return
 
         for fname in mdf_files:
-            file_path = os.path.join(self.path_to_mdf, fname)
+            file_path = os.path.join(self.path_to_extracted, fname)
             name, _ = os.path.splitext(fname)
 
             try:

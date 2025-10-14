@@ -6,6 +6,7 @@ from asammdf import MDF, Signal
 from utils.mf4_extractor import mf4_extractor
 from utils.signal_filters import accel_filter
 from utils.enum_loader import EnumMapper
+from utils.load_params import load_params_from_class, load_params_from_config
 
 # For folder selection
 import tkinter as tk
@@ -17,14 +18,12 @@ class InputHandler:
     InputHandler
     -------------
     Handles input configuration and processing of MF4 files.
-
-    Loads RESAMPLE_RATE from config (if available),
-    and processes all MF4 files in the selected folder.
     """
 
-    # --- Fallback default (used only if not defined in config) ---
-    RESAMPLE_RATE = 0.01   # seconds (100 Hz)
-    CUTOFF_FREQ   = 10.0   # Hz 
+    PARAM_SPECS = {
+        "resample_rate": {"default": 0.01, "type": float, "desc": "Resampling interval in seconds (e.g., 0.01 = 100 Hz)"},
+        "cutoff_freq": {"default": 10.0, "type": float, "desc": "Low-pass filter cutoff frequency in Hz"},
+    }
 
     def __init__(self, config):
         """
@@ -39,36 +38,14 @@ class InputHandler:
             raise TypeError("Config object must define signal_map")
 
         # --- Assign base attributes ---
-        self.signal_map = config.signal_map
-        self.path_to_raw_data = None
+        self.signal_map         = config.signal_map
+        self.path_to_raw_data   = None
+        self.path_to_extracted  = None
 
-        # --- Default fallback parameters ---
-        self.resample_rate = self.RESAMPLE_RATE
-        self.cutoff_freq   = self.CUTOFF_FREQ   # Hz (default for accel_filter)
-
-        # --- Load parameters from config.params if available ---
-        if hasattr(config, "params") and isinstance(config.params, dict):
-            params = config.params or {}
-
-            # RESAMPLE_RATE
-            if "RESAMPLE_RATE" in params:
-                try:
-                    self.resample_rate = float(params["RESAMPLE_RATE"])
-                    print(f"📈 Using RESAMPLE_RATE={self.resample_rate:.3f}s from config.")
-                except Exception as e:
-                    warnings.warn(f"⚠️ Invalid RESAMPLE_RATE in config: {e}")
-            
-            # CUTOFF_FREQ
-            if "CUTOFF_FREQ" in params:
-                try:
-                    self.cutoff_freq = float(params["CUTOFF_FREQ"])
-                    print(f"🎚 Using CUTOFF_FREQ={self.cutoff_freq:.1f} Hz from config.")
-                except Exception as e:
-                    warnings.warn(f"⚠️ Invalid CUTOFF_FREQ in config: {e}")
-
-        else:
-            print(f"⚙️ Using default RESAMPLE_RATE={self.resample_rate:.3f}s, "
-                f"CUTOFF_FREQ={self.cutoff_freq:.1f} Hz")
+        # --- Load parameters from class and then override with config ---
+        load_params_from_class(self)
+        if config:
+            load_params_from_config(self, config)
 
         # --- Prompt user for MF4 folder ---
         print("📂 Please select the MF4 folder...")
@@ -81,6 +58,10 @@ class InputHandler:
         
         self.path_to_raw_data = os.path.abspath(folder)
         print(f"✅ Selected MF4 folder: {self.path_to_raw_data}")
+
+        # --- Create subfolder for extracted files ---
+        self.path_to_extracted = os.path.join(self.path_to_raw_data, "extracted")
+        os.makedirs(self.path_to_extracted, exist_ok=True)
 
     # -------------------- Public API -------------------- #
     def process_mf4_files(self) -> None:
@@ -193,9 +174,15 @@ class InputHandler:
                     except Exception as e:
                         print(f"⚠️ Failed to append signal {col}: {e}")
 
+                # Extract just the base filename, e.g., "test.mf4" → "test_extracted.mf4"
+                base_name = os.path.splitext(os.path.basename(full_path))[0] + "_extracted.mf4"
 
-                extracted_file = os.path.splitext(full_path)[0] + "_extracted.mf4"
+                # Build the new path inside the extracted folder
+                extracted_file = os.path.join(self.path_to_extracted, base_name)
+
+                # Save to the extracted folder
                 new_mdf.save(extracted_file, overwrite=True)
+                
                 print(f"💾 Saved extracted + filtered signals → {extracted_file}")
 
             except Exception as e:
