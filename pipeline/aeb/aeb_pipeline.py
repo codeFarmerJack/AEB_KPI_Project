@@ -6,7 +6,7 @@ from pathlib import Path
 from config.config import Config
 from pipeline.aeb.aeb_event_segmenter import AebEventSegmenter
 from pipeline.aeb.aeb_kpi_extractor import AebKpiExtractor
-from pipeline.aeb.visualizer import AebVisualizer
+from pipeline.aeb.aeb_visualizer import AebVisualizer
 
 
 class AebPipeline:

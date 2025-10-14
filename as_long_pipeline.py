@@ -2,6 +2,7 @@ from pathlib import Path
 from config.config import Config
 from pipeline.input_handler import InputHandler
 from pipeline.aeb.aeb_pipeline import AebPipeline
+from pipeline.fcw.fcw_pipeline import FcwPipeline
 
 
 # --- Define paths ---
@@ -17,6 +18,6 @@ aeb = AebPipeline(config_path, input_handler=ih)
 aeb.run(skip_mf4_processing=True)
 
 # --- Create and run FCW pipeline ---
-#fcw = FcwPipeline(config_path, input_handler=ih)
-#fcw.run(skip_mf4_processing=True)
+fcw = FcwPipeline(config_path, input_handler=ih)
+fcw.run(skip_mf4_processing=True)
 

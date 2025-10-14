@@ -4,6 +4,7 @@ from config.config import Config
 from pipeline.input_handler import InputHandler
 from pipeline.fcw.fcw_event_segmenter import FcwEventSegmenter
 from pipeline.fcw.fcw_kpi_extractor import FcwKpiExtractor
+from pipeline.fcw.fcw_visualizer import FcwVisualizer
 from asammdf import MDF
 import pandas as pd
 
@@ -64,13 +65,11 @@ def main():
     kpi.export_to_excel()
 
     # --- Instantiate AebVisualizer (debug mode) ---
-    #print("\n🧩 Initializing AebVisualizer...\n")
-    #viz = AebVisualizer(cfg, kpi)
+    print("\n🧩 Initializing AebVisualizer...\n")
+    viz = FcwVisualizer(cfg, kpi)
+    viz.interactive = True  # enable zoomable interactive plots
+    viz.plot()
 
-    # --- Optional: enable interactive plots ---
-    # 👉 Set this to True if you want zoomable pop-ups.
-    #    You can also make this conditional on environment if desired.
-    
 
 if __name__ == "__main__":
     main()
