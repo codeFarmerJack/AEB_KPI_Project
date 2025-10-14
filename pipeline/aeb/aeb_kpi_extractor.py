@@ -10,6 +10,7 @@ from utils.event_detector.aeb import find_aeb_intv_start, find_aeb_intv_end
 from utils.process_calibratables import interpolate_threshold_clamped
 from utils.data_utils import safe_scalar
 from utils.exporter import export_kpi_to_excel
+from utils.load_params import load_params_from_class, load_params_from_config
 
 # Import all KPI functions directly via __init__.py
 from utils.kpis.aeb import *
@@ -35,12 +36,13 @@ class Thresholds:
 class AebKpiExtractor:
     """Extracts AEB KPI metrics from MF4 chunks."""
 
-    # --- Fallback defaults (used if not overridden by config) ---
-    PB_TGT_DECEL    = -6.0      # m/s²
-    FB_TGT_DECEL    = -15.0     # m/s²
-    TGT_TOL         = 0.2       # m/s²
-    AEB_END_THD     = -4.9      # m/s²
-    TIME_IDX_OFFSET = 300       # samples (~3s at 0.01s rate) 
+    PARAM_SPECS = {
+        "pb_tgt_decel":    {"default": -6.0,  "type": float, "desc": "AEB PB target decel"},
+        "fb_tgt_decel":    {"default": -15.0, "type": float, "desc": "AEB FB target decel"},
+        "tgt_tol":         {"default": 0.2,   "type": float, "desc": "Target tolerance"},
+        "aeb_end_thd":     {"default": -4.9,  "type": float, "desc": "AEB end threshold"},
+        "time_idx_offset": {"default": 300,   "type": int,   "desc": "Sample offset (~3s)"},
+    }
 
     def __init__(self, config, event_detector):
         if config is None or event_detector is None:
@@ -81,29 +83,9 @@ class AebKpiExtractor:
                 warnings.warn(f"⚠️ Missing calibratable '{cfg_key}' in config.")
                 self.calibratables[internal_name] = pd.DataFrame()
 
-        # --- Initialize parameters ---
-        self._apply_defaults()
-
-        # --- Apply parameter overrides from Config.params (if present) ---
-        if hasattr(config, "params") and isinstance(config.params, dict):
-            params = config.params
-            print("⚙️ Applying parameter overrides from config.params")
-
-            self.pb_tgt_decel    = float(params.get("PB_TGT_DECEL", self.pb_tgt_decel))
-            self.fb_tgt_decel    = float(params.get("FB_TGT_DECEL", self.fb_tgt_decel))
-            self.tgt_tol         = float(params.get("TGT_TOL", self.tgt_tol))
-            self.aeb_end_thd     = float(params.get("AEB_END_THD", self.aeb_end_thd))
-            self.time_idx_offset = int(params.get("TIME_IDX_OFFSET", self.time_idx_offset))
-
-        # --- Debug summary ---
-        print(
-            f"\n📊 KPI Parameter Summary:\n"
-            f"   PB_TGT_DECEL    = {self.pb_tgt_decel}\n"
-            f"   FB_TGT_DECEL    = {self.fb_tgt_decel}\n"
-            f"   TGT_TOL         = {self.tgt_tol}\n"
-            f"   AEB_END_THD     = {self.aeb_end_thd}\n"
-            f"   TIME_IDX_OFFSET = {self.time_idx_offset}\n"
-        )
+        # --- Load parameters (defaults + config overrides) ---
+        load_params_from_class(self)
+        load_params_from_config(self, config)
 
     # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):
@@ -198,17 +180,4 @@ class AebKpiExtractor:
         except Exception as e:
             warnings.warn(f"⚠️ Failed to export AEB KPI results: {e}")
 
-    # ------------------------------------------------------------------ #
-    def _apply_defaults(self):
-        """Fallback defaults if Config.params does not override them."""
-        self.pb_tgt_decel    = self.PB_TGT_DECEL
-        self.fb_tgt_decel    = self.FB_TGT_DECEL
-        self.tgt_tol         = self.TGT_TOL
-        self.aeb_end_thd     = self.AEB_END_THD
-        self.time_idx_offset = self.TIME_IDX_OFFSET
-
-        print(
-            f"⚙️ Using default parameters: "
-            f"PB_TGT_DECEL={self.pb_tgt_decel}, FB_TGT_DECEL={self.fb_tgt_decel}, "
-            f"TGT_TOL={self.tgt_tol}, AEB_END_THD={self.aeb_end_thd}"
-        )
+    

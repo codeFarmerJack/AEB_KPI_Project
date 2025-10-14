@@ -3,14 +3,25 @@ import gc
 import warnings
 import pandas as pd
 from utils.signal_mdf import SignalMDF
-
+from utils.load_params import load_params_from_class, load_params_from_config
 
 class BaseEventSegmenter:
     """Base class for all event detectors (AEB, FCW, etc.)."""
 
-    # --- Default pre/post timing (subclasses may override) ---
-    PRE_TIME_DEFAULT  = 6.0
-    POST_TIME_DEFAULT = 3.0
+    PARAM_SPECS = {
+        "pre_time": {
+            "default": 6.0,
+            "type": float,
+            "desc": "Seconds before event",
+            "aliases": ["pre_time_aeb", "pre_time_fcw", "pre_time_default"],
+        },
+        "post_time": {
+            "default": 3.0,
+            "type": float,
+            "desc": "Seconds after event",
+            "aliases": ["post_time_aeb", "post_time_fcw", "post_time_default"],
+        },
+    }
 
     def __init__(self, input_handler, config=None, event_name="base", pre_key=None, post_key=None):
         if input_handler is None or not hasattr(input_handler, "path_to_raw_data"):
@@ -23,19 +34,10 @@ class BaseEventSegmenter:
         self.path_to_chunks = os.path.join(self.path_to_mdf, f"{self.event_name}_chunks")
         os.makedirs(self.path_to_chunks, exist_ok=True)
 
-        # --- Load timing params from config ---
-        self.pre_time = self.PRE_TIME_DEFAULT
-        self.post_time = self.POST_TIME_DEFAULT
-        if config is not None and hasattr(config, "params"):
-            try:
-                params = config.params or {}
-                self.pre_time = float(params.get(pre_key, self.PRE_TIME_DEFAULT))
-                self.post_time = float(params.get(post_key, self.POST_TIME_DEFAULT))
-                print(f"⏱ {self.event_name.upper()}: Using PRE={self.pre_time}s, POST={self.post_time}s from config.")
-            except Exception as e:
-                warnings.warn(f"⚠️ Failed to load timing params for {self.event_name}: {e}")
-        else:
-            print(f"⚙️ Using default timing: PRE={self.pre_time}s, POST={self.post_time}s")
+        # load pre/post time keys
+        load_params_from_class(self)
+        if config:
+            load_params_from_config(self, config)
 
     # -------------------- Common file processing -------------------- #
 

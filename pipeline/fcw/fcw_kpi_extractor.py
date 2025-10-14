@@ -7,6 +7,7 @@ import pandas as pd
 from utils.signal_mdf import SignalMDF
 from utils.create_kpi_table import create_kpi_table_from_df
 from utils.data_utils import safe_scalar
+from utils.load_params import load_params_from_class, load_params_from_config
 from utils.exporter import export_kpi_to_excel
 from utils.event_detector.fcw import detect_fcw_events
 
@@ -45,10 +46,18 @@ class FcwKpiExtractor:
 
         # --- Create KPI table ---
         self.kpi_table = create_kpi_table_from_df(config.kpi_spec, feature="FCW")
-
-        # --- Initialize defaults and apply overrides ---
-        self._apply_defaults()
-        self._load_params_from_config(config)
+        
+        # --- Load parameters from class and config using mapping ---
+        mapping = {
+            "JERK_NEG_THD": "jerk_neg_thd",
+            "JERK_POS_THD": "jerk_pos_thd",
+            "WINDOW_S": "window_s",
+            "BRAKEJERK_MIN_SPEED": "brakejerk_min_speed",
+            "BRAKEJERK_MAX_SPEED": "brakejerk_max_speed",
+        }
+        # --- Load defaults then overrides ---
+        load_params_from_class(self, mapping)
+        load_params_from_config(self, config, mapping)
 
         # --- Debug summary ---
         print(
@@ -59,22 +68,6 @@ class FcwKpiExtractor:
             f"   BRAKEJERK_MIN_SPEED  = {self.brakejerk_min_speed}\n"
             f"   BRAKEJERK_MAX_SPEED  = {self.brakejerk_max_speed}\n"
         )
-
-    # ------------------------------------------------------------------ #
-    def _load_params_from_config(self, config):
-        """
-        Load parameter overrides from Excel Config.params sheet (if available).
-        """
-        if hasattr(config, "params") and isinstance(config.params, dict):
-            params = config.params
-
-            self.jerk_neg_thd        = float(params.get("JERK_NEG_THD", self.jerk_neg_thd))
-            self.jerk_pos_thd        = float(params.get("JERK_POS_THD", self.jerk_pos_thd))
-            self.window_s            = float(params.get("WINDOW_S", self.window_s))
-            self.brakejerk_min_speed = float(params.get("BRAKEJERK_MIN_SPEED", self.brakejerk_min_speed))
-            self.brakejerk_max_speed = float(params.get("BRAKEJERK_MAX_SPEED", self.brakejerk_max_speed))
-
-            print("⚙️ Loaded overrides from Config.params sheet")
 
     # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):
@@ -135,21 +128,3 @@ class FcwKpiExtractor:
             export_kpi_to_excel(self.kpi_table, self.path_to_results, sheet_name="fcw")
         except Exception as e:
             warnings.warn(f"⚠️ Failed to export FCW KPI results: {e}")
-
-    # ------------------------------------------------------------------ #
-    def _apply_defaults(self):
-        """Apply default parameter values."""
-        self.window_s            = self.WINDOW_S
-        self.jerk_neg_thd        = self.JERK_NEG_THD
-        self.jerk_pos_thd        = self.JERK_POS_THD
-        self.brakejerk_min_speed = self.BRAKEJERK_MIN_SPEED
-        self.brakejerk_max_speed = self.BRAKEJERK_MAX_SPEED
-
-        print(
-            f"⚙️ Using default parameters: "
-            f"WINDOW_S={self.window_s}, "
-            f"JERK_NEG_THD={self.jerk_neg_thd}, "
-            f"JERK_POS_THD={self.jerk_pos_thd}, "
-            f"BRAKEJERK_MIN_SPEED={self.brakejerk_min_speed}, "
-            f"BRAKEJERK_MAX_SPEED={self.brakejerk_max_speed}"
-        )

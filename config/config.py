@@ -45,7 +45,7 @@ class Config:
 
             try:
                 df = cfg.params.dropna(subset=["parameter", "value"]).copy()
-                df["parameter"] = df["parameter"].astype(str).str.strip().str.upper()
+                df["parameter"] = df["parameter"].astype(str).str.strip().str.lower()
 
                 param_dict = {}
                 type_dict  = {}
