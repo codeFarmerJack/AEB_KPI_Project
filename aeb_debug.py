@@ -4,7 +4,7 @@ from config.config import Config
 from pipeline.input_handler import InputHandler
 from pipeline.aeb.aeb_event_segmenter import AebEventSegmenter
 from pipeline.aeb.aeb_kpi_extractor import AebKpiExtractor
-from pipeline.AebVisualizer import AebVisualizer
+from pipeline.aeb.aeb_visualizer import AebVisualizer
 from asammdf import MDF
 import pandas as pd
 
