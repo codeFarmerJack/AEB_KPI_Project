@@ -8,13 +8,19 @@ class FcwEventSegmenter(BaseEventSegmenter):
 
     signal_name = "fcwRequest"
 
+    PARAM_SPECS = {
+        "pre_time": {"default": 6.0, "type": float, "desc": "time before event (duration)",
+                     "aliases": ["pre_time_fcw", "PRE_TIME_FCW"],},
+        "post_time": {"default": 3.0, "type": float, "desc": "time after event (duration)",
+            "aliases": ["post_time_fcw", "POST_TIME_FCW"],
+        },
+    }
+
     def __init__(self, input_handler, config=None):
         super().__init__(
             input_handler,
             config=config,
             event_name="fcw",
-            pre_key="PRE_TIME_FCW",
-            post_key="POST_TIME_FCW",
         )
 
         # Backward compatibility alias

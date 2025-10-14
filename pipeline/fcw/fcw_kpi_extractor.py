@@ -21,12 +21,13 @@ from utils.kpis.fcw import *
 class FcwKpiExtractor:
     """Extracts FCW KPI metrics from MF4 chunks."""
 
-    # --- Default fallback parameters ---
-    WINDOW_S             = 1.0     # seconds for jerk calculation window
-    JERK_NEG_THD         = -20.0   # m/s³ threshold for negative jerk
-    JERK_POS_THD         = 20.0    # m/s³ threshold for positive jerk
-    BRAKEJERK_MIN_SPEED  = 30.0    # minimum valid vehicle speed (kph)
-    BRAKEJERK_MAX_SPEED  = 130.0   # maximum valid vehicle speed (kph)
+    PARAM_SPECS = {
+        "window_s": {"default": 1.0, "type": float, "desc": "Sliding window duration for jerk calculation (s)",},
+        "jerk_neg_thd": {"default": -20.0, "type": float, "desc": "Negative jerk threshold (m/s³)",},
+        "jerk_pos_thd": {"default": 20.0, "type": float, "desc": "Positive jerk threshold (m/s³)",},
+        "brakejerk_min_speed": {"default": 30.0, "type": float, "desc": "Minimum valid speed for brake jerk (kph)",},
+        "brakejerk_max_speed": {"default": 130.0, "type": float, "desc": "Maximum valid speed for brake jerk (kph)",},
+    }
 
     def __init__(self, config, event_detector):
         if config is None or event_detector is None:
@@ -47,27 +48,10 @@ class FcwKpiExtractor:
         # --- Create KPI table ---
         self.kpi_table = create_kpi_table_from_df(config.kpi_spec, feature="FCW")
         
-        # --- Load parameters from class and config using mapping ---
-        mapping = {
-            "JERK_NEG_THD": "jerk_neg_thd",
-            "JERK_POS_THD": "jerk_pos_thd",
-            "WINDOW_S": "window_s",
-            "BRAKEJERK_MIN_SPEED": "brakejerk_min_speed",
-            "BRAKEJERK_MAX_SPEED": "brakejerk_max_speed",
-        }
         # --- Load defaults then overrides ---
-        load_params_from_class(self, mapping)
-        load_params_from_config(self, config, mapping)
+        load_params_from_class(self)
+        load_params_from_config(self, config)
 
-        # --- Debug summary ---
-        print(
-            f"\n📊 FCW KPI Parameter Summary:\n"
-            f"   WINDOW_S             = {self.window_s}\n"
-            f"   JERK_NEG_THD         = {self.jerk_neg_thd}\n"
-            f"   JERK_POS_THD         = {self.jerk_pos_thd}\n"
-            f"   BRAKEJERK_MIN_SPEED  = {self.brakejerk_min_speed}\n"
-            f"   BRAKEJERK_MAX_SPEED  = {self.brakejerk_max_speed}\n"
-        )
 
     # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):
