@@ -104,8 +104,6 @@ class BaseEventSegmenter:
                 print(f"⚠️ Skipping invalid window {start_sec:.3f}s → {stop_sec:.3f}s")
                 continue
 
-            print(f"   [DEBUG] Cutting {self.event_name.upper()} window: {start_sec:.3f}s → {stop_sec:.3f}s")
-
             try:
                 mdf_chunk = mdf.cut(start=start_sec, stop=stop_sec)
                 if not mdf_chunk or len(mdf_chunk.channels_db) == 0:

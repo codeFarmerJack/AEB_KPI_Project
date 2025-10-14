@@ -1,21 +1,13 @@
 import os
-import warnings
 import numpy as np
 import pandas as pd
-
-# --- Local utils imports ---
-from utils.signal_mdf import SignalMDF
-from utils.create_kpi_table import create_kpi_table_from_df
+import warnings
+from dataclasses import dataclass
+from pipeline.base.base_kpi_extractor import BaseKpiExtractor
 from utils.event_detector.aeb import find_aeb_intv_start, find_aeb_intv_end
 from utils.process_calibratables import interpolate_threshold_clamped
 from utils.data_utils import safe_scalar
-from utils.exporter import export_kpi_to_excel
-from utils.load_params import load_params_from_class, load_params_from_config
-
-# Import all KPI functions directly via __init__.py
 from utils.kpis.aeb import *
-
-from dataclasses import dataclass
 
 
 # ------------------------------------------------------------------ #
@@ -33,9 +25,10 @@ class Thresholds:
 # ------------------------------------------------------------------ #
 # AEB KPI Extractor
 # ------------------------------------------------------------------ #
-class AebKpiExtractor:
+class AebKpiExtractor(BaseKpiExtractor):
     """Extracts AEB KPI metrics from MF4 chunks."""
 
+    FEATURE_NAME = "AEB"
     PARAM_SPECS = {
         "pb_tgt_decel":    {"default": -6.0,  "type": float, "desc": "AEB PB target decel"},
         "fb_tgt_decel":    {"default": -15.0, "type": float, "desc": "AEB FB target decel"},
@@ -44,29 +37,11 @@ class AebKpiExtractor:
         "time_idx_offset": {"default": 300,   "type": int,   "desc": "Sample offset (~3s)"},
     }
 
+    # ------------------------------------------------------------------ #
     def __init__(self, config, event_detector):
-        if config is None or event_detector is None:
-            raise ValueError("Config and AebEventSegmenter are required.")
-        if not hasattr(event_detector, "path_to_aeb_chunks"):
-            raise TypeError("event_detector must have path_to_aeb_chunks attribute.")
+        super().__init__(config, event_detector, "path_to_aeb_chunks", feature_name="AEB")
 
-        # --- Setup paths ---
-        self.path_to_mdf     = event_detector.path_to_mdf
-        self.path_to_results = os.path.join(self.path_to_mdf, "analysis_results")
-        
-        if not os.path.exists(self.path_to_results):
-            os.makedirs(self.path_to_results)
-       
-        self.path_to_chunks  = event_detector.path_to_aeb_chunks
-        self.file_list       = [f for f in os.listdir(self.path_to_chunks) if f.endswith(".mf4")]
-
-        if not self.file_list:
-            raise FileNotFoundError(f"No .mf4 files in {self.path_to_chunks}")
-
-        # --- KPI table creation ---
-        self.kpi_table = create_kpi_table_from_df(config.kpi_spec, feature="AEB")
-
-        # --- Load calibratables safely ---
+        # --- Load calibratables ---
         expected_keys = {
             "SteeringWheelAngle_Th": "SteeringWheelAngle_Th",
             "AEB_SteeringAngleRate_Override": "AEB_SteeringAngleRate_Override",
@@ -83,42 +58,25 @@ class AebKpiExtractor:
                 warnings.warn(f"⚠️ Missing calibratable '{cfg_key}' in config.")
                 self.calibratables[internal_name] = pd.DataFrame()
 
-        # --- Load parameters (defaults + config overrides) ---
-        load_params_from_class(self)
-        load_params_from_config(self, config)
-
     # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):
-        """Process all .mf4 chunk files and calculate KPIs."""
+        """Process all AEB MF4 chunk files and calculate KPIs."""
         for i, fname in enumerate(self.file_list):
             fpath = os.path.join(self.path_to_chunks, fname)
-            print(f"🔍 Processing {fname}")
+            self._insert_label(i, fname)
 
-            if "label" not in self.kpi_table.columns:
-                self.kpi_table.insert(0, "label", "")
-            self.kpi_table.loc[i, "label"] = fname
-
-            try:
-                mdf = SignalMDF(fpath)
-            except Exception as e:
-                warnings.warn(f"⚠️ Failed to read {fname}: {e}")
+            mdf = self._load_mdf(fpath)
+            if mdf is None:
                 continue
 
             # --- Time vector ---
-            time = mdf.time
-            if time is None or len(time) == 0:
-                try:
-                    time = mdf.get_master(0).flatten()
-                except Exception:
-                    n = len(mdf.groups[0].channels[0].samples) if mdf.groups else 0
-                    time = np.arange(n, dtype=float)
-                warnings.warn("⚠️ Synthesized time vector (equidistant).")
+            time = self._prepare_time(mdf)
 
             # --- Signals ---
-            ego_speed     = mdf.egoSpeedKph   
+            ego_speed = mdf.egoSpeedKph
             aeb_tgt_decel = mdf.aebTargetDecel
 
-            # --- KPI event detection ---
+            # --- AEB event detection ---
             aeb_start_idx, aeb_start_time = find_aeb_intv_start(
                 {"aebTargetDecel": aeb_tgt_decel, "time": time}, self.pb_tgt_decel
             )
@@ -128,11 +86,11 @@ class AebKpiExtractor:
                 self.aeb_end_thd,
             )
 
-            # --- Save intervention info ---
+            # --- Save timing info ---
             self.kpi_table.loc[i, "logTime"]          = safe_scalar(aeb_start_time)
             self.kpi_table.loc[i, "aebIntvStartTime"] = safe_scalar(aeb_start_time)
-            self.kpi_table.loc[i, "isVehStopped"]     = bool(is_veh_stopped)
             self.kpi_table.loc[i, "aebIntvEndTime"]   = safe_scalar(aeb_end_time)
+            self.kpi_table.loc[i, "isVehStopped"]     = bool(is_veh_stopped)
 
             if np.isfinite(safe_scalar(aeb_start_time)) and np.isfinite(safe_scalar(aeb_end_time)):
                 self.kpi_table.loc[i, "intvDur"] = round(
@@ -145,7 +103,7 @@ class AebKpiExtractor:
                 veh_spd = safe_scalar(ego_speed[aeb_start_idx])
             self.kpi_table.loc[i, "vehSpd"] = veh_spd
 
-            # --- Thresholds ---
+            # --- Threshold interpolation ---
             thd = Thresholds(
                 steer_ang_th      = interpolate_threshold_clamped(self.calibratables["SteeringWheelAngle_Th"], veh_spd),
                 steer_ang_rate_th = interpolate_threshold_clamped(self.calibratables["AEB_SteeringAngleRate_Override"], veh_spd),
@@ -161,7 +119,7 @@ class AebKpiExtractor:
             self.kpi_table.loc[i, "yawRateSuspTh"]  = safe_scalar(thd.yaw_rate_susp_th)
             self.kpi_table.loc[i, "latAccelTh"]     = safe_scalar(thd.lat_accel_th)
 
-            # --- KPI metrics ---
+            # --- KPI computations ---
             distance(mdf, self.kpi_table, i, aeb_start_idx, aeb_end_idx)
             throttle(mdf, self.kpi_table, i, aeb_start_idx, thd.pedal_pos_inc_th)
             steering_wheel(mdf, self.kpi_table, i, aeb_start_idx, thd.steer_ang_th, thd.steer_ang_rate_th, self.time_idx_offset)
@@ -171,13 +129,3 @@ class AebKpiExtractor:
             latency(mdf, self.kpi_table, i, aeb_start_idx)
 
             self.kpi_table = self.kpi_table.round(3)
-
-    # ------------------------------------------------------------------ #
-    def export_to_excel(self):
-        """Export AEB KPI results to Excel (sheet: 'aeb')."""
-        try:
-            export_kpi_to_excel(self.kpi_table, self.path_to_results, sheet_name="aeb")
-        except Exception as e:
-            warnings.warn(f"⚠️ Failed to export AEB KPI results: {e}")
-
-    

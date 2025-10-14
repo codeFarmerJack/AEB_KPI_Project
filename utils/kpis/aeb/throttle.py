@@ -10,7 +10,7 @@ def throttle(mdf, kpi_table, row_idx, aeb_start_idx, pedal_pos_inc_th):
     - pedalPosAtStart : Pedal position at start of AEB intervention
     - pedalPosMax     : Maximum pedal position during AEB intervention
     - pedalPosInc     : Increment (Max - Start)
-    - isPedalHigh     : True if pedalPosInc exceeds threshold
+    - isPedalPosIncHigh : True if pedalPosInc exceeds threshold
     - isPedalOnAtStrt : True if pedal was pressed at AEB start
     """
     # Ensure required columns exist with correct dtype
@@ -18,7 +18,7 @@ def throttle(mdf, kpi_table, row_idx, aeb_start_idx, pedal_pos_inc_th):
         ("pedalPosAtStart", np.nan, "float"),
         ("pedalPosMax", np.nan, "float"),
         ("pedalPosInc", np.nan, "float"),
-        ("isPedalHigh", False, "boolean"),
+        ("isPedalPosIncHigh", False, "boolean"),
         ("isPedalOnAtStrt", False, "boolean"),
     ]:
         if col not in kpi_table.columns:
@@ -28,11 +28,11 @@ def throttle(mdf, kpi_table, row_idx, aeb_start_idx, pedal_pos_inc_th):
         throttle = np.asarray(mdf.throttleValue)
     except AttributeError:
         # Missing signal → set defaults
-        kpi_table.at[row_idx, "pedalPosAtStart"] = np.nan
-        kpi_table.at[row_idx, "pedalPosMax"]     = np.nan
-        kpi_table.at[row_idx, "pedalPosInc"]     = np.nan
-        kpi_table.at[row_idx, "isPedalHigh"]     = False
-        kpi_table.at[row_idx, "isPedalOnAtStrt"] = False
+        kpi_table.at[row_idx, "pedalPosAtStart"]    = np.nan
+        kpi_table.at[row_idx, "pedalPosMax"]        = np.nan
+        kpi_table.at[row_idx, "pedalPosInc"]        = np.nan
+        kpi_table.at[row_idx, "isPedalPosIncHigh"]  = False
+        kpi_table.at[row_idx, "isPedalOnAtStrt"]    = False
         return
 
     # Validate aeb_start_idx
@@ -41,11 +41,11 @@ def throttle(mdf, kpi_table, row_idx, aeb_start_idx, pedal_pos_inc_th):
         or aeb_start_idx < 0
         or aeb_start_idx >= len(throttle)
     ):
-        kpi_table.at[row_idx, "pedalPosAtStart"] = np.nan
-        kpi_table.at[row_idx, "pedalPosMax"]     = np.nan
-        kpi_table.at[row_idx, "pedalPosInc"]     = np.nan
-        kpi_table.at[row_idx, "isPedalHigh"]     = False
-        kpi_table.at[row_idx, "isPedalOnAtStrt"] = False
+        kpi_table.at[row_idx, "pedalPosAtStart"]    = np.nan
+        kpi_table.at[row_idx, "pedalPosMax"]        = np.nan
+        kpi_table.at[row_idx, "pedalPosInc"]        = np.nan
+        kpi_table.at[row_idx, "isPedalPosIncHigh"]  = False
+        kpi_table.at[row_idx, "isPedalOnAtStrt"]    = False
         return
 
     # Pedal at start
@@ -67,6 +67,6 @@ def throttle(mdf, kpi_table, row_idx, aeb_start_idx, pedal_pos_inc_th):
     kpi_table.at[row_idx, "pedalPosInc"] = pedal_inc if np.isfinite(pedal_inc) else np.nan
 
     # Threshold flag
-    kpi_table.at[row_idx, "isPedalHigh"] = (
+    kpi_table.at[row_idx, "isPedalPosIncHigh"] = (
         pedal_inc > pedal_pos_inc_th if np.isfinite(pedal_inc) else False
     )
