@@ -38,10 +38,10 @@ class FcwKpiExtractor(BaseKpiExtractor):
                 continue
 
             # --- Extract signals ---
-            time = self._prepare_time(mdf)
-            accel = mdf.longActAccelFlt
+            time        = self._prepare_time(mdf)
+            accel       = mdf.longActAccelFlt
             fcw_request = mdf.fcwRequest
-            ego_speed = mdf.egoSpeedKph
+            ego_speed   = mdf.egoSpeedKph
 
             if accel is None or fcw_request is None:
                 warnings.warn(f"⚠️ Missing accel or fcwRequest in {fname} → skipped.")
@@ -63,4 +63,7 @@ class FcwKpiExtractor(BaseKpiExtractor):
 
             # --- KPI metrics ---
             brake_jerk(self, mdf, i)
+            fcw_warning(self, mdf, i)
+
+            
             self.kpi_table = self.kpi_table.round(3)
