@@ -15,11 +15,11 @@ class FcwKpiExtractor(BaseKpiExtractor):
 
     FEATURE_NAME = "FCW"
     PARAM_SPECS = {
-        "window_s":            {"default": 1.0,   "type": float, "desc": "Sliding window duration (s)"},
-        "jerk_neg_thd":        {"default": -20.0, "type": float, "desc": "Negative jerk threshold (m/s³)"},
-        "jerk_pos_thd":        {"default": 20.0,  "type": float, "desc": "Positive jerk threshold (m/s³)"},
-        "brakejerk_min_speed": {"default": 30.0,  "type": float, "desc": "Minimum valid speed (kph)"},
-        "brakejerk_max_speed": {"default": 130.0, "type": float, "desc": "Maximum valid speed (kph)"},
+        "window_s":               {"default": 1.0,   "type": float, "desc": "Sliding window duration (s)"},
+        "brakejerk_jerk_neg_thd": {"default": -20.0, "type": float, "desc": "Negative jerk threshold (m/s³)"},
+        "brakejerk_jerk_pos_thd": {"default": 20.0,  "type": float, "desc": "Positive jerk threshold (m/s³)"},
+        "brakejerk_min_speed":    {"default": 30.0,  "type": float, "desc": "Minimum valid speed (kph)"},
+        "brakejerk_max_speed":    {"default": 130.0, "type": float, "desc": "Maximum valid speed (kph)"},
     }
 
     # ------------------------------------------------------------------ #
@@ -65,5 +65,5 @@ class FcwKpiExtractor(BaseKpiExtractor):
             brake_jerk(self, mdf, i)
             fcw_warning(self, mdf, i)
 
-            
+
             self.kpi_table = self.kpi_table.round(3)

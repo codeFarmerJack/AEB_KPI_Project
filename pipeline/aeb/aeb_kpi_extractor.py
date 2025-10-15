@@ -30,11 +30,13 @@ class AebKpiExtractor(BaseKpiExtractor):
 
     FEATURE_NAME = "AEB"
     PARAM_SPECS = {
-        "pb_tgt_decel":    {"default": -6.0,  "type": float, "desc": "AEB PB target decel"},
-        "fb_tgt_decel":    {"default": -15.0, "type": float, "desc": "AEB FB target decel"},
-        "tgt_tol":         {"default": 0.2,   "type": float, "desc": "Target tolerance"},
-        "aeb_end_thd":     {"default": -4.9,  "type": float, "desc": "AEB end threshold"},
-        "time_idx_offset": {"default": 300,   "type": int,   "desc": "Sample offset (~3s)"},
+        "pb_tgt_decel":           {"default": -6.0,  "type": float, "desc": "AEB PB target decel"},
+        "fb_tgt_decel":          {"default": -15.0, "type": float, "desc": "AEB FB target decel"},
+        "tgt_tol":                {"default": 0.2,   "type": float, "desc": "Target tolerance"},
+        "aeb_end_thd":            {"default": -4.9,  "type": float, "desc": "AEB end threshold"},
+        "time_idx_offset":        {"default": 300,   "type": int,   "desc": "Sample offset (~3s)"},
+        "aeb_jerk_neg_thd":       {"default": -20.0, "type": float, "desc": "AEB negative jerk threshold (m/s³)"},
+        "latency_window_samples": {"default": 30, "type": int, "desc": "Sample window after AEB start for latency detection"},
     }
 
     # ------------------------------------------------------------------ #
@@ -93,9 +95,7 @@ class AebKpiExtractor(BaseKpiExtractor):
             self.kpi_table.loc[i, "isVehStopped"]     = bool(is_veh_stopped)
 
             if np.isfinite(safe_scalar(aeb_start_time)) and np.isfinite(safe_scalar(aeb_end_time)):
-                self.kpi_table.loc[i, "intvDur"] = round(
-                    float(aeb_end_time) - float(aeb_start_time), 3
-                )
+                self.kpi_table.loc[i, "intvDur"] = round(float(aeb_end_time) - float(aeb_start_time), 3)
 
             # --- Vehicle speed at start ---
             veh_spd = np.nan
@@ -126,6 +126,6 @@ class AebKpiExtractor(BaseKpiExtractor):
             lat_accel(mdf, self.kpi_table, i, aeb_start_idx, thd.lat_accel_th, self.time_idx_offset)
             yaw_rate(mdf, self.kpi_table, i, aeb_start_idx, thd.yaw_rate_susp_th, self.time_idx_offset)
             brake_mode(mdf, self.kpi_table, i, aeb_start_idx, self.pb_tgt_decel, self.fb_tgt_decel, self.tgt_tol)
-            latency(mdf, self.kpi_table, i, aeb_start_idx)
+            latency(mdf, self.kpi_table, i, aeb_start_idx, self.aeb_jerk_neg_thd, self.latency_window_samples)
 
             self.kpi_table = self.kpi_table.round(3)

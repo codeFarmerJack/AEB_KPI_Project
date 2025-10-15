@@ -1,6 +1,7 @@
 import numpy as np
 import warnings
 from utils.data_utils import safe_scalar
+from utils.event_detector.decel import detect_decel_onset, detect_brake_jerk_end
 
 
 def brake_jerk(self, mdf, row_idx: int):
@@ -18,8 +19,8 @@ def brake_jerk(self, mdf, row_idx: int):
     """
 
     kpi_table = self.kpi_table
-    neg_thd   = self.jerk_neg_thd
-    pos_thd   = self.jerk_pos_thd
+    neg_thd   = self.brakejerk_jerk_neg_thd
+    pos_thd   = self.brakejerk_jerk_pos_thd
     min_spd   = self.brakejerk_min_speed
     max_spd   = self.brakejerk_max_speed
 
@@ -46,7 +47,7 @@ def brake_jerk(self, mdf, row_idx: int):
         print(f"   ⚠️ No valid brake jerk detected ({reason}) → filled 0s.")
         return
 
-    # --- Detect FCW rising edge ---
+    # --- Detect BrakeJerk rising edge ---
     edges = np.where((fcw[:-1] < 3) & (fcw[1:] >= 3))[0]
     if len(edges) == 0:
         _fill_zero("no FCW trigger")
@@ -80,13 +81,16 @@ def brake_jerk(self, mdf, row_idx: int):
         _fill_zero("no jerk peaks")
         return
 
-    # Choose earliest negative and last positive after it
-    i0 = neg_idx[0]
-    i1_candidates = pos_idx[pos_idx > i0]
-    if len(i1_candidates) == 0:
+    # detect start/end of brake jerk
+    i0 = detect_decel_onset(jerk, neg_thd)
+    i1 = detect_brake_jerk_end(jerk, pos_thd, i0)
+
+    if i0 is None:
+        _fill_zero("no negative jerk start")
+        return
+    if i1 is None:
         _fill_zero("no positive recovery")
         return
-    i1 = i1_candidates[-1]
 
     # --- Duration and sanity check ---
     dur = tw[i1] - tw[i0]

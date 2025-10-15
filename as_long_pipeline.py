@@ -10,7 +10,7 @@ config_path = Path("/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_kpi_extractor
 
 # --- Shared input handler ---
 cfg = Config.from_json(config_path)
-ih = InputHandler(cfg)
+ih  = InputHandler(cfg)
 ih.process_mf4_files()   # Process MF4 files once for both pipelines
 
 # --- Create and run AEB pipeline ---
