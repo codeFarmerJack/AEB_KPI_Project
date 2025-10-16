@@ -1,26 +1,26 @@
 import numpy as np
 from scipy.signal import argrelextrema
 
-def detect_aeb_events(time, aeb_target_decel, start_decel_delta=-30.0,
-                      end_decel_delta=29.0, pb_tgt_decel=-6.0,
-                      post_time=3.0):
+import numpy as np
+import warnings
+
+def detect_aeb_events(time, aeb_request, post_time=3.0):
     """
-    Detect start and end times of AEB (Autonomous Emergency Braking) events.
+    Detect AEB (Autonomous Emergency Braking) events based on aebRequest signal transitions.
+
+    Logic
+    -----
+    • Start → when aebRequest changes *to* 1 or 2.
+    • End   → when aebRequest changes *from* 1, 2, or 3 *to* 0.
 
     Parameters
     ----------
     time : np.ndarray
-        Time vector (seconds, increasing).
-    aeb_target_decel : np.ndarray
-        AEB target deceleration signal.
-    start_decel_delta : float, optional
-        Threshold for strong negative decel delta (AEB start).
-    end_decel_delta : float, optional
-        Threshold for positive decel delta (AEB end).
-    pb_tgt_decel : float, optional
-        Deceleration threshold for PB activation (start mask).
+        Time vector (seconds, monotonically increasing).
+    aeb_request : np.ndarray
+        Integer or float signal representing AEB request state (e.g., 0, 1, 2, 3).
     post_time : float, optional
-        Fallback end time if end not found (seconds).
+        Safety buffer if an end is not detected before the signal ends.
 
     Returns
     -------
@@ -31,29 +31,45 @@ def detect_aeb_events(time, aeb_target_decel, start_decel_delta=-30.0,
     """
 
     time = np.asarray(time, dtype=float)
-    decel = np.asarray(aeb_target_decel, dtype=float)
+    req = np.asarray(aeb_request, dtype=float)
 
-    if len(time) != len(decel) or len(time) == 0:
+    if len(time) != len(req) or len(time) == 0:
         raise ValueError("Input arrays must be the same length and non-empty.")
 
-    # First derivative of deceleration
-    delta = np.diff(decel)
+    # --- Identify transitions ---
+    start_indices = []
+    end_indices = []
 
-    # --- Start detection ---
-    locate_start = np.where(np.diff(delta < start_decel_delta))[0]
-    start_mask = decel[locate_start + 1] <= pb_tgt_decel
-    start_times = time[locate_start][start_mask]
+    for i in range(1, len(req)):
+        prev, curr = req[i - 1], req[i]
 
-    # --- End detection ---
-    locate_end = np.where(delta > end_decel_delta)[0]
-    end_times = time[locate_end]
+        # Detect rising transition → AEB start
+        if curr in (1, 2) and prev not in (1, 2):
+            start_indices.append(i)
 
-    # --- Handle missing end events ---
-    if len(end_times) == 0 and len(start_times) > 0:
-        buffer_time = max(1.0, post_time + 4)
-        end_times = start_times + buffer_time
+        # Detect falling transition → AEB end
+        if prev in (1, 2, 3) and curr == 0:
+            end_indices.append(i)
+
+    # --- Pair start and end events ---
+    start_times = []
+    end_times = []
+
+    for s in start_indices:
+        # Find first end index after this start
+        e_candidates = [e for e in end_indices if e > s]
+        if e_candidates:
+            e = e_candidates[0]
+            start_times.append(time[s])
+            end_times.append(time[e])
+        else:
+            # No matching end found → fallback to +post_time
+            start_times.append(time[s])
+            end_times.append(min(time[-1], time[s] + post_time))
+            warnings.warn(f"⚠️ No AEB end found after {time[s]:.3f}s — used +{post_time:.1f}s buffer.")
 
     return np.array(start_times), np.array(end_times)
+
 
 def find_first_last_indices(vector, target_value, comparison_mode="equal", tolerance=0.0):
     """

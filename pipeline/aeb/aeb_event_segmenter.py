@@ -6,13 +6,7 @@ from utils.event_detector.aeb import detect_aeb_events
 class AebEventSegmenter(BaseEventSegmenter):
     """Detects AEB events and extracts event chunks."""
 
-    signal_name = "aebTargetDecel"
-
-    PARAM_SPECS = {
-        "start_decel_delta": {"default": -30.0, "type": float, "desc": "Δ start decel threshold"},
-        "end_decel_delta":   {"default": 29.0,  "type": float, "desc": "Δ end decel threshold"},
-        "pb_tgt_decel":      {"default": -6.0,  "type": float, "desc": "AEB PB target decel"},
-    }
+    signal_name = "aebRequest"
 
     def __init__(self, input_handler, config=None):
         super().__init__(
@@ -32,9 +26,6 @@ class AebEventSegmenter(BaseEventSegmenter):
 
         return detect_aeb_events(
             time=df["time"].values,
-            aeb_target_decel=df[self.signal_name].values,
-            start_decel_delta=self.start_decel_delta,
-            end_decel_delta=self.end_decel_delta,
-            pb_tgt_decel=self.pb_tgt_decel,
+            aeb_request=df[self.signal_name].values,
             post_time=self.post_time,
         )
