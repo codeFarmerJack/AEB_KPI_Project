@@ -8,14 +8,7 @@ import plotly.io as pio
 from plotly.tools import mpl_to_plotly
 from collections import defaultdict
 
-
-
 class ScatterPlotter:
-    """
-    MATLAB-equivalent grouped scatter plotter (class version).
-    Each instance manages plotting configuration, figure caching,
-    and export (PNG + interactive HTML).
-    """
 
     def __init__(self, obj):
         self.graph_spec      = obj.graph_spec
@@ -75,6 +68,7 @@ class ScatterPlotter:
         y_label       = str(self.graph_spec.loc[graph_idx, "axis_name"])
         legend_name   = str(self.graph_spec.loc[graph_idx, "legend"])
         connect_flag  = self._resolve_connect_flag(self.graph_spec.loc[graph_idx, "connectpoints"])
+        avg_flag      = str(self.graph_spec.loc[graph_idx, "average"]).strip().lower() == "true"
         ax.set_ylabel(y_label.replace("_", " "))
 
         self._series_labels[title].append(legend_name)
@@ -106,6 +100,26 @@ class ScatterPlotter:
             ax.plot(x_vals, y_vals, linestyle="-", marker=marker, color=color, label=legend_name)
         else:
             ax.scatter(x_vals, y_vals, marker=marker, color=color, label=legend_name)
+
+        # Add average line if enabled
+        if avg_flag and len(y_vals) > 0:
+            y_avg = float(np.nanmean(y_vals))
+
+            # Get X range from the axis itself (not just data)
+            x_min, x_max = ax.get_xlim()
+
+            # Draw a full-width horizontal line
+            ax.plot(
+                [x_min, x_max],
+                [y_avg, y_avg],
+                "--",
+                color="black",
+                linewidth=1.2,
+                alpha=0.7,
+                label=f"Average {legend_name}: {y_avg:.3f}",
+                zorder=5
+            )
+            print(f"➕ Added average line for '{legend_name}' at y={y_avg:.3f}")
 
         # === Finalize if last in group === #
         if is_last:
@@ -204,26 +218,28 @@ class ScatterPlotter:
 
     def _finalize_figure(self, title, fig, ax, enabled_rows):
         """Finalize figure export and cleanup."""
-        # Add calibration limits first (these bring their own legend labels)
+        # Add calibration limits (each adds its own legend entry)
         for row in enabled_rows:
             cal_limit = str(self.graph_spec.loc[row, "calibration_lim"]).strip().lower()
             if cal_limit not in ["none", "nan", ""]:
                 self._add_calibration_limit(cal_limit, ax)
 
-        # De-duplicate legend (matplotlib side) so we export a clean structure
-        if ax.get_legend_handles_labels()[1]:
+        # Ensure Matplotlib legend exists before export
+        handles, labels = ax.get_legend_handles_labels()
+        if labels:
             ax.legend(fontsize=8, loc="upper right")
 
+        # Assign unique group ID and output paths
         group_id = next(self._group_counter)
         out_name_html = f"Fig_{group_id:02d} - {title}.html"
         out_path_html = os.path.join(self.path_to_output, out_name_html)
 
         print(f"🌐 Exporting interactive HTML for '{title}' ...")
         try:
-            # ---- Matplotlib -> Plotly ----
+            # ---- Convert to Plotly ----
             plotly_fig = mpl_to_plotly(fig, strip_style=True)
 
-            # (1) RESPONSIVENESS: remove fixed sizing and enable autosize
+            # === FIX 1: Responsiveness ===
             plotly_fig.layout.width = None
             plotly_fig.layout.height = None
             plotly_fig.update_layout(
@@ -238,43 +254,47 @@ class ScatterPlotter:
                 ),
             )
 
-            # (2) LEGENDS: rename non-calibration traces using recorded labels
-            data_labels = list(self._series_labels.get(title, []))  # copy
-            # map lower-case calibratable keys back to canonical key
-            cal_key_map = {k.lower(): k for k in self.calibratables.keys()}
+            # === FIX 2: Legend naming correction (correct order + include averages) ===
+            data_labels = list(self._series_labels.get(title, []))
+            expected_labels = []
 
-            # First pass: fix names
-            for tr in plotly_fig.data:
-                tname = getattr(tr, "name", None)
-                tnamel = tname.lower() if isinstance(tname, str) else ""
+            # For each scatter, expect one optional average line after it
+            for lbl in data_labels:
+                expected_labels.append(lbl)  # scatter first
 
-                # If it already matches a calibration key (possibly modified by mpl_to_plotly), normalize its case
-                if tnamel in cal_key_map:
-                    tr.name = cal_key_map[tnamel]
-                    continue
+                # Try to recover numeric average value from the Matplotlib legend
+                avg_handle_labels = [l for l in labels if l.startswith(f"Average {lbl}")]
+                if avg_handle_labels:
+                    avg_lbl = avg_handle_labels[0]  # e.g., "Average Dead Time: 0.188"
+                else:
+                    avg_lbl = f"Average {lbl}"
+                expected_labels.append(avg_lbl)
 
-                # Otherwise assign the next data series label (scatter/stem line, etc.)
-                if data_labels:
-                    tr.name = data_labels.pop(0)
+            # Plotly reverses trace order; fix and apply correct labels
+            traces = list(reversed(plotly_fig.data))
+            for i, tr in enumerate(traces):
+                if i < len(expected_labels):
+                    tr.name = expected_labels[i]
+            plotly_fig.data = tuple(reversed(traces))  # restore visual order
 
-            # Second pass: show each legend entry once (avoid duplicates)
+            # === FIX 3: Ensure all legend entries are visible and unique ===
             seen = set()
             for tr in plotly_fig.data:
-                nm = getattr(tr, "name", "") or ""
-                if nm not in seen:
+                nm = getattr(tr, "name", "")
+                if nm not in seen and nm.strip():
                     tr.showlegend = True
                     seen.add(nm)
                 else:
                     tr.showlegend = False
 
-            # Write responsive HTML (Plotly will stretch to container width)
+            # === Export responsive HTML ===
             pio.write_html(
                 plotly_fig,
                 file=out_path_html,
                 full_html=True,
                 include_plotlyjs="cdn",
                 auto_open=False,
-                config={"responsive": True},  # key flag for auto-resize
+                config={"responsive": True},
             )
             print(f"✅ Saved interactive HTML → {out_name_html}")
 
@@ -290,9 +310,10 @@ class ScatterPlotter:
             plt.close(fig)
             print(f"💾 Non-interactive mode: figure saved only.")
 
-        # Clear per-title caches
+        # Cleanup caches
         if title in self._fig_cache:
             del self._fig_cache[title]
         if title in self._series_labels:
             del self._series_labels[title]
+
 
