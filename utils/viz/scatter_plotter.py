@@ -21,7 +21,8 @@ class ScatterPlotter:
         self.interactive     = getattr(obj, "interactive", False)
         self._fig_cache      = {}
         self._group_counter  = getattr(obj, "_group_counter", iter(range(1, 100)))
-        self._series_labels  = defaultdict(list)  # track legend labels per title
+        self._series_labels  = defaultdict(list)   
+        self._draw_labels    = defaultdict(list)  # authoritative draw-order ledger
 
     # ==========================================================
     # Public API
@@ -101,24 +102,19 @@ class ScatterPlotter:
         else:
             ax.scatter(x_vals, y_vals, marker=marker, color=color, label=legend_name)
 
+        self._draw_labels[title].append(legend_name)     # <-- record
+
+
         # Add average line if enabled
         if avg_flag and len(y_vals) > 0:
             y_avg = float(np.nanmean(y_vals))
-
-            # Get X range from the axis itself (not just data)
             x_min, x_max = ax.get_xlim()
+            avg_label = f"Average {legend_name}: {y_avg:.3f}"
 
-            # Draw a full-width horizontal line
-            ax.plot(
-                [x_min, x_max],
-                [y_avg, y_avg],
-                "--",
-                color="black",
-                linewidth=1.2,
-                alpha=0.7,
-                label=f"Average {legend_name}: {y_avg:.3f}",
-                zorder=5
-            )
+            ax.plot([x_min, x_max], [y_avg, y_avg], "--",
+                    color="black", linewidth=1.2, alpha=0.7,
+                    label=avg_label, zorder=5)
+            self._draw_labels[title].append(avg_label)   # <-- record
             print(f"➕ Added average line for '{legend_name}' at y={y_avg:.3f}")
 
         # === Finalize if last in group === #
@@ -201,7 +197,7 @@ class ScatterPlotter:
             return bool(cp_raw)
         return str(cp_raw).strip().lower() in ["true", "1", "yes", "y"]
 
-    def _add_calibration_limit(self, cal_limit, ax):
+    def _add_calibration_limit(self, cal_limit, ax, title):
         if not cal_limit or str(cal_limit).lower() == "none":
             return
         cal_key = next((k for k in self.calibratables.keys() if k.lower() == cal_limit.lower()), None)
@@ -212,34 +208,84 @@ class ScatterPlotter:
         if not (isinstance(lim, dict) and "x" in lim and "y" in lim):
             warnings.warn(f"⚠️ Calibration {cal_limit} found but not in (x,y) format.")
             return
+
         ax.plot(lim["x"], lim["y"], "r--", linewidth=1.5, label=f"{cal_key}")
-        ax.relim()
-        ax.autoscale_view()
+        self._draw_labels[title].append(str(cal_key))   # <-- record
+        ax.relim(); ax.autoscale_view()
+
 
     def _finalize_figure(self, title, fig, ax, enabled_rows):
-        """Finalize figure export and cleanup."""
-        # Add calibration limits (each adds its own legend entry)
+        # 1) Draw calibrations (they also get recorded into _draw_labels)
         for row in enabled_rows:
             cal_limit = str(self.graph_spec.loc[row, "calibration_lim"]).strip().lower()
             if cal_limit not in ["none", "nan", ""]:
-                self._add_calibration_limit(cal_limit, ax)
+                self._add_calibration_limit(cal_limit, ax, title)
 
-        # Ensure Matplotlib legend exists before export
+        # Matplotlib legend (visual only)
         handles, labels = ax.get_legend_handles_labels()
         if labels:
             ax.legend(fontsize=8, loc="upper right")
 
-        # Assign unique group ID and output paths
         group_id = next(self._group_counter)
         out_name_html = f"Fig_{group_id:02d} - {title}.html"
         out_path_html = os.path.join(self.path_to_output, out_name_html)
 
+        # ---------------- Build desired labels from the ledger ----------------
+        raw = list(self._draw_labels.get(title, []))  # exact order of how you drew things
+
+        cal_key_map = {k.lower(): k for k in self.calibratables.keys()}
+        calibratables, series_labels, avg_labels = [], [], []
+
+        for lbl in raw:
+            low = lbl.lower()
+            if low in cal_key_map:
+                calibratables.append(cal_key_map[low])
+            elif lbl.startswith("Average "):
+                avg_labels.append(lbl)  # Average <series>: <value>
+            else:
+                series_labels.append(lbl)
+
+        # ---- Title-specific ordering rules ----
+        tl = str(title).lower()
+
+        # FIGURE 03 rule (PedalPosPro*): Calibratable first, then Star=Max Throttle Value,
+        # then Triangle=Max throttle increase during AEB
+        if "pedalpospro" in tl:
+            prio = {
+                "max throttle value": 0,
+                "max throttle increase during aeb": 1,
+            }
+            series_labels.sort(key=lambda s: prio.get(s.lower(), 999))
+
+        # FIGURE 08 rule (AEB Braking Distances): ★ First, ▲ Stable, ◆ Actuation, ● Stop gap
+        if "aeb braking distances" in tl:
+            prio = {
+                "first detection dist": 0,
+                "stable detection dist": 1,
+                "aeb actuation dist": 2,
+                "aeb stop gap": 3,
+            }
+            series_labels.sort(key=lambda s: prio.get(s.lower(), 999))
+
+            # Keep each average next to its series (if present)
+            ordered_avg = []
+            for s in series_labels:
+                # find matching "Average <s>"
+                match = next((a for a in avg_labels if a.startswith(f"Average {s}")), None)
+                if match:
+                    ordered_avg.append(match)
+            avg_labels = ordered_avg  # only averages that match the sorted order
+
+        # Final desired order: calibratables first (for Fig 03), then series, then their averages
+        desired_series = series_labels[:]  # keep copy
+        desired = calibratables + series_labels + avg_labels
+
+        # ---------------- Convert → Plotly & assign by trace type ----------------
         print(f"🌐 Exporting interactive HTML for '{title}' ...")
         try:
-            # ---- Convert to Plotly ----
             plotly_fig = mpl_to_plotly(fig, strip_style=True)
 
-            # === FIX 1: Responsiveness ===
+            # Responsive layout
             plotly_fig.layout.width = None
             plotly_fig.layout.height = None
             plotly_fig.update_layout(
@@ -254,40 +300,51 @@ class ScatterPlotter:
                 ),
             )
 
-            # === FIX 2: Legend naming correction (correct order + include averages) ===
-            data_labels = list(self._series_labels.get(title, []))
-            expected_labels = []
+            traces = list(plotly_fig.data)
 
-            # For each scatter, expect one optional average line after it
-            for lbl in data_labels:
-                expected_labels.append(lbl)  # scatter first
+            # Partition traces by type
+            scatter_traces = [t for t in traces if getattr(t, "mode", "") and "markers" in t.mode]
+            line_only_traces = [t for t in traces if getattr(t, "mode", "") and "lines" in t.mode and "markers" not in t.mode]
 
-                # Try to recover numeric average value from the Matplotlib legend
-                avg_handle_labels = [l for l in labels if l.startswith(f"Average {lbl}")]
-                if avg_handle_labels:
-                    avg_lbl = avg_handle_labels[0]  # e.g., "Average Dead Time: 0.188"
+            # Identify average (black dashed) vs calibratable (remaining line-only)
+            def _is_black(c):
+                if c is None: return False
+                s = str(c).replace(" ", "").lower()
+                return s.startswith("rgb(0,0,0)") or s.startswith("rgba(0,0,0")
+
+            avg_line_traces = []
+            cal_line_traces = []
+            for t in line_only_traces:
+                lc = getattr(getattr(t, "line", None), "color", None)
+                if _is_black(lc):
+                    avg_line_traces.append(t)
                 else:
-                    avg_lbl = f"Average {lbl}"
-                expected_labels.append(avg_lbl)
+                    cal_line_traces.append(t)
 
-            # Plotly reverses trace order; fix and apply correct labels
-            traces = list(reversed(plotly_fig.data))
-            for i, tr in enumerate(traces):
-                if i < len(expected_labels):
-                    tr.name = expected_labels[i]
-            plotly_fig.data = tuple(reversed(traces))  # restore visual order
+            # Assign names deterministically by type
 
-            # === FIX 3: Ensure all legend entries are visible and unique ===
+            # 1) Calibratables
+            for t, lbl in zip(cal_line_traces, calibratables):
+                t.name = lbl
+
+            # 2) Series (non-average) in your required order
+            for t, lbl in zip(scatter_traces, desired_series):
+                t.name = lbl
+
+            # 3) Averages (black dashed) in the same order as desired_avg (built above)
+            for t, lbl in zip(avg_line_traces, avg_labels):
+                t.name = lbl
+
+            # Ensure legend shows each entry once
             seen = set()
-            for tr in plotly_fig.data:
-                nm = getattr(tr, "name", "")
-                if nm not in seen and nm.strip():
-                    tr.showlegend = True
+            for t in traces:
+                nm = (getattr(t, "name", "") or "").strip()
+                if nm and nm not in seen:
+                    t.showlegend = True
                     seen.add(nm)
                 else:
-                    tr.showlegend = False
+                    t.showlegend = False
 
-            # === Export responsive HTML ===
             pio.write_html(
                 plotly_fig,
                 file=out_path_html,
@@ -297,6 +354,7 @@ class ScatterPlotter:
                 config={"responsive": True},
             )
             print(f"✅ Saved interactive HTML → {out_name_html}")
+            print(f"🧭 Legend order used: {desired}")
 
         except Exception as e:
             warnings.warn(f"⚠️ Failed to export Plotly HTML: {e}")
@@ -304,16 +362,14 @@ class ScatterPlotter:
             fig.savefig(png_path, dpi=400, bbox_inches="tight")
             print(f"💾 Fallback PNG saved → {png_path}")
 
+        # Cleanup
         if self.interactive:
             plt.show(block=True)
         else:
             plt.close(fig)
-            print(f"💾 Non-interactive mode: figure saved only.")
+            print("💾 Non-interactive mode: figure saved only.")
 
-        # Cleanup caches
-        if title in self._fig_cache:
-            del self._fig_cache[title]
-        if title in self._series_labels:
-            del self._series_labels[title]
-
+        self._fig_cache.pop(title, None)
+        self._series_labels.pop(title, None)
+        self._draw_labels.pop(title, None)
 
