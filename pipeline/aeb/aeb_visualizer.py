@@ -1,7 +1,7 @@
 import os
 import warnings
 import pandas as pd
-from utils.viz.scatter_plotter import scatter_plotter
+from utils.viz.scatter_plotter import ScatterPlotter
 from pipeline.base.base_visualizer import BaseVisualizer
 
 
@@ -41,6 +41,9 @@ class AebVisualizer(BaseVisualizer):
         print(f"📊 Found {num_graphs} plot definitions in GraphSpec.")
         print("🎨 Launching visualization...\n")
 
+        # Initialize the plotter here to reuse the same instance across all plots
+        plotter = ScatterPlotter(self)
+        
         for j in range(1, num_graphs):
             plot_type = str(self.graph_spec.loc[j, "plottype"]).strip().lower()
             title = str(self.graph_spec.loc[j, "title"]).strip()
@@ -48,7 +51,7 @@ class AebVisualizer(BaseVisualizer):
 
             try:
                 if plot_type == "scatter":
-                    scatter_plotter(self, j)
+                    plotter.plot(j)
                 elif plot_type == "stem":
                     warnings.warn(f"⚙️ Stem plot at row {j} not yet implemented.")
                 elif plot_type == "pie":

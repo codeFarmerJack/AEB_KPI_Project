@@ -1,5 +1,5 @@
 import warnings
-from utils.viz.scatter_plotter import scatter_plotter
+from utils.viz.scatter_plotter import ScatterPlotter
 from pipeline.base.base_visualizer import BaseVisualizer
 
 
@@ -28,13 +28,16 @@ class FcwVisualizer(BaseVisualizer):
         num_graphs = len(self.graph_spec)
         print(f"📊 Found {num_graphs} FCW plot definitions.\n")
 
+        # Initialize the plotter here to reuse the same instance across all plots
+        plotter = ScatterPlotter(self)
+
         for j in range(1, num_graphs):
             plot_type = str(self.graph_spec.loc[j, "plottype"]).strip().lower()
             title = str(self.graph_spec.loc[j, "title"]).strip()
             print(f"🎨 [FCW] Plotting [{plot_type.upper()}] — {title}")
             try:
                 if plot_type == "scatter":
-                    scatter_plotter(self, j)
+                    plotter.plot(j)
             except Exception as e:
                 warnings.warn(f"⚠️ FCW plot failed at row {j}: {e}")
 
