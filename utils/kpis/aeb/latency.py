@@ -140,12 +140,12 @@ class AebLatencyCalculator:
         comm_latency = max(t_decel_knee - t_pb_fb, 0.0)
 
         # --- Step 7: summary print
-        print(
-            f"🛰️ [Row {row_idx}] Communication Latency:\n"
-            f"   • PB→FB transition @ {t_pb_fb:.3f} s (idx={fb_start_idx})\n"
-            f"   • Decel knee       @ {t_decel_knee:.3f} s (idx={resp_idx_abs})\n"
-            f"   → commLatency = {comm_latency:.3f} s\n"
-        )
+        #print(
+        #    f"🛰️ [Row {row_idx}] Communication Latency:\n"
+        #    f"   • PB→FB transition @ {t_pb_fb:.3f} s (idx={fb_start_idx})\n"
+        #    f"   • Decel knee       @ {t_decel_knee:.3f} s (idx={resp_idx_abs})\n"
+        #    f"   → commLatency = {comm_latency:.3f} s\n"
+        #)
 
         return {"comm_latency": round(comm_latency, 3)}
 

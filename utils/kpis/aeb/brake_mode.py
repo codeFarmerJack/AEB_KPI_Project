@@ -105,8 +105,8 @@ class AebBrakeModeCalculator:
         kpi_table.at[row_idx, "isFBOn"] = is_fb_on
 
         # --- Step 6: Debug print
-        print(
-            f"🧩 [Row {row_idx}] Brake Mode Detection:\n"
-            f"   • PB: {'ON' if is_pb_on else 'OFF'} | Duration = {kpi_table.at[row_idx, 'pbDur']:.3f} s (before FB)\n"
-            f"   • FB: {'ON' if is_fb_on else 'OFF'} | Duration = {kpi_table.at[row_idx, 'fbDur']:.3f} s\n"
-        )
+        #print(
+        #    f"🧩 [Row {row_idx}] Brake Mode Detection:\n"
+        #    f"   • PB: {'ON' if is_pb_on else 'OFF'} | Duration = {kpi_table.at[row_idx, 'pbDur']:.3f} s (before FB)\n"
+        #    f"   • FB: {'ON' if is_fb_on else 'OFF'} | Duration = {kpi_table.at[row_idx, 'fbDur']:.3f} s\n"
+        #)
