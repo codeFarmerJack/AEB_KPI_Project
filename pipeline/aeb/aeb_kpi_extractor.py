@@ -11,6 +11,7 @@ from utils.kpis.aeb import *
 from utils.kpis.aeb.latency import AebLatencyCalculator
 from utils.kpis.aeb.brake_mode import AebBrakeModeCalculator
 from utils.kpis.aeb.distance import AebDistanceCalculator
+from utils.kpis.aeb.throttle import AebThrottleCalculator
 
 
 # ------------------------------------------------------------------ #
@@ -68,6 +69,7 @@ class AebKpiExtractor(BaseKpiExtractor):
         self.latency_calc       = AebLatencyCalculator(self)
         self.brake_mode_calc    = AebBrakeModeCalculator(self)
         self.distance_calc      = AebDistanceCalculator(self)
+        self.throttle_calc      = AebThrottleCalculator(self)
 
     # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):
@@ -133,7 +135,7 @@ class AebKpiExtractor(BaseKpiExtractor):
             # --- KPI computations ---
             
             self.distance_calc.compute_distance(mdf, self.kpi_table, i, aeb_start_idx, aeb_end_idx)
-            throttle(mdf, self.kpi_table, i, aeb_start_idx, thd.pedal_pos_inc_th)
+            self.throttle_calc.compute_throttle(mdf, self.kpi_table, i, aeb_start_idx, thd.pedal_pos_inc_th)
             steering_wheel(mdf, self.kpi_table, i, aeb_start_idx, thd.steer_ang_th, thd.steer_ang_rate_th, self.time_idx_offset)
             lat_accel(mdf, self.kpi_table, i, aeb_start_idx, thd.lat_accel_th, self.time_idx_offset)
             yaw_rate(mdf, self.kpi_table, i, aeb_start_idx, thd.yaw_rate_susp_th, self.time_idx_offset)
