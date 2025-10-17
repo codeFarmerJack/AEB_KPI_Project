@@ -19,7 +19,8 @@ class AebLatencyCalculator:
         """
         Initialize using parameters from the parent AebKpiExtractor instance.
         """
-        self.neg_thd                = extractor.aeb_jerk_neg_thd
+        self.aeb_jerk_neg_thd       = extractor.aeb_jerk_neg_thd
+        self.fb_jerk_neg_thd        = extractor.fb_jerk_neg_thd
         self.latency_window_samples = extractor.latency_window_samples
         self.pb_tgt_decel           = extractor.pb_tgt_decel
         self.fb_tgt_decel           = extractor.fb_tgt_decel
@@ -56,7 +57,7 @@ class AebLatencyCalculator:
 
         # Compute jerk and detect onset
         jerk = np.gradient(accel[start_idx:end_idx + 1], time[start_idx:end_idx + 1])
-        resp_idx_rel = detect_decel_onset(jerk, self.neg_thd)
+        resp_idx_rel = detect_decel_onset(jerk, self.aeb_jerk_neg_thd)
 
         if resp_idx_rel is not None:
             resp_idx_abs = start_idx + resp_idx_rel
@@ -80,7 +81,7 @@ class AebLatencyCalculator:
         2. Detect transition to full braking (FB).
         3. Define PB→FB transition as communication start time.
         4. Search within a time window after FB for actual decel onset
-            (knee point) based on jerk threshold.
+        (knee point) based on jerk threshold.
         5. Latency = (decel knee time) - (PB→FB transition time)
         """
         time = np.asarray(mdf.time)
@@ -121,10 +122,13 @@ class AebLatencyCalculator:
             warnings.warn(f"[Row {row_idx}] Invalid latency window after FB; commLatency=0.")
             return {"comm_latency": 0.0}
 
-        # --- Step 4: find knee point (vehicle response)
-        jerk = np.gradient(accel[fb_start_idx:end_idx + 1], time[fb_start_idx:end_idx + 1])
-        resp_idx_rel = detect_decel_onset(jerk, self.neg_thd)
+        # --- Step 4: compute jerk
+        accel_window = accel[fb_start_idx:end_idx + 1]
+        time_window = time[fb_start_idx:end_idx + 1]
+        jerk = np.gradient(accel_window, time_window)
 
+        # --- Step 5: detect decel onset
+        resp_idx_rel = detect_decel_onset(jerk, self.fb_jerk_neg_thd)
         if resp_idx_rel is None:
             warnings.warn(f"[Row {row_idx}] No decel onset detected after FB; commLatency=0.")
             return {"comm_latency": 0.0}
@@ -132,9 +136,10 @@ class AebLatencyCalculator:
         resp_idx_abs = fb_start_idx + resp_idx_rel
         t_decel_knee = time[resp_idx_abs]
 
-        # --- Step 5: compute latency
+        # --- Step 6: compute latency
         comm_latency = max(t_decel_knee - t_pb_fb, 0.0)
 
+        # --- Step 7: summary print
         print(
             f"🛰️ [Row {row_idx}] Communication Latency:\n"
             f"   • PB→FB transition @ {t_pb_fb:.3f} s (idx={fb_start_idx})\n"
@@ -143,3 +148,4 @@ class AebLatencyCalculator:
         )
 
         return {"comm_latency": round(comm_latency, 3)}
+

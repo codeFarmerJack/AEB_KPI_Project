@@ -8,7 +8,8 @@ from utils.event_detector.aeb import find_aeb_intv_start, find_aeb_intv_end
 from utils.process_calibratables import interpolate_threshold_clamped
 from utils.data_utils import safe_scalar
 from utils.kpis.aeb import *
-from utils.kpis.aeb.latency_01 import AebLatencyCalculator
+from utils.kpis.aeb.latency import AebLatencyCalculator
+from utils.kpis.aeb.brake_mode import AebBrakeModeCalculator
 
 
 # ------------------------------------------------------------------ #
@@ -38,7 +39,8 @@ class AebKpiExtractor(BaseKpiExtractor):
         "time_idx_offset":        {"default": 300,   "type": int,   "desc": "Sample offset (~3s)"},
         "aeb_jerk_neg_thd":       {"default": -20.0, "type": float, "desc": "AEB negative jerk threshold (m/s³)"},
         "latency_window_samples": {"default": 30, "type": int, "desc": "Sample window after AEB start for latency detection"},
-        "pb_duration":            {"default": 0.32,  "type": float, "desc": "Minimum duration (s) for partial braking"}
+        "pb_duration":            {"default": 0.32,  "type": float, "desc": "Minimum duration (s) for partial braking"},
+        "fb_jerk_neg_thd":        {"default": -20.0, "type": float, "desc": "FB negative jerk threshold (m/s³)"},
     }
 
     # ------------------------------------------------------------------ #
@@ -62,7 +64,8 @@ class AebKpiExtractor(BaseKpiExtractor):
                 warnings.warn(f"⚠️ Missing calibratable '{cfg_key}' in config.")
                 self.calibratables[internal_name] = pd.DataFrame()
 
-        self.latency_calc = AebLatencyCalculator(self)
+        self.latency_calc       = AebLatencyCalculator(self)
+        self.brake_mode_calc    = AebBrakeModeCalculator(self)
 
     # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):
@@ -70,6 +73,8 @@ class AebKpiExtractor(BaseKpiExtractor):
         for i, fname in enumerate(self.file_list):
             fpath = os.path.join(self.path_to_chunks, fname)
             self._insert_label(i, fname)
+
+            print(f"\n📊 Processing AEB KPI for file {i + 1}/{len(self.file_list)}: {fname}")
 
             mdf = self._load_mdf(fpath)
             if mdf is None:
@@ -130,7 +135,7 @@ class AebKpiExtractor(BaseKpiExtractor):
             steering_wheel(mdf, self.kpi_table, i, aeb_start_idx, thd.steer_ang_th, thd.steer_ang_rate_th, self.time_idx_offset)
             lat_accel(mdf, self.kpi_table, i, aeb_start_idx, thd.lat_accel_th, self.time_idx_offset)
             yaw_rate(mdf, self.kpi_table, i, aeb_start_idx, thd.yaw_rate_susp_th, self.time_idx_offset)
-            brake_mode(mdf, self.kpi_table, i, aeb_start_idx, self.pb_tgt_decel, self.fb_tgt_decel, self.tgt_tol)
+            self.brake_mode_calc.compute_brake_mode(mdf, self.kpi_table, i, aeb_start_idx)
             self.latency_calc.compute_all(mdf, self.kpi_table, i, aeb_start_idx)
 
             self.kpi_table = self.kpi_table.round(3)
