@@ -14,11 +14,11 @@ ih  = InputHandler(cfg)
 ih.process_mf4_files()   # Process MF4 files once for both pipelines
 
 # --- Create and run AEB pipeline ---
-aeb = AebPipeline(config_path, input_handler=ih)
-aeb.run(skip_mf4_processing=True)
+#aeb = AebPipeline(config_path, input_handler=ih)
+#aeb.run(skip_mf4_processing=True)
 
 # --- Create and run FCW pipeline ---
-#fcw = FcwPipeline(config_path, input_handler=ih)
-#fcw.run(skip_mf4_processing=True)
+fcw = FcwPipeline(config_path, input_handler=ih)
+fcw.run(skip_mf4_processing=True)
 
 

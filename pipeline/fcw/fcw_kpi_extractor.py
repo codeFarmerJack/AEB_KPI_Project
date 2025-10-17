@@ -5,6 +5,7 @@ from pipeline.base.base_kpi_extractor import BaseKpiExtractor
 from utils.event_detector.fcw import detect_fcw_events
 from utils.data_utils import safe_scalar
 from utils.kpis.fcw import *
+from utils.kpis.fcw.brake_jerk import FcwBrakeJerkCalculator
 
 
 # ------------------------------------------------------------------ #
@@ -26,12 +27,18 @@ class FcwKpiExtractor(BaseKpiExtractor):
     def __init__(self, config, event_detector):
         super().__init__(config, event_detector, "path_to_fcw_chunks", feature_name="FCW")
 
+        # --- Initialize submodules ---
+        self.brake_jerk_calc = FcwBrakeJerkCalculator(self)
+
     # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):
         """Process all FCW MF4 chunk files and calculate KPIs."""
         for i, fname in enumerate(self.file_list):
             fpath = os.path.join(self.path_to_chunks, fname)
             self._insert_label(i, fname)
+
+            # print progress
+            print(f"\n📊 Processing FCW KPI for file {i + 1}/{len(self.file_list)}: {fname}")
 
             mdf = self._load_mdf(fpath)
             if mdf is None:
@@ -62,7 +69,7 @@ class FcwKpiExtractor(BaseKpiExtractor):
             self.kpi_table.loc[i, "vehSpd"] = veh_spd
 
             # --- KPI metrics ---
-            brake_jerk(self, mdf, i)
+            self.brake_jerk_calc.compute_brake_jerk(mdf, self.kpi_table, i)
             fcw_warning(self, mdf, i)
 
 
