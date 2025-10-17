@@ -8,19 +8,11 @@ class AebThrottleCalculator:
     Computes throttle-related KPIs during an AEB event.
 
     KPIs extracted:
-      • pedalPosAtStart   – Pedal position at start of AEB intervention
-      • pedalPosMax       – Maximum pedal position during AEB event
-      • pedalPosInc       – Increment (Max - Start)
-      • isPedalPosIncHigh – True if pedalPosInc exceeds threshold
-      • isPedalOnAtStrt   – True if pedal was pressed at AEB start
-
-    Constructed from an AebKpiExtractor instance:
-
-        self.throttle_calc = AebThrottleCalculator(self)
-
-    Called within the KPI loop:
-
-        self.throttle_calc.compute_throttle(mdf, self.kpi_table, i, aeb_start_idx)
+      • pedalPosAtStart   - Pedal position at start of AEB intervention
+      • pedalPosMax       - Maximum pedal position during AEB event
+      • pedalPosInc       - Increment (Max - Start)
+      • isPedalPosIncHigh - True if pedalPosInc exceeds threshold
+      • isPedalOnAtStrt   - True if pedal was pressed at AEB start
     """
 
     # ------------------------------------------------------------------

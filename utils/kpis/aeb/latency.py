@@ -9,9 +9,6 @@ class AebLatencyCalculator:
     Calculates AEB system latencies, including:
       1. Vehicle response latency (jerk / decel onset)
       2. Communication latency (PB→FB transition)
-
-    Constructed directly from an AebKpiExtractor instance:
-        self.latency_calc = AebLatencyCalculator(self)
     """
 
     # ------------------------------------------------------------------

@@ -8,20 +8,10 @@ class AebSteeringCalculator:
     Analyzes steering wheel behavior during an AEB event.
 
     KPIs extracted:
-      • absSteerMaxDeg       – Maximum absolute steering angle (°)
-      • isSteerHigh          – True if absSteerMaxDeg > steer_ang_th
-      • absSteerRateMaxDeg   – Maximum absolute steering angle rate (°/s)
-      • isSteerAngRateHigh   – True if absSteerRateMaxDeg > steer_ang_rate_th
-
-    Constructed from an AebKpiExtractor instance:
-
-        self.steering_calc = AebSteeringCalculator(self)
-
-    Called within the KPI loop:
-
-        self.steering_calc.compute_steering(
-            mdf, self.kpi_table, i, aeb_start_idx
-        )
+      • absSteerMaxDeg       - Maximum absolute steering angle (°)
+      • isSteerHigh          - True if absSteerMaxDeg > steer_ang_th
+      • absSteerRateMaxDeg   - Maximum absolute steering angle rate (°/s)
+      • isSteerAngRateHigh   - True if absSteerRateMaxDeg > steer_ang_rate_th
     """
 
     # ------------------------------------------------------------------

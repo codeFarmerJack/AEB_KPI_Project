@@ -7,14 +7,6 @@ class AebBrakeModeCalculator:
     """
     Determines Partial Braking (PB) and Full Braking (FB)
     activation and durations for AEB events.
-
-    Constructed from an AebKpiExtractor instance:
-
-        self.brake_mode_calc = AebBrakeModeCalculator(self)
-
-    Called within the KPI loop:
-
-        self.brake_mode_calc.compute_brake_mode(mdf, self.kpi_table, i, aeb_start_idx)
     """
 
     # ------------------------------------------------------------------
@@ -81,26 +73,26 @@ class AebBrakeModeCalculator:
                 if len(pb_idx) == 0:
                     is_pb_on = False
                 else:
-                    pb_start = aeb_start_idx + pb_idx[0]
-                    pb_end = aeb_start_idx + pb_idx[-1]
-                    pb_dur_val = time[pb_end] - time[pb_start]
+                    pb_start    = aeb_start_idx + pb_idx[0]
+                    pb_end      = aeb_start_idx + pb_idx[-1]
+                    pb_dur_val  = time[pb_end] - time[pb_start]
             else:
-                pb_start = aeb_start_idx + pb_idx[0]
-                pb_end = aeb_start_idx + pb_idx[-1]
-                pb_dur_val = time[pb_end] - time[pb_start]
+                pb_start    = aeb_start_idx + pb_idx[0]
+                pb_end      = aeb_start_idx + pb_idx[-1]
+                pb_dur_val  = time[pb_end] - time[pb_start]
 
         # --- Step 4: Compute FB duration
         if is_fb_on:
-            fb_start = aeb_start_idx + fb_idx[0]
-            fb_end = aeb_start_idx + fb_idx[-1]
-            fb_dur = time[fb_end] - time[fb_start]
-            fb_dur_val = round(float(fb_dur), 3) if np.isfinite(fb_dur) else 0.0
+            fb_start    = aeb_start_idx + fb_idx[0]
+            fb_end      = aeb_start_idx + fb_idx[-1]
+            fb_dur      = time[fb_end] - time[fb_start]
+            fb_dur_val  = round(float(fb_dur), 3) if np.isfinite(fb_dur) else 0.0
         else:
             fb_dur_val = 0.0
 
         # --- Step 5: Write to KPI table
-        kpi_table.at[row_idx, "pbDur"] = round(float(pb_dur_val), 3) if np.isfinite(pb_dur_val) else 0.0
-        kpi_table.at[row_idx, "fbDur"] = fb_dur_val
+        kpi_table.at[row_idx, "pbDur"]  = round(float(pb_dur_val), 3) if np.isfinite(pb_dur_val) else 0.0
+        kpi_table.at[row_idx, "fbDur"]  = fb_dur_val
         kpi_table.at[row_idx, "isPBOn"] = is_pb_on
         kpi_table.at[row_idx, "isFBOn"] = is_fb_on
 

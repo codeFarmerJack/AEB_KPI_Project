@@ -10,14 +10,6 @@ class AebDistanceCalculator:
       • stableDetDist  — Distance where longGap becomes continuously non-zero
       • aebIntvDist    — longGap at AEB intervention start
       • aebStopGap     — longGap at AEB end
-
-    Constructed from an AebKpiExtractor instance:
-
-        self.distance_calc = AebDistanceCalculator(self)
-
-    Called within the KPI loop:
-
-        self.distance_calc.compute_distance(mdf, self.kpi_table, i, aeb_start_idx, aeb_end_idx)
     """
 
     # ------------------------------------------------------------------
