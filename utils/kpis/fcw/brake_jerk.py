@@ -1,5 +1,4 @@
 import numpy as np
-import warnings
 from utils.data_utils import safe_scalar
 from utils.event_detector.decel import detect_decel_onset, detect_brake_jerk_end
 
@@ -127,8 +126,8 @@ class FcwBrakeJerkCalculator:
         kpi_table.at[row_idx, "brakeJerkMax"]   = safe_scalar(jerk_max)
         kpi_table.at[row_idx, "brakeAccelMin"]  = safe_scalar(accel_min)
 
-        print(
-            f"   ✅ [Row {row_idx}] Brake jerk detected: "
-            f"start={tw[i0]:.3f}s | end={tw[i1]:.3f}s | dur={dur:.3f}s | "
-            f"jerkMax={jerk_max:.2f} | accelMin={accel_min:.2f} | spd={mean_spd:.1f} kph"
-        )
+        #print(
+        #    f"   ✅ [Row {row_idx}] Brake jerk detected: "
+        #    f"start={tw[i0]:.3f}s | end={tw[i1]:.3f}s | dur={dur:.3f}s | "
+        #    f"jerkMax={jerk_max:.2f} | accelMin={accel_min:.2f} | spd={mean_spd:.1f} kph"
+        #)

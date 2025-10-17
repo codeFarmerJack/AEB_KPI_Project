@@ -4,8 +4,8 @@ import warnings
 from pipeline.base.base_kpi_extractor import BaseKpiExtractor
 from utils.event_detector.fcw import detect_fcw_events
 from utils.data_utils import safe_scalar
-from utils.kpis.fcw import *
 from utils.kpis.fcw.brake_jerk import FcwBrakeJerkCalculator
+from utils.kpis.fcw.fcw_warning import FcwWarningCalculator
 
 
 # ------------------------------------------------------------------ #
@@ -28,7 +28,8 @@ class FcwKpiExtractor(BaseKpiExtractor):
         super().__init__(config, event_detector, "path_to_fcw_chunks", feature_name="FCW")
 
         # --- Initialize submodules ---
-        self.brake_jerk_calc = FcwBrakeJerkCalculator(self)
+        self.brake_jerk_calc    = FcwBrakeJerkCalculator(self)
+        self.fcw_warning_calc   = FcwWarningCalculator(self)
 
     # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):
@@ -70,7 +71,7 @@ class FcwKpiExtractor(BaseKpiExtractor):
 
             # --- KPI metrics ---
             self.brake_jerk_calc.compute_brake_jerk(mdf, self.kpi_table, i)
-            fcw_warning(self, mdf, i)
+            self.fcw_warning_calc.compute_fcw_warning(mdf, self.kpi_table, i)
 
 
             self.kpi_table = self.kpi_table.round(3)
