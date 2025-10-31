@@ -36,4 +36,10 @@ AutoEmergencyBrakingPlannerState:
   AUTO_EMERGENCY_BRAKING_PLANNER_STATE_UNAVAILABLE: 4
   AUTO_EMERGENCY_BRAKING_PLANNER_STATE_DEGRADED: 5
 
+DIActiveSafetyCPMEvent:
+  DI_ACTIVE_SAFETY_EVENT_CPM_NONE: 0       # No event is active
+  DI_ACTIVE_SAFETY_EVENT_CPM_COMFORT: 1    # Comfort event is active
+  DI_ACTIVE_SAFETY_EVENT_CPM_CRITICAL: 2   # Critical event is active
+  DI_ACTIVE_SAFETY_EVENT_CPM_DAA: 3        # Drive Away Assist event is active
+  DI_ACTIVE_SAFETY_EVENT_CPM_ACPE: 4       # Acceleration Control for Pedal Error event is active
 

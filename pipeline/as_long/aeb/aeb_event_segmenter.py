@@ -1,6 +1,6 @@
 import numpy as np
-from pipeline.base.base_event_segmenter import BaseEventSegmenter
-from utils.event_detector.aeb import detect_aeb_events
+from pipeline.as_long.base.base_event_segmenter import BaseEventSegmenter
+from utils.event_detector.as_long.aeb import detect_aeb_events
 
 
 class AebEventSegmenter(BaseEventSegmenter):

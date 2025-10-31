@@ -1,8 +1,8 @@
 from pathlib import Path
-from pipeline.base.base_pipeline import BasePipeline
-from pipeline.aeb.aeb_event_segmenter import AebEventSegmenter
-from pipeline.aeb.aeb_kpi_extractor import AebKpiExtractor
-from pipeline.aeb.aeb_visualizer import AebVisualizer
+from pipeline.as_long.base.base_pipeline import BasePipeline
+from pipeline.as_long.aeb.aeb_event_segmenter import AebEventSegmenter
+from pipeline.as_long.aeb.aeb_kpi_extractor import AebKpiExtractor
+from pipeline.as_long.aeb.aeb_visualizer import AebVisualizer
 
 
 class AebPipeline(BasePipeline):

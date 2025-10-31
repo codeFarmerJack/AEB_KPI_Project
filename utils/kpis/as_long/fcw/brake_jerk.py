@@ -1,6 +1,6 @@
 import numpy as np
 from utils.data_utils import safe_scalar
-from utils.event_detector.decel import detect_decel_onset, detect_brake_jerk_end
+from utils.event_detector.as_long.decel import detect_decel_onset, detect_brake_jerk_end
 
 
 class FcwBrakeJerkCalculator:

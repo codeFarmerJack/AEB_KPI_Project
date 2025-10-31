@@ -1,8 +1,8 @@
 from pathlib import Path
-from pipeline.base.base_pipeline import BasePipeline
-from pipeline.fcw.fcw_event_segmenter import FcwEventSegmenter
-from pipeline.fcw.fcw_kpi_extractor import FcwKpiExtractor
-from pipeline.fcw.fcw_visualizer import FcwVisualizer
+from pipeline.as_long.base.base_pipeline import BasePipeline
+from pipeline.as_long.fcw.fcw_event_segmenter import FcwEventSegmenter
+from pipeline.as_long.fcw.fcw_kpi_extractor import FcwKpiExtractor
+from pipeline.as_long.fcw.fcw_visualizer import FcwVisualizer
 
 
 class FcwPipeline(BasePipeline):

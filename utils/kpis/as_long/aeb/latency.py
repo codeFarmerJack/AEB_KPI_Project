@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import warnings
-from utils.event_detector.decel import detect_decel_onset
+from utils.event_detector.as_long.decel import detect_decel_onset
 
 
 class AebLatencyCalculator:

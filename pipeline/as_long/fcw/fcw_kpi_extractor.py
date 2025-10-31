@@ -1,11 +1,11 @@
 import os
 import numpy as np
 import warnings
-from pipeline.base.base_kpi_extractor import BaseKpiExtractor
-from utils.event_detector.fcw import detect_fcw_events
+from pipeline.as_long.base.base_kpi_extractor import BaseKpiExtractor
+from utils.event_detector.as_long.fcw import detect_fcw_events
 from utils.data_utils import safe_scalar
-from utils.kpis.fcw.brake_jerk import FcwBrakeJerkCalculator
-from utils.kpis.fcw.fcw_warning import FcwWarningCalculator
+from utils.kpis.as_long.fcw.brake_jerk import FcwBrakeJerkCalculator
+from utils.kpis.as_long.fcw.fcw_warning import FcwWarningCalculator
 
 
 # ------------------------------------------------------------------ #
