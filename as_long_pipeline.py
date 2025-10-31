@@ -6,7 +6,7 @@ from pipeline.fcw.fcw_pipeline import FcwPipeline
 
 
 # --- Define paths ---
-config_path = Path("/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_kpi_extractor/python/config/Config.json")
+config_path = Path("/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_kpi_extractor/python/config/config_as_long.json")
 
 # --- Shared input handler ---
 cfg = Config.from_json(config_path)
