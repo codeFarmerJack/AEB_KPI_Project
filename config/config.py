@@ -38,11 +38,21 @@ class Config:
             cfg.signal_map.columns = cfg.signal_map.columns.str.strip().str.lower()
 
         # =====================================================
-        # 2️⃣ Load KPI/PlotSpec-related sheets from kpi_as_long.xlsx
+        # 2️⃣ Load KPI/PlotSpec-related sheets (auto-detect Long/Lat/etc.)
         # =====================================================
-        spec_cfg   = config_struct["KpiAsLong"]
+        # Find any key starting with "KpiAs"
+        kpi_section_key = next(
+            (k for k in config_struct.keys() if k.lower().startswith("kpias")),
+            None
+        )
+        if not kpi_section_key:
+            raise ValueError("No KPI section found in config (expected 'KpiAsLong' or 'KpiAsLat').")
+
+        spec_cfg   = config_struct[kpi_section_key]
         spec_path  = spec_cfg["FilePath"]
         sheet_list = spec_cfg["Sheets"]
+
+        print(f"📘 Loading KPI section: '{kpi_section_key}' → {Path(spec_path).name}")
 
         spec_data  = cls._load_signal_map_kpi_plot_spec(spec_path, sheet_list)
         sheet_map  = {k.lower(): v for k, v in spec_data.items()}
@@ -52,6 +62,7 @@ class Config:
         cfg.marker_shapes = sheet_map.get("markershapes")
         cfg.kpi_spec      = sheet_map.get("kpi")
         cfg.params        = sheet_map.get("params")
+
 
         # =====================================================
         # 3️⃣ Parse params sheet into dict with type awareness
@@ -140,6 +151,10 @@ class Config:
     # =====================================================
     @staticmethod
     def _load_config(file_path):
+        """
+        Load and validate the JSON configuration file.
+        Automatically detects KPI section (KpiAsLong / KpiAsLat / etc.).
+        """
         file_path = Path(file_path)
         if not file_path.exists():
             raise FileNotFoundError(f"Config file not found: {file_path}")
@@ -147,8 +162,9 @@ class Config:
         with open(file_path, "r", encoding="utf-8") as f:
             params = json.load(f)
 
-        # --- validation (exactly same as before)
-        for section in ["SignalMap", "KpiAsLong", "Calibration"]:
+        # --- required sections ---
+        required_sections = ["SignalMap", "Calibration"]
+        for section in required_sections:
             if section not in params:
                 raise ValueError(f"Missing '{section}' in config file.")
             if "FilePath" not in params[section]:
@@ -156,7 +172,28 @@ class Config:
             if "Sheets" not in params[section]:
                 raise ValueError(f"{section}.Sheets must be defined in config.")
 
+        # --- detect KPI section automatically (any key starting with "KpiAs") ---
+        kpi_section_key = next(
+            (k for k in params.keys() if k.lower().startswith("kpias")),
+            None
+        )
+
+        if not kpi_section_key:
+            raise ValueError(
+                "Missing KPI section (expected key starting with 'KpiAs', "
+                "e.g. 'KpiAsLong' or 'KpiAsLat')."
+            )
+
+        kpi_section = params[kpi_section_key]
+        if "FilePath" not in kpi_section:
+            raise ValueError(f"Missing {kpi_section_key}.FilePath in config.")
+        if "Sheets" not in kpi_section:
+            raise ValueError(f"{kpi_section_key}.Sheets must be defined in config.")
+
+        print(f"📘 Detected KPI section: '{kpi_section_key}'")
+
         return params
+
 
     @staticmethod
     def _load_signal_map_kpi_plot_spec(file_path, sheet_list):

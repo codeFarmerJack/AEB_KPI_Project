@@ -1,0 +1,16 @@
+{
+    "SignalMap": {
+        "FilePath": "/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_kpi_extractor/python/config/signal_map.xlsx",
+        "Sheets": ["vbRcSignals"]
+    },
+    "KpiAsLat": {
+        "FilePath": "/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_kpi_extractor/python/config/kpi_as_lat.xlsx",
+        "Sheets": ["graphSpec", "lineColors","markerShapes","KPI","params"]
+    },
+    "Calibration": {
+        "FilePath": "",
+        "Sheets": {
+            
+        }			
+    }
+}
