@@ -31,8 +31,8 @@ class BaseKpiExtractor:
 
         # --- Setup paths ---
         self.in_path_raw_data = event_detector.in_path_raw_data
-        self.path_to_results  = os.path.join(self.in_path_raw_data, "analysis_results")
-        os.makedirs(self.path_to_results, exist_ok=True)
+        self.out_path_results  = os.path.join(self.in_path_raw_data, "analysis_results")
+        os.makedirs(self.out_path_results, exist_ok=True)
 
         self.out_path_chunks = getattr(event_detector, chunk_attr_name)
         self.file_list = [f for f in os.listdir(self.out_path_chunks) if f.endswith(".mf4")]
@@ -108,7 +108,7 @@ class BaseKpiExtractor:
         """Export KPI results to Excel."""
         sheet = sheet_name or self.feature_name.lower()
         try:
-            export_kpi_to_excel(self.kpi_table, self.path_to_results, sheet_name=sheet)
+            export_kpi_to_excel(self.kpi_table, self.out_path_results, sheet_name=sheet)
         except Exception as e:
             warnings.warn(f"⚠️ Failed to export KPI results for {sheet}: {e}")
 

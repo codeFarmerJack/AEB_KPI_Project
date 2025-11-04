@@ -17,7 +17,7 @@ class ScatterPlotter:
         self.calibratables   = obj.calibratables
         self.kpi_spec        = obj.kpi_spec
         self.kpi_data        = obj.kpi_data
-        self.path_to_output  = obj.path_to_output
+        self.in_path_output  = obj.out_path_output
         self.interactive     = getattr(obj, "interactive", False)
         self._fig_cache      = {}
         self._group_counter  = getattr(obj, "_group_counter", iter(range(1, 100)))
@@ -228,7 +228,7 @@ class ScatterPlotter:
 
         group_id = next(self._group_counter)
         out_name_html = f"Fig_{group_id:02d} - {title}.html"
-        out_path_html = os.path.join(self.path_to_output, out_name_html)
+        out_path_html = os.path.join(self.in_path_output, out_name_html)
 
         # ---------------- Build desired labels from the ledger ----------------
         raw = list(self._draw_labels.get(title, []))  # exact order of how you drew things
@@ -358,7 +358,7 @@ class ScatterPlotter:
 
         except Exception as e:
             warnings.warn(f"⚠️ Failed to export Plotly HTML: {e}")
-            png_path = os.path.join(self.path_to_output, f"Fig_{group_id:02d} - {title}.png")
+            png_path = os.path.join(self.in_path_output, f"Fig_{group_id:02d} - {title}.png")
             fig.savefig(png_path, dpi=400, bbox_inches="tight")
             print(f"💾 Fallback PNG saved → {png_path}")
 

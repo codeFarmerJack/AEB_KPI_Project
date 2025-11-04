@@ -18,36 +18,35 @@ class BaseVisualizer:
             raise ValueError("Feature name (e.g. 'aeb', 'fcw') must be specified.")
 
         # --- Shared attributes ---
-        self.feature = feature.lower()
-        self.config = config
-        self.path_to_results = kpi_extractor.path_to_results
-        self.path_to_excel = os.path.join(self.path_to_results, "AS-Long_KPI_Results.xlsx")
-        self.path_to_output = os.path.join(self.path_to_results, self.feature)
+        self.feature         = feature.lower()
+        self.config          = config
+        self.in_path_results = kpi_extractor.out_path_results
+        self.out_path_excel  = os.path.join(self.in_path_results, "AS-Long_KPI_Results.xlsx")
+        self.out_path_output = os.path.join(self.in_path_results, self.feature)
 
         # --- Create output folder ---
-        os.makedirs(self.path_to_output, exist_ok=True)
+        os.makedirs(self.out_path_output, exist_ok=True)
 
         # --- Shared config references ---
-        self.graph_spec = config.graph_spec.copy()
-        self.line_colors = config.line_colors
-        self.marker_shapes = config.marker_shapes
-        self.calibratables = config.calibratables
-        self.kpi_spec = config.kpi_spec
-
+        self.graph_spec     = config.graph_spec.copy()
+        self.line_colors    = config.line_colors
+        self.marker_shapes  = config.marker_shapes
+        self.calibratables  = config.calibratables
+        self.kpi_spec       = config.kpi_spec
         # --- Load KPI sheet for this feature ---
-        self.kpi_data = self._load_kpi_data()
+        self.kpi_data       = self._load_kpi_data()
 
         print(f"✅ BaseVisualizer initialized for feature: {self.feature.upper()}")
 
     # --------------------------------------------------------------- #
     def _load_kpi_data(self):
         """Safely load KPI data for the given feature sheet."""
-        if not os.path.isfile(self.path_to_excel):
-            warnings.warn(f"⚠️ KPI Excel not found: {self.path_to_excel}")
+        if not os.path.isfile(self.out_path_excel):
+            warnings.warn(f"⚠️ KPI Excel not found: {self.out_path_excel}")
             return getattr(self.config, "kpi_table", pd.DataFrame())
 
         try:
-            df = pd.read_excel(self.path_to_excel, sheet_name=self.feature)
+            df = pd.read_excel(self.out_path_excel, sheet_name=self.feature)
             print(f"📘 Loaded KPI data for feature '{self.feature}' — shape {df.shape}")
             return df
         except Exception as e:

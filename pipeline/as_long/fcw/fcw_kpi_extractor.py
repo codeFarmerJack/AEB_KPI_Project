@@ -25,7 +25,7 @@ class FcwKpiExtractor(BaseKpiExtractor):
 
     # ------------------------------------------------------------------ #
     def __init__(self, config, event_detector):
-        super().__init__(config, event_detector, "path_to_fcw_chunks", feature_name="FCW")
+        super().__init__(config, event_detector, "in_path_fcw_chunks", feature_name="FCW")
 
         # --- Initialize submodules ---
         self.brake_jerk_calc    = FcwBrakeJerkCalculator(self)
