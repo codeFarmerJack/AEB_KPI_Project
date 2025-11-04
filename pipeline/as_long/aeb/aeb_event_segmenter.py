@@ -16,7 +16,7 @@ class AebEventSegmenter(BaseEventSegmenter):
         )
 
         # Backward compatibility alias
-        self.path_to_aeb_chunks = self.path_to_chunks
+        self.path_to_aeb_chunks = self.out_path_chunks
 
     # -------------------- AEB-specific detection -------------------- #
     def detect_events(self, df):

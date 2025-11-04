@@ -24,16 +24,16 @@ class BaseEventSegmenter:
     }
 
     def __init__(self, input_handler, config=None, event_name="base", pre_key=None, post_key=None):
-        if input_handler is None or not hasattr(input_handler, "path_to_raw_data"):
+        if input_handler is None or not hasattr(input_handler, "in_path_raw_data"):
             raise TypeError(f"{self.__class__.__name__} requires an InputHandler instance.")
 
         self.event_name         = event_name.lower()
-        self.path_to_mdf        = input_handler.path_to_raw_data
-        self.path_to_extracted  = input_handler.path_to_extracted
+        self.in_path_raw_data   = input_handler.in_path_raw_data
+        self.in_path_extracted  = input_handler.out_path_extracted
 
         # --- Set folder for extracted chunks ---
-        self.path_to_chunks = os.path.join(self.path_to_mdf, f"{self.event_name}_chunks")
-        os.makedirs(self.path_to_chunks, exist_ok=True)
+        self.out_path_chunks = os.path.join(self.in_path_raw_data, f"{self.event_name}_chunks")
+        os.makedirs(self.out_path_chunks, exist_ok=True)
 
         # load pre/post time keys
         load_params_from_class(self)
@@ -44,15 +44,15 @@ class BaseEventSegmenter:
 
     def process_all_files(self):
         """Loop over all *_extracted.mf4 files and detect/extract events."""
-        mdf_files = [f for f in os.listdir(self.path_to_extracted) if f.endswith("_extracted.mf4")]
-        print(f"\n📂 Found {len(mdf_files)} extracted MF4 files in {self.path_to_extracted}\n")
+        mdf_files = [f for f in os.listdir(self.in_path_extracted) if f.endswith("_extracted.mf4")]
+        print(f"\n📂 Found {len(mdf_files)} extracted MF4 files in {self.in_path_extracted}\n")
 
         if not mdf_files:
             print("⚠️ No extracted MF4 files found. Did you run InputHandler.process_mf4_files first?")
             return
 
         for fname in mdf_files:
-            file_path = os.path.join(self.path_to_extracted, fname)
+            file_path = os.path.join(self.in_path_extracted, fname)
             name, _ = os.path.splitext(fname)
 
             try:
@@ -112,7 +112,7 @@ class BaseEventSegmenter:
                     continue
 
                 mf4_name = f"{name}_{self.event_name}_{j+1:02d}.mf4"
-                mf4_path = os.path.join(self.path_to_chunks, mf4_name)
+                mf4_path = os.path.join(self.out_path_chunks, mf4_name)
                 mdf_chunk.save(mf4_path, overwrite=True)
                 print(f"   ✅ Saved {self.event_name.upper()} event {j+1}: {start_sec:.2f}s → {stop_sec:.2f}s → {mf4_name}")
 

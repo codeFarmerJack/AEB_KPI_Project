@@ -39,8 +39,8 @@ class InputHandler:
 
         # --- Assign base attributes ---
         self.signal_map         = config.signal_map
-        self.path_to_raw_data   = None
-        self.path_to_extracted  = None
+        self.in_path_raw_data   = None
+        self.out_path_extracted = None
 
         # --- Load parameters from class and then override with config ---
         load_params_from_class(self)
@@ -56,12 +56,12 @@ class InputHandler:
         if not folder:
             raise ValueError("No MF4 folder selected. Aborting.")
         
-        self.path_to_raw_data = os.path.abspath(folder)
-        print(f"✅ Selected MF4 folder: {self.path_to_raw_data}")
+        self.in_path_raw_data = os.path.abspath(folder)
+        print(f"✅ Selected MF4 folder: {self.in_path_raw_data}")
 
         # --- Create subfolder for extracted files ---
-        self.path_to_extracted = os.path.join(self.path_to_raw_data, "extracted")
-        os.makedirs(self.path_to_extracted, exist_ok=True)
+        self.out_path_extracted = os.path.join(self.in_path_raw_data, "extracted")
+        os.makedirs(self.out_path_extracted, exist_ok=True)
 
     # -------------------- Public API -------------------- #
     def process_mf4_files(self) -> None:
@@ -73,7 +73,7 @@ class InputHandler:
         4. Save all signals to '_extracted.mf4'
         """
 
-        mf4_files = [f for f in os.listdir(self.path_to_raw_data) if f.lower().endswith(".mf4")]
+        mf4_files = [f for f in os.listdir(self.in_path_raw_data) if f.lower().endswith(".mf4")]
         print(f"🔎 Found {len(mf4_files)} MF4 file(s) to process...")
 
         if not mf4_files:
@@ -81,7 +81,7 @@ class InputHandler:
             return
 
         for file in mf4_files:
-            full_path = os.path.join(self.path_to_raw_data, file)
+            full_path = os.path.join(self.in_path_raw_data, file)
             print(f"\n📂 Processing file: {file}")
 
             try:
@@ -178,7 +178,7 @@ class InputHandler:
                 base_name = os.path.splitext(os.path.basename(full_path))[0] + "_extracted.mf4"
 
                 # Build the new path inside the extracted folder
-                extracted_file = os.path.join(self.path_to_extracted, base_name)
+                extracted_file = os.path.join(self.out_path_extracted, base_name)
 
                 # Save to the extracted folder
                 new_mdf.save(extracted_file, overwrite=True)

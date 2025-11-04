@@ -79,7 +79,7 @@ class AebKpiExtractor(BaseKpiExtractor):
     def process_all_mdf_files(self):
         """Process all AEB MF4 chunk files and calculate KPIs."""
         for i, fname in enumerate(self.file_list):
-            fpath = os.path.join(self.path_to_chunks, fname)
+            fpath = os.path.join(self.out_path_chunks, fname)
             self._insert_label(i, fname)
 
             print(f"\n📊 Processing AEB KPI for file {i + 1}/{len(self.file_list)}: {fname}")

@@ -35,7 +35,7 @@ class FcwKpiExtractor(BaseKpiExtractor):
     def process_all_mdf_files(self):
         """Process all FCW MF4 chunk files and calculate KPIs."""
         for i, fname in enumerate(self.file_list):
-            fpath = os.path.join(self.path_to_chunks, fname)
+            fpath = os.path.join(self.out_path_chunks, fname)
             self._insert_label(i, fname)
 
             # print progress

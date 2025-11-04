@@ -30,14 +30,14 @@ class BaseKpiExtractor:
             raise TypeError(f"event_detector missing required attribute '{chunk_attr_name}'")
 
         # --- Setup paths ---
-        self.path_to_mdf = event_detector.path_to_mdf
-        self.path_to_results = os.path.join(self.path_to_mdf, "analysis_results")
+        self.in_path_raw_data = event_detector.in_path_raw_data
+        self.path_to_results  = os.path.join(self.in_path_raw_data, "analysis_results")
         os.makedirs(self.path_to_results, exist_ok=True)
 
-        self.path_to_chunks = getattr(event_detector, chunk_attr_name)
-        self.file_list = [f for f in os.listdir(self.path_to_chunks) if f.endswith(".mf4")]
+        self.out_path_chunks = getattr(event_detector, chunk_attr_name)
+        self.file_list = [f for f in os.listdir(self.out_path_chunks) if f.endswith(".mf4")]
         if not self.file_list:
-            raise FileNotFoundError(f"No .mf4 files found in {self.path_to_chunks}")
+            raise FileNotFoundError(f"No .mf4 files found in {self.out_path_chunks}")
 
         # --- KPI table ---
         self.feature_name = feature_name or self.FEATURE_NAME

@@ -16,7 +16,7 @@ class FcwEventSegmenter(BaseEventSegmenter):
         )
 
         # Backward compatibility alias
-        self.path_to_fcw_chunks = self.path_to_chunks
+        self.path_to_fcw_chunks = self.out_path_chunks
 
     # -------------------- FCW-specific detection -------------------- #
 
