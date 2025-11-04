@@ -16,7 +16,7 @@ class LsaebEventSegmenter(BaseEventSegmenter):
         )
 
         # Backward compatibility alias
-        self.path_to_lsaeb_chunks = self.out_path_chunks
+        self.in_path_lsaeb_chunks = self.out_path_chunks
 
     # -------------------- LSAEB-specific detection -------------------- #
 
