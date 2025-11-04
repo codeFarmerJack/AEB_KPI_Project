@@ -6,6 +6,7 @@ SignalToEnumMap:
   isVehicleStoppedNV: VioVehicleStopped
   aebFullState: AutoEmergencyBrakingPlannerState
   aebPartialState: AutoEmergencyBrakingPlannerState
+  cpmEventType: DIActiveSafetyCPMEvent
 
 # Enums used to convert symbolic MDF signal values into numeric codes.
 
