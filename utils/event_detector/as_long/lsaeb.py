@@ -62,4 +62,4 @@ def detect_lsaeb_events(time, cpm_event_type, merge_window: float = 2.0):
         print(f"   ➝ Start idx={si:6d} (t={time[si]:.3f}s), End idx={ei:6d} (t={time[ei]:.3f}s)")
     print(f"   Total events detected: {len(merged_starts)}\n")
 
-    return merged_starts, merged_ends
+    return time[merged_starts], time[merged_ends]
