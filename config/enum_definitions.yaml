@@ -7,6 +7,7 @@ SignalToEnumMap:
   aebFullState: AutoEmergencyBrakingPlannerState
   aebPartialState: AutoEmergencyBrakingPlannerState
   cpmEventType: DIActiveSafetyCPMEvent
+  lkaInterventionStatus: DIActiveSafetyEvent
 
 # Enums used to convert symbolic MDF signal values into numeric codes.
 
@@ -43,4 +44,12 @@ DIActiveSafetyCPMEvent:
   DI_ACTIVE_SAFETY_EVENT_CPM_CRITICAL: 2   # Critical event is active
   DI_ACTIVE_SAFETY_EVENT_CPM_DAA: 3        # Drive Away Assist event is active
   DI_ACTIVE_SAFETY_EVENT_CPM_ACPE: 4       # Acceleration Control for Pedal Error event is active
+
+DIActiveSafetyEvent:
+  DI_ACTIVE_SAFETY_EVENT_NONE: 0       # No active warning or event
+  DI_ACTIVE_SAFETY_EVENT_LEVEL_1: 1    # Level 1 warning or event is active
+  DI_ACTIVE_SAFETY_EVENT_LEVEL_2: 2    # Level 2 warning or event is active
+  DI_ACTIVE_SAFETY_EVENT_LEVEL_3: 3    # Level 3 warning or event is active
+  DI_ACTIVE_SAFETY_EVENT_LEVEL_4: 4    # Level 4 warning or event is active
+  DI_ACTIVE_SAFETY_EVENT_COUNT: 5      # Total number of defined event levels
 
