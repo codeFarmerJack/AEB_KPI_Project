@@ -4,7 +4,6 @@ from pathlib import Path
 import pandas as pd
 from openpyxl import load_workbook
 
-
 class Config:
     def __init__(self):
         self.signal_map     = None       # vbRcSignals sheet
@@ -12,24 +11,23 @@ class Config:
         self.graph_spec     = None       # graphSpec sheet
         self.line_colors    = None       # lineColors sheet
         self.marker_shapes  = None       # markerShapes sheet
-        self.calibratables  = {}         # calibratables 
+        self.calibratables  = {}         # calibratables (optional)
         self.params         = None       # params sheet 
         self.param_types    = {}         # keep parameter type metadata
 
     @classmethod
     def from_json(cls, json_config_path):
-        """Create Config object from JSON file."""
+        """Create Config object from JSON file (supports both as_long & as_lat)."""
         cfg = cls()
-
         config_struct = cls._load_config(json_config_path)
 
         # =====================================================
-        # 1️⃣ Load vbRcSignals from separate signal_map.xlsx
+        # 1️⃣ Load vbRcSignals from signal_map.xlsx
         # =====================================================
-        sig_cfg   = config_struct["SignalMap"]
-        sig_path  = sig_cfg["FilePath"]
+        sig_cfg    = config_struct["SignalMap"]
+        sig_path   = sig_cfg["FilePath"]
         sig_sheets = sig_cfg["Sheets"]
-        sig_data  = cls._load_signal_map_kpi_plot_spec(sig_path, sig_sheets)
+        sig_data   = cls._load_signal_map_kpi_plot_spec(sig_path, sig_sheets)
 
         sig_map = {k.lower(): v for k, v in sig_data.items()}
         cfg.signal_map = sig_map.get("vbrcsignals")
@@ -40,11 +38,7 @@ class Config:
         # =====================================================
         # 2️⃣ Load KPI/PlotSpec-related sheets (auto-detect Long/Lat/etc.)
         # =====================================================
-        # Find any key starting with "KpiAs"
-        kpi_section_key = next(
-            (k for k in config_struct.keys() if k.lower().startswith("kpias")),
-            None
-        )
+        kpi_section_key = next((k for k in config_struct.keys() if k.lower().startswith("kpias")), None)
         if not kpi_section_key:
             raise ValueError("No KPI section found in config (expected 'KpiAsLong' or 'KpiAsLat').")
 
@@ -62,7 +56,6 @@ class Config:
         cfg.marker_shapes = sheet_map.get("markershapes")
         cfg.kpi_spec      = sheet_map.get("kpi")
         cfg.params        = sheet_map.get("params")
-
 
         # =====================================================
         # 3️⃣ Parse params sheet into dict with type awareness
@@ -128,23 +121,27 @@ class Config:
                 warnings.warn("⚠️ No valid R,G,B columns found in lineColors sheet.")
 
         # =====================================================
-        # 5️⃣ Load Calibration
+        # 5️⃣ Load Calibration (optional)
         # =====================================================
-        calib_cfg         = config_struct["Calibration"]
-        calib_file        = calib_cfg["FilePath"]
-        sheet_defs        = calib_cfg["Sheets"]
-        cfg.calibratables = cls._load_calibratables(calib_file, sheet_defs)
+        if "Calibration" in config_struct:
+            calib_cfg  = config_struct["Calibration"]
+            calib_file = calib_cfg.get("FilePath")
+            sheet_defs = calib_cfg.get("Sheets", [])
+            print(f"📗 Loading Calibration workbook: {calib_file}")
+            cfg.calibratables = cls._load_calibratables(calib_file, sheet_defs)
+            cfg._apply_calibration_scaling()
+        else:
+            print("⚙️ No 'Calibration' section found — skipping calibration load.")
+            cfg.calibratables = {}
 
         # =====================================================
-        # 6️⃣ Apply calibration scaling logic
+        # 6️⃣ Normalize graph_spec columns
         # =====================================================
-        cfg._apply_calibration_scaling()
-
-        # Normalize graph_spec columns
         if cfg.graph_spec is not None:
             cfg.graph_spec.columns = cfg.graph_spec.columns.str.strip().str.lower()
 
         return cfg
+
 
     # =====================================================
     # Helper functions
@@ -153,7 +150,9 @@ class Config:
     def _load_config(file_path):
         """
         Load and validate the JSON configuration file.
-        Automatically detects KPI section (KpiAsLong / KpiAsLat / etc.).
+
+        Automatically detects KPI section (e.g. KpiAsLong, KpiAsLat, etc.).
+        Calibration section is optional for lateral (as_lat) configs.
         """
         file_path = Path(file_path)
         if not file_path.exists():
@@ -162,17 +161,25 @@ class Config:
         with open(file_path, "r", encoding="utf-8") as f:
             params = json.load(f)
 
-        # --- required sections ---
-        required_sections = ["SignalMap", "Calibration"]
-        for section in required_sections:
-            if section not in params:
-                raise ValueError(f"Missing '{section}' in config file.")
-            if "FilePath" not in params[section]:
-                raise ValueError(f"Missing {section}.FilePath in config.")
-            if "Sheets" not in params[section]:
-                raise ValueError(f"{section}.Sheets must be defined in config.")
+        # --- Always required ---
+        if "SignalMap" not in params:
+            raise ValueError("Missing 'SignalMap' section in config file.")
+        if "FilePath" not in params["SignalMap"]:
+            raise ValueError("Missing SignalMap.FilePath in config.")
+        if "Sheets" not in params["SignalMap"]:
+            raise ValueError("SignalMap.Sheets must be defined in config.")
 
-        # --- detect KPI section automatically (any key starting with "KpiAs") ---
+        # --- Optional Calibration section ---
+        if "Calibration" in params:
+            calib = params["Calibration"]
+            if "FilePath" not in calib:
+                raise ValueError("Missing Calibration.FilePath in config.")
+            if "Sheets" not in calib:
+                raise ValueError("Calibration.Sheets must be defined in config.")
+        else:
+            print("⚙️ Skipping 'Calibration' section (not required for this config).")
+
+        # --- Detect KPI section automatically (any key starting with 'KpiAs') ---
         kpi_section_key = next(
             (k for k in params.keys() if k.lower().startswith("kpias")),
             None

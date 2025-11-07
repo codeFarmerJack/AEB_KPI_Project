@@ -108,7 +108,7 @@ class BaseEventSegmenter:
             try:
                 mdf_chunk = mdf.cut(start=start_sec, stop=stop_sec)
                 if not mdf_chunk or len(mdf_chunk.channels_db) == 0:
-                    print(f"⚠️ Empty chunk ({start_sec:.2f}s–{stop_sec:.2f}s) → no overlap.")
+                    print(f"⚠️ Empty chunk ({start_sec:.2f}s-{stop_sec:.2f}s) → no overlap.")
                     continue
 
                 mf4_name = f"{name}_{self.event_name}_{j+1:02d}.mf4"
