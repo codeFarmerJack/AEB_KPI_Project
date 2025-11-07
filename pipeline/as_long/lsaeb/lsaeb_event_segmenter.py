@@ -21,7 +21,12 @@ class LsaebEventSegmenter(BaseEventSegmenter):
     # -------------------- LSAEB-specific detection -------------------- #
 
     def detect_events(self, df, merge_window: float = 2.0):
-        """Wrapper calling the shared detection function."""
         if "time" not in df or self.signal_name not in df:
             raise KeyError(f"DataFrame must contain 'time' and '{self.signal_name}' columns.")
-        return detect_lsaeb_events(df["time"].values, df[self.signal_name].values, merge_window)
+        # ask the detector for times for chunk extraction
+        return detect_lsaeb_events(
+            df["time"].values,
+            df[self.signal_name].values,
+            merge_window,
+            output="times",
+        )
