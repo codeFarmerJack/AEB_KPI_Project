@@ -4,6 +4,8 @@ def detect_lsaeb_events(time, cpm_event_type, merge_window: float = 2.0):
     """
     Detect start and end indices of LSAEB (Low-Speed AEB) events.
     Works safely for both full-length and segmented recordings.
+
+    return the indices of start and end of detected events.
     """
 
     time = np.asarray(time, dtype=float)
@@ -62,4 +64,4 @@ def detect_lsaeb_events(time, cpm_event_type, merge_window: float = 2.0):
         print(f"   ➝ Start idx={si:6d} (t={time[si]:.3f}s), End idx={ei:6d} (t={time[ei]:.3f}s)")
     print(f"   Total events detected: {len(merged_starts)}\n")
 
-    return time[merged_starts], time[merged_ends]
+    return merged_starts, merged_ends
