@@ -4,7 +4,7 @@ from config.config import Config
 from pipeline.input_handler import InputHandler
 from pipeline.as_long.lsaeb.lsaeb_event_segmenter import LsaebEventSegmenter
 from pipeline.as_long.lsaeb.lsaeb_kpi_extractor import LsaebKpiExtractor
-#from pipeline.as_long.lsaeb.lsaeb_visualizer import LsaebVisualizer
+from pipeline.as_long.lsaeb.lsaeb_visualizer import LsaebVisualizer
 import pandas as pd
 
 
@@ -64,6 +64,14 @@ def main():
     kpi_extractor.process_all_mdf_files()
     kpi_extractor.export_to_excel()
     print("✅ LSAEB KPI extraction finished.\n")
+
+    # --- Visualization stage ---
+    print("\n➡️ [5/5] Launching LSAEB visualization...\n")
+    try:
+        viz = LsaebVisualizer(cfg, kpi_extractor)
+        viz.plot()
+    except Exception as e:
+        print(f"⚠️ Visualization failed: {e}")
 
 if __name__ == "__main__":
     main()

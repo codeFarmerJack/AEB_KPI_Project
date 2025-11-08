@@ -3,6 +3,7 @@ from config.config import Config
 from pipeline.input_handler import InputHandler
 from pipeline.as_long.aeb.aeb_pipeline import AebPipeline
 from pipeline.as_long.fcw.fcw_pipeline import FcwPipeline
+from pipeline.as_long.lsaeb.lsaeb_pipeline import LsaebPipeline
 
 
 # --- Define paths ---
@@ -21,4 +22,9 @@ aeb.run(skip_mf4_processing=True)
 fcw = FcwPipeline(config_path, input_handler=ih)
 fcw.run(skip_mf4_processing=True)
 
+# --- Create and run LSAEB pipeline ---
+lsaeb = LsaebPipeline(config_path, input_handler=ih)
+lsaeb.run(skip_mf4_processing=True) 
+
+print("\n🎯 All as_long pipelines completed successfully.\n")
 
