@@ -5,6 +5,7 @@ from config.config import Config
 from pipeline.input_handler import InputHandler
 from pipeline.as_lat.lka.lka_event_segmenter import LkaEventSegmenter
 from pipeline.as_lat.lka.lka_kpi_extractor import LkaKpiExtractor  
+from pipeline.as_lat.lka.lka_visualizer import LkaVisualizer
 # --- User parameters ---
 config_path = Path("/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_kpi_extractor/python/config/config_as_lat.json")
 
@@ -49,6 +50,16 @@ def main():
     kpi_extractor.process_all_mdf_files()
     kpi_extractor.export_to_excel()
     print("✅ LKA KPI extraction finished.\n")
+
+    # --- Visualization stage ---
+    print("\n➡️ [5/5] Launching LKA visualization...\n")
+    try:
+        viz = LkaVisualizer(cfg, kpi_extractor)
+        viz.plot()
+    except Exception as e:
+        print(f"⚠️ Visualization failed: {e}")
+
+    print("\n🏁 LKA pipeline complete.\n")
 
 if __name__ == "__main__":
     main()

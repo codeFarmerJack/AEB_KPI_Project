@@ -21,7 +21,9 @@ class BaseVisualizer:
         self.feature         = feature.lower()
         self.config          = config
         self.in_path_results = kpi_extractor.out_path_results
-        self.out_path_excel  = os.path.join(self.in_path_results, "AS-Long_KPI_Results.xlsx")
+        # -- Define output paths ---
+        filename             = getattr(config, "kpi_result_filename", "kpi_results.xlsx")
+        self.out_path_excel  = os.path.join(self.in_path_results, filename)
         self.out_path_output = os.path.join(self.in_path_results, self.feature)
 
         # --- Create output folder ---
