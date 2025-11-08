@@ -5,6 +5,6 @@
     },
     "KpiAsLat": {
         "FilePath": "/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_kpi_extractor/python/config/kpi_as_lat.xlsx",
-        "Sheets": ["paramAsLat", "graphAsLat","kpiAsLat","markerShapes","lineColors"]
+        "Sheets": ["graphSpec", "lineColors","markerShapes","KPI","params"]
     }
 }

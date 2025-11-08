@@ -4,8 +4,7 @@ from pathlib import Path
 from config.config import Config
 from pipeline.input_handler import InputHandler
 from pipeline.as_lat.lka.lka_event_segmenter import LkaEventSegmenter
-# from pipeline.as_lat.lka.lka_kpi_extractor import LkaKpiExtractor  # optional
-
+from pipeline.as_lat.lka.lka_kpi_extractor import LkaKpiExtractor  
 # --- User parameters ---
 config_path = Path("/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_kpi_extractor/python/config/config_as_lat.json")
 
@@ -14,6 +13,13 @@ def main():
     if not config_path.exists():
         raise FileNotFoundError(f"⚠️ Config file not found: {config_path}")
     cfg = Config.from_json(config_path)
+
+    print("\n🔍 DEBUG: list of attributes containing 'kpi' after config load:")
+    for attr in dir(cfg):
+        if "kpi" in attr.lower():
+            val = getattr(cfg, attr)
+            print(f"  • {attr:25s} → {type(val)} {'shape ' + str(val.shape) if isinstance(val, pd.DataFrame) else ''}")
+
 
     # --- Display KPI Specification Summary ---
     print("\n📑 KPI Specification (cfg.kpi_spec):")
@@ -37,12 +43,12 @@ def main():
     lka_event.process_all_files()
     print("✅ LKA event segmentation finished.\n")
 
-    # --- (Optional) KPI extraction ---
-    # print("\n📊 Running LKA KPI extraction...\n")
-    # kpi_extractor = LkaKpiExtractor(cfg, lka_event)
-    # kpi_extractor.process_all_mdf_files()
-    # kpi_extractor.export_to_excel()
-    # print("✅ LKA KPI extraction finished.\n")
+    # --- KPI extraction ---
+    print("\n📊 Running LKA KPI extraction...\n")
+    kpi_extractor = LkaKpiExtractor(cfg, lka_event)
+    kpi_extractor.process_all_mdf_files()
+    kpi_extractor.export_to_excel()
+    print("✅ LKA KPI extraction finished.\n")
 
 if __name__ == "__main__":
     main()

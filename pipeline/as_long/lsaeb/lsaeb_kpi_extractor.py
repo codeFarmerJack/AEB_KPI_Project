@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import warnings
 from dataclasses import dataclass
-from pipeline.as_long.base.base_kpi_extractor import BaseKpiExtractor
+from pipeline.base.base_kpi_extractor import BaseKpiExtractor
 from utils.event_detector.as_long.lsaeb import detect_lsaeb_events
 from utils.data_utils import safe_scalar
 from utils.kpis.as_long.lsaeb.distance import LsaebDistanceCalculator

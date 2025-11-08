@@ -46,6 +46,14 @@ class Config:
         spec_path  = spec_cfg["FilePath"]
         sheet_list = spec_cfg["Sheets"]
 
+        ## --- Define the name for the KPI excel export ---
+        cfg.kpi_excel_path = Path(spec_path)
+        cfg.kpi_excel_name = cfg.kpi_excel_path.stem.lower()        # e.g. "kpi_as_lat"
+        cfg.domain_name = "as_long" if "long" in cfg.kpi_excel_name else (
+            "as_lat" if "lat" in cfg.kpi_excel_name else "as_unknown"
+        )
+        cfg.kpi_result_filename = f"{cfg.domain_name}_kpi_results.xlsx"
+
         print(f"📘 Loading KPI section: '{kpi_section_key}' → {Path(spec_path).name}")
 
         spec_data  = cls._load_signal_map_kpi_plot_spec(spec_path, sheet_list)

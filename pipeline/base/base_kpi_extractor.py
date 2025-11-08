@@ -105,12 +105,19 @@ class BaseKpiExtractor:
 
     # ------------------------------------------------------------------ #
     def export_to_excel(self, sheet_name=None):
-        """Export KPI results to Excel."""
+        """Export KPI results to Excel (auto-named by domain)."""
         sheet = sheet_name or self.feature_name.lower()
+
+        # --- Build output path using config-defined name ---
+        filename = getattr(self.config, "kpi_result_filename", "kpi_results.xlsx")
+        output_path = os.path.join(self.out_path_results, filename)
+
         try:
-            export_kpi_to_excel(self.kpi_table, self.out_path_results, sheet_name=sheet)
+            export_kpi_to_excel(self.kpi_table, output_path, sheet_name=sheet)
+            print(f"💾 Saved KPI results → {output_path}")
         except Exception as e:
             warnings.warn(f"⚠️ Failed to export KPI results for {sheet}: {e}")
+
 
     # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):

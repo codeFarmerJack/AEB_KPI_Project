@@ -22,11 +22,14 @@ def export_kpi_to_excel(kpi_df: pd.DataFrame, output_dir: str, sheet_name: str):
         if not sheet_name or not isinstance(sheet_name, str):
             raise ValueError("sheet_name must be a non-empty string.")
 
-        # Ensure output folder exists
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-
-        output_filename = os.path.join(output_dir, "AS-Long_KPI_Results.xlsx")
+        # If output_dir is a full Excel path (ends with .xlsx), use it directly.
+        if output_dir.lower().endswith(".xlsx"):
+            output_filename = output_dir
+            os.makedirs(os.path.dirname(output_filename), exist_ok=True)
+        else:
+            # Otherwise, treat it as a folder and use a default name.
+            os.makedirs(output_dir, exist_ok=True)
+            output_filename = os.path.join(output_dir, "kpi_results.xlsx")
 
         df = kpi_df.copy()
 
