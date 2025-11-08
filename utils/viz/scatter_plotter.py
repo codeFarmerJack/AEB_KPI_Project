@@ -155,14 +155,25 @@ class ScatterPlotter:
         return True
 
     def _resolve_filter(self, plot_enabled):
+        """Return a boolean mask for which rows to plot based on the 'plotenabled' value."""
         val = str(plot_enabled).strip()
         low = val.lower()
+
+        # Case 1: direct True/False keywords
         if low == "true":
             return pd.Series(True, index=self.kpi_data.index)
         if low in ["false", "na", "none", ""]:
             return pd.Series(False, index=self.kpi_data.index)
+
+        # Case 2: handle negation (e.g. '!isWhlTrqHigh')
+        negate = False
+        if val.startswith("!"):
+            negate = True
+            val = val[1:].strip()  # remove '!' prefix
+
+        # Case 3: validate column
         if val not in self.kpi_data.columns:
-            warnings.warn(f"⚠️ Conditional flag '{val}' not found; plotting all points.")
+            warnings.warn(f"⚠️ Conditional flag '{plot_enabled}' not found; plotting all points.")
             return pd.Series(True, index=self.kpi_data.index)
 
         col = self.kpi_data[val]
@@ -172,6 +183,10 @@ class ScatterPlotter:
             mask = col.fillna(0) != 0
         else:
             mask = col.astype(str).str.lower().isin(["true", "1", "yes", "y"])
+
+        # Case 4: apply negation
+        if negate:
+            mask = ~mask
         return mask.reindex(self.kpi_data.index, fill_value=False)
 
     def _select_marker_and_color(self, row_in_group):
