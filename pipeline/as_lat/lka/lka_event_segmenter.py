@@ -1,6 +1,6 @@
 import numpy as np
 from utils.event_detector.as_lat.lka import detect_lka_events
-from pipeline.as_long.base.base_event_segmenter import BaseEventSegmenter
+from pipeline.base.base_event_segmenter import BaseEventSegmenter
 
 class LkaEventSegmenter(BaseEventSegmenter):
     """Detects LKA (Lane Keeping Assist) events and extracts event chunks."""

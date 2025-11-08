@@ -1,5 +1,5 @@
 import numpy as np
-from pipeline.as_long.base.base_event_segmenter import BaseEventSegmenter
+from pipeline.base.base_event_segmenter import BaseEventSegmenter
 from utils.event_detector.as_long.aeb import detect_aeb_events
 
 

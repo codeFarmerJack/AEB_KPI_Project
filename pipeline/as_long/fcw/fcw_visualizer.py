@@ -1,6 +1,6 @@
 import warnings
 from utils.viz.scatter_plotter import ScatterPlotter
-from pipeline.as_long.base.base_visualizer import BaseVisualizer
+from pipeline.base.base_visualizer import BaseVisualizer
 
 
 class FcwVisualizer(BaseVisualizer):

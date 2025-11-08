@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import warnings
 from dataclasses import dataclass
-from pipeline.as_long.base.base_kpi_extractor import BaseKpiExtractor
+from pipeline.base.base_kpi_extractor import BaseKpiExtractor
 from utils.event_detector.as_long.aeb import find_aeb_intv_start, find_aeb_intv_end
 from utils.process_calibratables import interpolate_threshold_clamped
 from utils.data_utils import safe_scalar
