@@ -35,7 +35,7 @@ class LkaPipeline(BasePipeline):
         print("\n➡️ [5/5] Launching LKA visualization...\n")
         try:
             self.viz = LkaVisualizer(self.cfg, self.kpi)
-            self.viz.interactive = True   # optional interactive mode
+            self.viz.interactive = getattr(self, "default_interactive", False)
             self.viz.plot()
         except Exception as e:
             raise RuntimeError(f"❌ LKA visualization failed: {e}")

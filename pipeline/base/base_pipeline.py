@@ -31,6 +31,8 @@ class BasePipeline(ABC):
         self.viz         = None
         self.feature     = self.__class__.__name__.replace("Pipeline", "").upper()
 
+        self.default_interactive = False   # enforce silent mode globally
+
     # ------------------------------------------------------------------ #
     def run(self, skip_mf4_processing: bool = False):
         """Run the entire feature pipeline sequentially."""

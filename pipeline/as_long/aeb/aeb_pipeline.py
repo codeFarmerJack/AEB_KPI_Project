@@ -32,7 +32,7 @@ class AebPipeline(BasePipeline):
         print("\n➡️ [5/5] Launching AEB visualization...\n")
         try:
             self.viz = AebVisualizer(self.cfg, self.kpi)
-            self.viz.interactive = True
+            self.viz.interactive = getattr(self, "default_interactive", False)
             self.viz.plot()
         except Exception as e:
             raise RuntimeError(f"❌ AEB visualization failed: {e}")

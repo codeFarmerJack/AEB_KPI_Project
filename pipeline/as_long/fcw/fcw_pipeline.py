@@ -32,7 +32,7 @@ class FcwPipeline(BasePipeline):
         print("\n➡️ [5/5] Launching FCW visualization...\n")
         try:
             self.viz = FcwVisualizer(self.cfg, self.kpi)
-            self.viz.interactive = True
+            self.viz.interactive = getattr(self, "default_interactive", False)
             self.viz.plot()
         except Exception as e:
             raise RuntimeError(f"❌ FCW visualization failed: {e}")

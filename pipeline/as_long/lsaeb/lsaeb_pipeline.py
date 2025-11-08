@@ -35,7 +35,7 @@ class LsaebPipeline(BasePipeline):
         print("\n➡️ [5/5] Launching LSAEB visualization...\n")
         try:
             self.viz = LsaebVisualizer(self.cfg, self.kpi)
-            self.viz.interactive = True   # Enable interactive Plotly output
+            self.viz.interactive = getattr(self, "default_interactive", False)
             self.viz.plot()
         except Exception as e:
             raise RuntimeError(f"❌ LSAEB visualization failed: {e}")
