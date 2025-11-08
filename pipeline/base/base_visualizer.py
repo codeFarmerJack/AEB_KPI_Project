@@ -57,14 +57,14 @@ class BaseVisualizer:
 
     # --------------------------------------------------------------- #
     def filter_graph_spec(self):
-        """Return only rows of graph_spec for this feature."""
+        """Return only rows of graph_spec relevant to this feature (and its common set)."""
         if self.graph_spec is None or self.graph_spec.empty:
             warnings.warn("⚠️ graph_spec is empty — cannot filter.")
             return pd.DataFrame()
-        
+
         print("DEBUG graph_spec columns:", list(self.graph_spec.columns))
 
-        # Normalize column names safely
+        # --- Normalize column names safely ---
         self.graph_spec.columns = (
             self.graph_spec.columns
             .astype(str)
@@ -77,10 +77,17 @@ class BaseVisualizer:
             warnings.warn("⚠️ No 'feature' column found in graph_spec — using all rows.")
             return self.graph_spec
 
-        # allow both feature and common_x rows
-        mask = self.graph_spec["feature"].astype(str).str.strip().str.lower().isin([self.feature, "common_x"])
+        # --- Determine feature-specific common axis label ---
+        common_label = f"common_{self.feature.lower()}"  # e.g., common_aeb, common_fcw, common_lsaeb, common_lka
+
+        # --- Build mask: include rows for this feature or its specific common axis ---
+        feature_vals = self.graph_spec["feature"].astype(str).str.strip().str.lower()
+        mask = feature_vals.isin([self.feature, common_label])
+
         filtered = self.graph_spec.loc[mask].reset_index(drop=True)
 
-        print(f"📊 Found {len(filtered)} plot rows for feature '{self.feature.upper()}'")
+        print(f"📊 Found {len(filtered)} plot rows for feature '{self.feature.upper()}' "
+            f"(including '{common_label}' rows if present).")
+
         return filtered
 
