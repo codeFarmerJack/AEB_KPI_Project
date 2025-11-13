@@ -48,15 +48,40 @@ class LkaKpiExtractor(BaseKpiExtractor):
                 dtle_target = np.asarray(getattr(mdf, "dtleTarget", np.full_like(dtle, np.nan)))
                 lka_status = np.asarray(mdf.lkaInterventionStatus)
                 steer_torque = np.asarray(mdf.steerWheelTorque)
+                RateOfDeparture = np.asarray(mdf.rateOfDeparture)
+                VehCurvature = np.asarray(mdf.vehCurvature)
+                LaneCurvature = np.asarray(mdf.laneCurvature)
+                use_case = np.asarray(getattr(mdf, "useCase", np.full_like(dtle, np.nan)))
             except AttributeError as e:
                 warnings.warn(f"[Row {i}] Missing required signal: {e}")
                 continue
 
             # --- Trim arrays to same length ---
-            n = min(len(time), len(dtle), len(lka_status), len(steer_torque))
-            time, dtle, dtle_target, lka_status, steer_torque = (
-                time[:n], dtle[:n], dtle_target[:n], lka_status[:n], steer_torque[:n]
+            n = min(
+                len(time),
+                len(dtle),
+                len(dtle_target),
+                len(lka_status),
+                len(steer_torque),
+                len(RateOfDeparture),
+                len(LaneCurvature),
+                len(VehCurvature),
+                len(use_case),
             )
+
+            time, dtle, dtle_target, lka_status, steer_torque, RateOfDeparture, LaneCurvature, VehCurvature, use_case = (
+                time[:n],
+                dtle[:n],
+                dtle_target[:n],
+                lka_status[:n],
+                steer_torque[:n],
+                RateOfDeparture[:n],
+                LaneCurvature[:n],
+                VehCurvature[:n],
+                use_case[:n],
+            )
+
+
 
             # --- Detect intervention events ---
             try:
@@ -77,20 +102,32 @@ class LkaKpiExtractor(BaseKpiExtractor):
 
             # --- Compute KPIs ---
             dtle_target_at_start = safe_scalar(dtle_target[start_idx])
+            dtle_at_start = safe_scalar(dtle[start_idx])
             dtle_min_during = np.nanmin(dtle[start_idx:end_idx + 1])
             min_dtle_delta = safe_scalar(dtle_target_at_start - dtle_min_during)
+            RoD_at_start = safe_scalar(RateOfDeparture[start_idx])
+            Lane_Curv_at_start = safe_scalar(LaneCurvature[start_idx])
+            Veh_Curv_at_start = safe_scalar(LaneCurvature[start_idx])
+            use_case_at_start = safe_scalar(use_case[start_idx])
+
 
             is_high = np.any(np.abs(steer_torque[start_idx:end_idx + 1]) > self.driver_torque_th)
 
             # --- Save results ---
             self.kpi_table.loc[i, "MinDTLEDelta"] = min_dtle_delta
+            self.kpi_table.loc[i, "TrigDTLE"] = dtle_at_start
             self.kpi_table.loc[i, "isWhlTrqHigh"] = bool(is_high)
             self.kpi_table.loc[i, "logTime"] = safe_scalar(time[start_idx])
+            self.kpi_table.loc[i, "TrigRateOfDeparture"] = RoD_at_start
+            self.kpi_table.loc[i, "TrigVehCurv"] = Veh_Curv_at_start
+            self.kpi_table.loc[i, "TrigLaneCurv"] = Lane_Curv_at_start
             self.kpi_table.loc[i, "vehSpd"] = safe_scalar(
                 getattr(mdf, "egoSpeedKph", [np.nan])[start_idx]
             )
+            self.kpi_table.loc[i, "UseCase"] = use_case_at_start
+
 
             # --- Round & finalize ---
-            self.kpi_table = self.kpi_table.round(3)
+            self.kpi_table = self.kpi_table.round(4)
 
         print("\n✅ LKA KPI extraction completed successfully.")
