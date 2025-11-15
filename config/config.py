@@ -64,6 +64,8 @@ class Config:
         cfg.marker_shapes = sheet_map.get("markershapes")
         cfg.kpi_spec      = sheet_map.get("kpi")
         cfg.params        = sheet_map.get("params")
+        cfg.overall_kpi   = sheet_map.get("overallkpi")
+
 
         # =====================================================
         # 3️⃣ Parse params sheet into dict with type awareness
@@ -219,8 +221,18 @@ class Config:
 
         result = {}
         for sheet_name in sheet_list:
+
+            # -----------------------------------------------
+            # Skip sheets that do not exist in workbook
+            # -----------------------------------------------
+            excel = pd.ExcelFile(file_path)
+            if sheet_name not in excel.sheet_names:
+                warnings.warn(f"⚠️ Sheet '{sheet_name}' not found in {file_path.name}, skipping.")
+                continue
+
             try:
                 preview = pd.read_excel(file_path, sheet_name=sheet_name, nrows=5, header=None)
+
                 header_row = 0
                 for i in range(len(preview)):
                     non_na = preview.iloc[i].notna().sum()
@@ -230,12 +242,13 @@ class Config:
 
                 df = pd.read_excel(file_path, sheet_name=sheet_name, header=header_row)
                 df.columns = df.columns.str.strip().str.lower()
-                result[sheet_name] = df
 
+                result[sheet_name] = df
                 print(f"✅ Loaded '{sheet_name}' (header at row {header_row+1}) — shape {df.shape}")
 
             except Exception as e:
                 warnings.warn(f'⚠️ Failed to read sheet "{sheet_name}": {e}')
+
         return result
 
     @staticmethod

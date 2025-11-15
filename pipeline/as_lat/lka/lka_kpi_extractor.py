@@ -27,10 +27,6 @@ class LkaKpiExtractor(BaseKpiExtractor):
     def __init__(self, config, event_segmenter=None):
         super().__init__(config, event_segmenter, "in_path_lka_chunks", feature_name="LKA")
         self.driver_torque_th = float(config.params.get("driver_interaction_torque", 2.0))
-        self.overall_table = pd.DataFrame(
-            columns=["file_name", "feature", "AvailDistPctLeft", "AvailDistPctRight"]
-        )
-
 
     # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):
@@ -143,7 +139,7 @@ class LkaKpiExtractor(BaseKpiExtractor):
         - % of distance LKA is available on right
 
         Results go ONLY into:
-            self.overall_table
+            self.overall_kpi_table (Excel-defined table)
         """
 
         print("\n📊 Processing LKA Feature Availability KPIs...")
@@ -158,21 +154,16 @@ class LkaKpiExtractor(BaseKpiExtractor):
                 warnings.warn(f"Missing extracted MF4 for {fname}")
                 continue
 
-
             # -------------------------------
             # Load required signals
             # -------------------------------
             try:
-                time = self._prepare_time(mdf)
-
+                time        = self._prepare_time(mdf)
                 ready_left  = np.asarray(mdf.lkaReadyLeft)
                 ready_right = np.asarray(mdf.lkaReadyRight)
-
                 lka_block   = np.asarray(mdf.lkaPrecondBlk)
                 lka_abort   = np.asarray(mdf.lkaAbort)
-
                 speed_kph   = np.asarray(mdf.egoSpeedKph)
-
             except AttributeError as e:
                 warnings.warn(f"[Feature Availability Row {i}] Missing required signal: {e}")
                 continue
@@ -180,13 +171,17 @@ class LkaKpiExtractor(BaseKpiExtractor):
             # -------------------------------
             # Trim to equal length
             # -------------------------------
-            n = min(len(time), len(ready_left), len(ready_right),
-                    len(lka_block), len(lka_abort), len(speed_kph))
+            n = min(
+                len(time), len(ready_left), len(ready_right),
+                len(lka_block), len(lka_abort), len(speed_kph)
+            )
 
-            time = time[:n]
-            ready_left, ready_right = ready_left[:n], ready_right[:n]
-            lka_block, lka_abort = lka_block[:n], lka_abort[:n]
-            speed_kph = speed_kph[:n]
+            time        = time[:n]
+            ready_left  = ready_left[:n]
+            ready_right = ready_right[:n]
+            lka_block   = lka_block[:n]
+            lka_abort   = lka_abort[:n]
+            speed_kph   = speed_kph[:n]
 
             # -------------------------------
             # Compute dt
@@ -208,26 +203,29 @@ class LkaKpiExtractor(BaseKpiExtractor):
             # -------------------------------
             # Availability rules
             # -------------------------------
-            global_ok = (lka_block == 0) & (lka_abort == 0)
-
-            avail_left  = (ready_left == 1) & global_ok
+            global_ok   = (lka_block == 0) & (lka_abort == 0)
+            avail_left  = (ready_left == 1)  & global_ok
             avail_right = (ready_right == 1) & global_ok
 
             # -------------------------------
             # % of distance available
             # -------------------------------
-            pct_left  = np.sum(dist[avail_left]) / total_dist * 100
+            pct_left  = np.sum(dist[avail_left])  / total_dist * 100
             pct_right = np.sum(dist[avail_right]) / total_dist * 100
 
             # -------------------------------
-            # Save ONLY into overall_table
+            # Save KPIs using direct assignment 
             # -------------------------------
-            self.overall_table.loc[len(self.overall_table)] = {
-                "file_name": fname,
-                "feature": self.FEATURE_NAME,
-                "AvailDistPctLeft": f"{round(pct_left, 2)}%",
-                "AvailDistPctRight": f"{round(pct_right, 2)}%",
-            }
+            if self.overall_kpi_table is not None:
+
+                # Mandatory columns
+                self.overall_kpi_table.loc[i, "label"] = fname
+                self.overall_kpi_table.loc[i, "feature"] = self.FEATURE_NAME
+                self.overall_kpi_table.loc[i, "AvailDistPctLeft"] = f"{pct_left:.2f}"
+                self.overall_kpi_table.loc[i, "AvailDistPctRight"] = f"{pct_right:.2f}"
+
 
         print("\n✅ Feature availability KPIs completed successfully.\n")
+
+
 
