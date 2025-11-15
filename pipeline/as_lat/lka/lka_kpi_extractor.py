@@ -27,6 +27,10 @@ class LkaKpiExtractor(BaseKpiExtractor):
     def __init__(self, config, event_segmenter=None):
         super().__init__(config, event_segmenter, "in_path_lka_chunks", feature_name="LKA")
         self.driver_torque_th = float(config.params.get("driver_interaction_torque", 2.0))
+        self.overall_table = pd.DataFrame(
+            columns=["file_name", "feature", "AvailDistPctLeft", "AvailDistPctRight"]
+        )
+
 
     # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):
@@ -43,15 +47,15 @@ class LkaKpiExtractor(BaseKpiExtractor):
 
             # --- Extract signals ---
             try:
-                time = self._prepare_time(mdf)
-                dtle = np.asarray(mdf.dtle)
-                dtle_target = np.asarray(getattr(mdf, "dtleTarget", np.full_like(dtle, np.nan)))
-                lka_status = np.asarray(mdf.lkaInterventionStatus)
-                steer_torque = np.asarray(mdf.steerWheelTorque)
+                time            = self._prepare_time(mdf)
+                dtle            = np.asarray(mdf.dtle)
+                dtle_target     = np.asarray(getattr(mdf, "dtleTarget", np.full_like(dtle, np.nan)))
+                lka_status      = np.asarray(mdf.lkaInterventionStatus)
+                steer_torque    = np.asarray(mdf.steerWheelTorque)
                 RateOfDeparture = np.asarray(mdf.rateOfDeparture)
-                VehCurvature = np.asarray(mdf.vehCurvature)
-                LaneCurvature = np.asarray(mdf.laneCurvature)
-                use_case = np.asarray(getattr(mdf, "useCase", np.full_like(dtle, np.nan)))
+                VehCurvature    = np.asarray(mdf.vehCurvature)
+                LaneCurvature   = np.asarray(mdf.laneCurvature)
+                use_case        = np.asarray(getattr(mdf, "useCase", np.full_like(dtle, np.nan)))
             except AttributeError as e:
                 warnings.warn(f"[Row {i}] Missing required signal: {e}")
                 continue
@@ -131,3 +135,99 @@ class LkaKpiExtractor(BaseKpiExtractor):
             self.kpi_table = self.kpi_table.round(4)
 
         print("\n✅ LKA KPI extraction completed successfully.")
+
+    def process_lka_availability(self, folder_feature_logs):
+        """
+        Compute feature availability across whole logs:
+        - % of distance LKA is available on left
+        - % of distance LKA is available on right
+
+        Results go ONLY into:
+            self.overall_table
+        """
+
+        print("\n📊 Processing LKA Feature Availability KPIs...")
+
+        for i, fname in enumerate(self.file_list_extracted):
+
+            fpath = os.path.join(folder_feature_logs, fname)
+            print(f"\n🚗 [{i+1}/{len(self.file_list_extracted)}]   Feature availability from: {fname}")
+
+            mdf = self._load_mdf(fpath)
+            if mdf is None:
+                warnings.warn(f"Missing extracted MF4 for {fname}")
+                continue
+
+
+            # -------------------------------
+            # Load required signals
+            # -------------------------------
+            try:
+                time = self._prepare_time(mdf)
+
+                ready_left  = np.asarray(mdf.lkaReadyLeft)
+                ready_right = np.asarray(mdf.lkaReadyRight)
+
+                lka_block   = np.asarray(mdf.lkaPrecondBlk)
+                lka_abort   = np.asarray(mdf.lkaAbort)
+
+                speed_kph   = np.asarray(mdf.egoSpeedKph)
+
+            except AttributeError as e:
+                warnings.warn(f"[Feature Availability Row {i}] Missing required signal: {e}")
+                continue
+
+            # -------------------------------
+            # Trim to equal length
+            # -------------------------------
+            n = min(len(time), len(ready_left), len(ready_right),
+                    len(lka_block), len(lka_abort), len(speed_kph))
+
+            time = time[:n]
+            ready_left, ready_right = ready_left[:n], ready_right[:n]
+            lka_block, lka_abort = lka_block[:n], lka_abort[:n]
+            speed_kph = speed_kph[:n]
+
+            # -------------------------------
+            # Compute dt
+            # -------------------------------
+            dt = np.diff(time, prepend=time[0])
+            dt = np.maximum(dt, 0.0)
+
+            # -------------------------------
+            # Compute distance
+            # -------------------------------
+            speed_mps = speed_kph / 3.6
+            dist = speed_mps * dt
+            total_dist = np.sum(dist)
+
+            if total_dist <= 0:
+                warnings.warn(f"[Row {i}] Total distance = 0 → skipping availability KPI.")
+                continue
+
+            # -------------------------------
+            # Availability rules
+            # -------------------------------
+            global_ok = (lka_block == 0) & (lka_abort == 0)
+
+            avail_left  = (ready_left == 1) & global_ok
+            avail_right = (ready_right == 1) & global_ok
+
+            # -------------------------------
+            # % of distance available
+            # -------------------------------
+            pct_left  = np.sum(dist[avail_left]) / total_dist * 100
+            pct_right = np.sum(dist[avail_right]) / total_dist * 100
+
+            # -------------------------------
+            # Save ONLY into overall_table
+            # -------------------------------
+            self.overall_table.loc[len(self.overall_table)] = {
+                "file_name": fname,
+                "feature": self.FEATURE_NAME,
+                "AvailDistPctLeft": f"{round(pct_left, 2)}%",
+                "AvailDistPctRight": f"{round(pct_right, 2)}%",
+            }
+
+        print("\n✅ Feature availability KPIs completed successfully.\n")
+

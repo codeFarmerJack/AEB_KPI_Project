@@ -36,9 +36,18 @@ class BaseKpiExtractor:
 
         self.in_path_extracted = event_segmenter.in_path_extracted
         self.out_path_chunks = getattr(event_segmenter, chunk_attr_name)
+
+        # ---- Chunked MF4 files (for event-based KPI extraction)
         self.file_list = [f for f in os.listdir(self.out_path_chunks) if f.endswith(".mf4")]
         if not self.file_list:
             raise FileNotFoundError(f"No .mf4 files found in {self.out_path_chunks}")
+
+        # ---- Extracted MF4 files (for availability KPI extraction)
+        self.file_list_extracted = [
+            f for f in os.listdir(self.in_path_extracted) if f.endswith(".mf4")
+        ]
+        if not self.file_list_extracted:
+            raise FileNotFoundError(f"No .mf4 extracted files found in {self.in_path_extracted}")
 
         # --- KPI table ---
         self.feature_name = feature_name or self.FEATURE_NAME
@@ -106,19 +115,44 @@ class BaseKpiExtractor:
 
     # ------------------------------------------------------------------ #
     def export_to_excel(self, sheet_name=None):
-        """Export KPI results to Excel (auto-named by domain)."""
-        sheet = sheet_name or self.feature_name.lower()
+        """
+        Export KPI results to Excel.
+        - If overall_table exists and is not empty → export two sheets.
+        - Otherwise → export only kpi_table.
+        """
 
-        # --- Build output path using config-defined name ---
+        # Determine sheet names
+        event_sheet = sheet_name or self.feature_name.lower()
+        overall_sheet = "overall"
+
+        # Build output file path
         filename = getattr(self.config, "kpi_result_filename", "kpi_results.xlsx")
         output_path = os.path.join(self.out_path_results, filename)
 
         try:
-            export_kpi_to_excel(self.kpi_table, output_path, sheet_name=sheet)
-            print(f"💾 Saved KPI results → {output_path}")
-        except Exception as e:
-            warnings.warn(f"⚠️ Failed to export KPI results for {sheet}: {e}")
+            # ------------------------------------------------------
+            # CASE 1: overall_table does NOT exist or is empty
+            # ------------------------------------------------------
+            if not hasattr(self, "overall_table") or self.overall_table.empty:
+                # Use your existing export method (single table)
+                export_kpi_to_excel(self.kpi_table, output_path, sheet_name=event_sheet)
+                print(f"💾 Saved KPI results → {output_path} (single sheet)")
+                return
 
+            # ------------------------------------------------------
+            # CASE 2: overall_table exists AND has data
+            # ------------------------------------------------------
+            with pd.ExcelWriter(output_path, engine="xlsxwriter") as writer:
+                # Write event KPIs
+                self.kpi_table.to_excel(writer, index=False, sheet_name=event_sheet)
+
+                # Write overall availability KPIs
+                self.overall_table.to_excel(writer, index=False, sheet_name=overall_sheet)
+
+            print(f"💾 Saved KPI results → {output_path} (two sheets)")
+
+        except Exception as e:
+            warnings.warn(f"⚠️ Failed to export KPI results: {e}")
 
     # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):

@@ -25,6 +25,7 @@ class LkaPipeline(BasePipeline):
         try:
             self.kpi = LkaKpiExtractor(self.cfg, self.event)
             self.kpi.process_all_mdf_files()
+            self.kpi.process_lka_availability(self.kpi.in_path_extracted)
             self.kpi.export_to_excel()
             print("✅ LKA KPI extraction and Excel export done.")
         except Exception as e:
