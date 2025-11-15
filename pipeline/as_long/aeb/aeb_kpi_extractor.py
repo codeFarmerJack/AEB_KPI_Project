@@ -47,8 +47,8 @@ class AebKpiExtractor(BaseKpiExtractor):
     }
 
     # ------------------------------------------------------------------ #
-    def __init__(self, config, event_detector):
-        super().__init__(config, event_detector, "in_path_aeb_chunks", feature_name="AEB")
+    def __init__(self, config, event_segmenter=None):
+        super().__init__(config, event_segmenter, "in_path_aeb_chunks", feature_name="AEB")
 
         # --- Load calibratables ---
         expected_keys = {

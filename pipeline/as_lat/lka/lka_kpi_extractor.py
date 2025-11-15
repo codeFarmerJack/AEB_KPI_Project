@@ -24,8 +24,8 @@ class LkaKpiExtractor(BaseKpiExtractor):
     }
 
     # ------------------------------------------------------------------ #
-    def __init__(self, config, event_detector=None):
-        super().__init__(config, event_detector, "in_path_lka_chunks", feature_name="LKA")
+    def __init__(self, config, event_segmenter=None):
+        super().__init__(config, event_segmenter, "in_path_lka_chunks", feature_name="LKA")
         self.driver_torque_th = float(config.params.get("driver_interaction_torque", 2.0))
 
     # ------------------------------------------------------------------ #

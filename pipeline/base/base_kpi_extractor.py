@@ -22,19 +22,20 @@ class BaseKpiExtractor:
     PARAM_SPECS = {}
 
     # ------------------------------------------------------------------ #
-    def __init__(self, config, event_detector, chunk_attr_name, feature_name=None):
-        if config is None or event_detector is None:
-            raise ValueError("Both Config and EventDetector are required.")
+    def __init__(self, config, event_segmenter, chunk_attr_name, feature_name=None):
+        if config is None or event_segmenter is None:
+            raise ValueError("Both Config and EventSegmenter are required.")
 
-        if not hasattr(event_detector, chunk_attr_name):
-            raise TypeError(f"event_detector missing required attribute '{chunk_attr_name}'")
+        if not hasattr(event_segmenter, chunk_attr_name):
+            raise TypeError(f"event_segmenter missing required attribute '{chunk_attr_name}'")
 
         # --- Setup paths ---
-        self.in_path_raw_data = event_detector.in_path_raw_data
+        self.in_path_raw_data  = event_segmenter.in_path_raw_data
         self.out_path_results  = os.path.join(self.in_path_raw_data, "analysis_results")
         os.makedirs(self.out_path_results, exist_ok=True)
 
-        self.out_path_chunks = getattr(event_detector, chunk_attr_name)
+        self.in_path_extracted = event_segmenter.in_path_extracted
+        self.out_path_chunks = getattr(event_segmenter, chunk_attr_name)
         self.file_list = [f for f in os.listdir(self.out_path_chunks) if f.endswith(".mf4")]
         if not self.file_list:
             raise FileNotFoundError(f"No .mf4 files found in {self.out_path_chunks}")

@@ -21,8 +21,8 @@ class LsaebKpiExtractor(BaseKpiExtractor):
     }
 
     # ------------------------------------------------------------------ #
-    def __init__(self, config, event_detector):
-        super().__init__(config, event_detector, "in_path_lsaeb_chunks", feature_name="LSAEB")
+    def __init__(self, config, event_segmenter=None):
+        super().__init__(config, event_segmenter, "in_path_lsaeb_chunks", feature_name="LSAEB")
         self.distance_calc = LsaebDistanceCalculator(self)
 
     # ------------------------------------------------------------------ #
