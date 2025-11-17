@@ -144,6 +144,23 @@ class LkaKpiExtractor(BaseKpiExtractor):
 
         print("\n📊 Processing LKA Feature Availability KPIs...")
 
+        # ============================================================
+        # Pre-compute: Determine NON-COMMON feature(s) from schema
+        # Example: {"label": "Common", "AvailDistPctLeft": "LKA", "AvailDistPctRight": "LKA"}
+        # ============================================================
+        if hasattr(self, "overall_kpi_feature_map") and self.overall_kpi_feature_map:
+            non_common_features = {
+                f for f in self.overall_kpi_feature_map.values()
+                if f and str(f).upper() != "COMMON"
+            }
+            # Usually a single feature like "LKA"
+            merged_feature_name = next(iter(non_common_features), self.FEATURE_NAME)
+        else:
+            merged_feature_name = self.FEATURE_NAME
+
+        # ============================================================
+        # Process every extracted MF4 file (one output row per file)
+        # ============================================================
         for i, fname in enumerate(self.file_list_extracted):
 
             fpath = os.path.join(folder_feature_logs, fname)
@@ -154,26 +171,21 @@ class LkaKpiExtractor(BaseKpiExtractor):
                 warnings.warn(f"Missing extracted MF4 for {fname}")
                 continue
 
-            # -------------------------------
-            # Load required signals
-            # -------------------------------
             try:
                 time        = self._prepare_time(mdf)
                 ready_left  = np.asarray(mdf.lkaReadyLeft)
                 ready_right = np.asarray(mdf.lkaReadyRight)
                 lka_block   = np.asarray(mdf.lkaPrecondBlk)
                 lka_abort   = np.asarray(mdf.lkaAbort)
-                speed_kph   = np.asarray(mdf.egoSpeedKph)
+                speed_mps   = np.asarray(mdf.egoSpeed)
             except AttributeError as e:
                 warnings.warn(f"[Feature Availability Row {i}] Missing required signal: {e}")
                 continue
 
-            # -------------------------------
-            # Trim to equal length
-            # -------------------------------
+            # --- Trim lengths ---
             n = min(
                 len(time), len(ready_left), len(ready_right),
-                len(lka_block), len(lka_abort), len(speed_kph)
+                len(lka_block), len(lka_abort), len(speed_mps)
             )
 
             time        = time[:n]
@@ -181,18 +193,13 @@ class LkaKpiExtractor(BaseKpiExtractor):
             ready_right = ready_right[:n]
             lka_block   = lka_block[:n]
             lka_abort   = lka_abort[:n]
-            speed_kph   = speed_kph[:n]
+            speed_mps   = speed_mps[:n]
 
-            # -------------------------------
-            # Compute dt
-            # -------------------------------
+            # --- dt ---
             dt = np.diff(time, prepend=time[0])
             dt = np.maximum(dt, 0.0)
 
-            # -------------------------------
-            # Compute distance
-            # -------------------------------
-            speed_mps = speed_kph / 3.6
+            # --- distance ---
             dist = speed_mps * dt
             total_dist = np.sum(dist)
 
@@ -200,32 +207,38 @@ class LkaKpiExtractor(BaseKpiExtractor):
                 warnings.warn(f"[Row {i}] Total distance = 0 → skipping availability KPI.")
                 continue
 
-            # -------------------------------
-            # Availability rules
-            # -------------------------------
+            # --- Availability conditions ---
             global_ok   = (lka_block == 0) & (lka_abort == 0)
-            avail_left  = (ready_left == 1)  & global_ok
+            avail_left  = (ready_left == 1) & global_ok
             avail_right = (ready_right == 1) & global_ok
 
-            # -------------------------------
-            # % of distance available
-            # -------------------------------
             pct_left  = np.sum(dist[avail_left])  / total_dist * 100
             pct_right = np.sum(dist[avail_right]) / total_dist * 100
 
-            # -------------------------------
-            # Save KPIs using direct assignment 
-            # -------------------------------
+            # ============================================================
+            # SAVE into one row of overall_kpi_table
+            # ============================================================
             if self.overall_kpi_table is not None:
 
-                # Mandatory columns
-                self.overall_kpi_table.loc[i, "label"] = fname
-                self.overall_kpi_table.loc[i, "feature"] = self.FEATURE_NAME
-                self.overall_kpi_table.loc[i, "AvailDistPctLeft"] = f"{pct_left:.2f}"
-                self.overall_kpi_table.loc[i, "AvailDistPctRight"] = f"{pct_right:.2f}"
+                row_idx = i  # one row per file
 
+                # --- label (Common KPI)
+                if "label" in self.overall_kpi_table.columns:
+                    self.overall_kpi_table.loc[row_idx, "label"] = fname
+
+                # --- feature (merged feature from schema)
+                if "feature" in self.overall_kpi_table.columns:
+                    self.overall_kpi_table.loc[row_idx, "feature"] = merged_feature_name
+
+                # --- KPI values (only write columns that exist in the table)
+                if "AvailDistPctLeft" in self.overall_kpi_table.columns:
+                    self.overall_kpi_table.loc[row_idx, "AvailDistPctLeft"] = f"{pct_left:.2f}"
+
+                if "AvailDistPctRight" in self.overall_kpi_table.columns:
+                    self.overall_kpi_table.loc[row_idx, "AvailDistPctRight"] = f"{pct_right:.2f}"
 
         print("\n✅ Feature availability KPIs completed successfully.\n")
+
 
 
 
