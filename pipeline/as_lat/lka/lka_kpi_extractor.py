@@ -55,34 +55,7 @@ class LkaKpiExtractor(BaseKpiExtractor):
             except AttributeError as e:
                 warnings.warn(f"[Row {i}] Missing required signal: {e}")
                 continue
-
-            # --- Trim arrays to same length ---
-            n = min(
-                len(time),
-                len(dtle),
-                len(dtle_target),
-                len(lka_status),
-                len(steer_torque),
-                len(RateOfDeparture),
-                len(LaneCurvature),
-                len(VehCurvature),
-                len(use_case),
-            )
-
-            time, dtle, dtle_target, lka_status, steer_torque, RateOfDeparture, LaneCurvature, VehCurvature, use_case = (
-                time[:n],
-                dtle[:n],
-                dtle_target[:n],
-                lka_status[:n],
-                steer_torque[:n],
-                RateOfDeparture[:n],
-                LaneCurvature[:n],
-                VehCurvature[:n],
-                use_case[:n],
-            )
-
-
-
+           
             # --- Detect intervention events ---
             try:
                 start_indices, end_indices = detect_lka_events(time, lka_status)
@@ -181,19 +154,6 @@ class LkaKpiExtractor(BaseKpiExtractor):
             except AttributeError as e:
                 warnings.warn(f"[Feature Availability Row {i}] Missing required signal: {e}")
                 continue
-
-            # --- Trim lengths ---
-            n = min(
-                len(time), len(ready_left), len(ready_right),
-                len(lka_block), len(lka_abort), len(speed_mps)
-            )
-
-            time        = time[:n]
-            ready_left  = ready_left[:n]
-            ready_right = ready_right[:n]
-            lka_block   = lka_block[:n]
-            lka_abort   = lka_abort[:n]
-            speed_mps   = speed_mps[:n]
 
             # --- dt ---
             dt = np.diff(time, prepend=time[0])
