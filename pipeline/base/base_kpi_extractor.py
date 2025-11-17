@@ -127,65 +127,49 @@ class BaseKpiExtractor:
     # ------------------------------------------------------------------ #
     def export_to_excel(self, sheet_name=None):
         """
-        Export KPI results to Excel.
-        - Always export kpi_table (sorted by vehSpd before renaming)
-        - Export overall_kpi_table only if available and non-empty
+        Export KPI results to Excel using the shared helper (export_kpi_to_excel).
+        - Always export kpi_table as one sheet.
+        - Export overall_kpi_table as an additional sheet (if it exists).
         """
 
-        event_sheet   = sheet_name or self.feature_name.lower()
-        overall_sheet = "overall"
+        # Default sheet for main KPI
+        event_sheet = sheet_name or self.feature_name.lower()
 
-        filename    = getattr(self.config, "kpi_result_filename", "kpi_results.xlsx")
-        output_path = os.path.join(self.out_path_results, filename)
-
-        def apply_display_names(df):
-            if hasattr(df, "attrs") and "display_names" in df.attrs:
-                return df.rename(columns=df.attrs["display_names"])
-            return df
+        # Excel output folder OR final path (both supported)
+        output_path = self.out_path_results
 
         try:
             # =====================================================
-            # 1) Prepare main KPI table
+            # 1) MAIN KPI TABLE — always exported
             # =====================================================
             df_main = self.kpi_table.copy()
 
-            # ---- sort BEFORE renaming ----
+            # --- Sort BEFORE renaming ---
             if "vehSpd" in df_main.columns:
-                df_main = df_main.sort_values(by="vehSpd", ascending=True)
+                df_main = df_main.sort_values("vehSpd")
             else:
-                print("⚠️ Column 'vehSpd' not found in kpi_table — skip sorting.")
+                print("⚠️ 'vehSpd' not found in kpi_table — skipping sort.")
 
-            # ---- now apply display names ----
-            df_main = apply_display_names(df_main)
-
-            # =====================================================
-            # 2) Check if overall KPI table exists and is usable
-            # =====================================================
-            export_overall = (
-                self.overall_kpi_table is not None 
-                and not self.overall_kpi_table.empty
-            )
+            # --- Export using the shared helper ---
+            export_kpi_to_excel(df_main, output_path, sheet_name=event_sheet)
 
             # =====================================================
-            # 3) Export to Excel
+            # 2) OVERALL TABLE — exported only when non-empty
             # =====================================================
-            if export_overall:
-                # Prepare overall table (no sorting)
-                df_over = apply_display_names(self.overall_kpi_table)
+            if self.overall_kpi_table is not None and not self.overall_kpi_table.empty:
+                df_over = self.overall_kpi_table.copy()
 
-                with pd.ExcelWriter(output_path, engine="xlsxwriter") as writer:
-                    df_main.to_excel(writer, index=False, sheet_name=event_sheet)
-                    df_over.to_excel(writer, index=False, sheet_name=overall_sheet)
+                export_kpi_to_excel(df_over, output_path, sheet_name="overall")
+                print("💾 Exported 'overall' KPI sheet.")
 
-                print(f"💾 Saved KPI results → {output_path} (kpi_table + overall_kpi)")
-            
             else:
-                # Export only kpi_table
-                df_main.to_excel(output_path, index=False, sheet_name=event_sheet)
-                print(f"💾 Saved KPI results → {output_path} (kpi_table only)")
+                print("ℹ️ No overall KPI table → exporting only the main KPI sheet.")
+
+            print(f"✅ KPI export completed successfully → {output_path}")
 
         except Exception as e:
             warnings.warn(f"⚠️ Failed to export KPI results: {e}")
+
 
 
 
