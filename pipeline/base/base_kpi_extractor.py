@@ -128,49 +128,66 @@ class BaseKpiExtractor:
     def export_to_excel(self, sheet_name=None):
         """
         Export KPI results to Excel.
-        - If overall_kpi_table exists and is not empty → export two sheets.
-        - Otherwise → export only kpi_table.
+        - Always export kpi_table (sorted by vehSpd before renaming)
+        - Export overall_kpi_table only if available and non-empty
         """
 
-        # Determine sheet names
         event_sheet   = sheet_name or self.feature_name.lower()
         overall_sheet = "overall"
 
-        # Output file
-        filename = getattr(self.config, "kpi_result_filename", "kpi_results.xlsx")
+        filename    = getattr(self.config, "kpi_result_filename", "kpi_results.xlsx")
         output_path = os.path.join(self.out_path_results, filename)
 
-        # Helper: apply display names (units etc.)
         def apply_display_names(df):
             if hasattr(df, "attrs") and "display_names" in df.attrs:
                 return df.rename(columns=df.attrs["display_names"])
             return df
 
         try:
-            # ----------------------------
-            # CASE 1: No overall KPI table
-            # ----------------------------
-            if self.overall_kpi_table is None or self.overall_kpi_table.empty:
-                df_main = apply_display_names(self.kpi_table)
+            # =====================================================
+            # 1) Prepare main KPI table
+            # =====================================================
+            df_main = self.kpi_table.copy()
 
-                export_kpi_to_excel(df_main, output_path, sheet_name=event_sheet)
-                print(f"💾 Saved KPI results → {output_path} (single sheet)")
-                return
+            # ---- sort BEFORE renaming ----
+            if "vehSpd" in df_main.columns:
+                df_main = df_main.sort_values(by="vehSpd", ascending=True)
+            else:
+                print("⚠️ Column 'vehSpd' not found in kpi_table — skip sorting.")
 
-            # ----------------------------
-            # CASE 2: Export two sheets
-            # ----------------------------
-            df_main   = apply_display_names(self.kpi_table)
-            df_over   = apply_display_names(self.overall_kpi_table)
+            # ---- now apply display names ----
+            df_main = apply_display_names(df_main)
 
-            with pd.ExcelWriter(output_path, engine="xlsxwriter") as writer:
-                df_main.to_excel(writer,   index=False, sheet_name=event_sheet)
-                df_over.to_excel(writer,   index=False, sheet_name=overall_sheet)
+            # =====================================================
+            # 2) Check if overall KPI table exists and is usable
+            # =====================================================
+            export_overall = (
+                self.overall_kpi_table is not None 
+                and not self.overall_kpi_table.empty
+            )
 
-            print(f"💾 Saved KPI results → {output_path} (two sheets)")
+            # =====================================================
+            # 3) Export to Excel
+            # =====================================================
+            if export_overall:
+                # Prepare overall table (no sorting)
+                df_over = apply_display_names(self.overall_kpi_table)
+
+                with pd.ExcelWriter(output_path, engine="xlsxwriter") as writer:
+                    df_main.to_excel(writer, index=False, sheet_name=event_sheet)
+                    df_over.to_excel(writer, index=False, sheet_name=overall_sheet)
+
+                print(f"💾 Saved KPI results → {output_path} (kpi_table + overall_kpi)")
+            
+            else:
+                # Export only kpi_table
+                df_main.to_excel(output_path, index=False, sheet_name=event_sheet)
+                print(f"💾 Saved KPI results → {output_path} (kpi_table only)")
 
         except Exception as e:
             warnings.warn(f"⚠️ Failed to export KPI results: {e}")
+
+
 
 
     # ------------------------------------------------------------------ #
