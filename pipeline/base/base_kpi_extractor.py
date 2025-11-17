@@ -128,15 +128,24 @@ class BaseKpiExtractor:
     def export_to_excel(self, sheet_name=None):
         """
         Export KPI results to Excel using the shared helper (export_kpi_to_excel).
-        - Always export kpi_table as one sheet.
-        - Export overall_kpi_table as an additional sheet (if it exists).
+        - Always export `kpi_table` as one sheet.
+        - Export `overall_kpi_table` as an additional sheet (if it exists).
+        - Ensures consistent sheet naming and correct Excel file naming.
         """
 
-        # Default sheet for main KPI
-        event_sheet = sheet_name or self.feature_name.lower()
+        # ------------------------------------------------------------
+        # 1. Determine sheet name (normalize to lowercase)
+        # ------------------------------------------------------------
+        event_sheet = (sheet_name or self.feature_name).lower()
 
-        # Excel output folder OR final path (both supported)
-        output_path = self.out_path_results
+        # ------------------------------------------------------------
+        # 2. Determine FINAL Excel file output path
+        # ------------------------------------------------------------
+        # Use config if provided, else fallback
+        filename = getattr(self.config, "kpi_result_filename", "kpi_results.xlsx")
+
+        # Full path: <results_folder>/<filename>
+        output_path = os.path.join(self.out_path_results, filename)
 
         try:
             # =====================================================
@@ -144,31 +153,32 @@ class BaseKpiExtractor:
             # =====================================================
             df_main = self.kpi_table.copy()
 
-            # --- Sort BEFORE renaming ---
+            # Sort BEFORE renaming
             if "vehSpd" in df_main.columns:
                 df_main = df_main.sort_values("vehSpd")
             else:
-                print("⚠️ 'vehSpd' not found in kpi_table — skipping sort.")
+                print("⚠️ 'vehSpd' not found in main KPI table — skipping sort.")
 
-            # --- Export using the shared helper ---
+            # Write/append sheet using helper
             export_kpi_to_excel(df_main, output_path, sheet_name=event_sheet)
+            print(f"📄 Exported '{event_sheet}' sheet → {output_path}")
 
             # =====================================================
-            # 2) OVERALL TABLE — exported only when non-empty
+            # 2) OVERALL TABLE — only exported when available
             # =====================================================
             if self.overall_kpi_table is not None and not self.overall_kpi_table.empty:
-                df_over = self.overall_kpi_table.copy()
+                df_overall = self.overall_kpi_table.copy()
 
-                export_kpi_to_excel(df_over, output_path, sheet_name="overall")
-                print("💾 Exported 'overall' KPI sheet.")
-
+                export_kpi_to_excel(df_overall, output_path, sheet_name="overall")
+                print("📄 Exported 'overall' KPI sheet.")
             else:
-                print("ℹ️ No overall KPI table → exporting only the main KPI sheet.")
+                print("ℹ️ No overall KPI table — only main sheet exported.")
 
             print(f"✅ KPI export completed successfully → {output_path}")
 
         except Exception as e:
-            warnings.warn(f"⚠️ Failed to export KPI results: {e}")
+            warnings.warn(f"⚠️ Failed to export KPI results to Excel ({output_path}): {e}")
+
 
 
 
