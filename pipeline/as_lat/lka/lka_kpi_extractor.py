@@ -75,13 +75,13 @@ class LkaKpiExtractor(BaseKpiExtractor):
 
             # --- Compute KPIs ---
             dtle_target_at_start = safe_scalar(dtle_target[start_idx])
-            dtle_at_start = safe_scalar(dtle[start_idx])
-            dtle_min_during = np.nanmin(dtle[start_idx:end_idx + 1])
-            min_dtle_delta = safe_scalar(dtle_target_at_start - dtle_min_during)
-            RoD_at_start = safe_scalar(RateOfDeparture[start_idx])
-            Lane_Curv_at_start = safe_scalar(LaneCurvature[start_idx])
-            Veh_Curv_at_start = safe_scalar(LaneCurvature[start_idx])
-            use_case_at_start = safe_scalar(use_case[start_idx])
+            dtle_at_start        = safe_scalar(dtle[start_idx])
+            dtle_min_during      = np.nanmin(dtle[start_idx:end_idx + 1])
+            min_dtle_delta       = safe_scalar(dtle_target_at_start - dtle_min_during)
+            RoD_at_start         = safe_scalar(RateOfDeparture[start_idx])
+            Lane_Curv_at_start   = safe_scalar(LaneCurvature[start_idx])
+            Veh_Curv_at_start    = safe_scalar(VehCurvature[start_idx])
+            use_case_at_start    = safe_scalar(use_case[start_idx])
 
 
             is_high = np.any(np.abs(steer_torque[start_idx:end_idx + 1]) > self.driver_torque_th)

@@ -21,11 +21,15 @@ class Config:
         cfg = cls()
         config_struct = cls._load_config(json_config_path)
 
+        # resolve paths relative to the config file
+        config_dir = Path(json_config_path).parent
+
         # =====================================================
         # 1️⃣ Load vbRcSignals from signal_map.xlsx
         # =====================================================
         sig_cfg    = config_struct["SignalMap"]
-        sig_path   = sig_cfg["FilePath"]
+        sig_path = cls._resolve_path(config_dir, sig_cfg["FilePath"])
+
         sig_sheets = sig_cfg["Sheets"]
         sig_data   = cls._load_signal_map_kpi_plot_spec(sig_path, sig_sheets)
 
@@ -43,7 +47,7 @@ class Config:
             raise ValueError("No KPI section found in config (expected 'KpiAsLong' or 'KpiAsLat').")
 
         spec_cfg   = config_struct[kpi_section_key]
-        spec_path  = spec_cfg["FilePath"]
+        spec_path = cls._resolve_path(config_dir, spec_cfg["FilePath"])
         sheet_list = spec_cfg["Sheets"]
 
         ## --- Define the name for the KPI excel export ---
@@ -304,3 +308,9 @@ class Config:
                             v * 100 if v is not None else None for v in y_vals
                         ]
                         print(f"📏 Scaled '{key}' *100 (0-1 → 0-100).")
+
+    @staticmethod
+    def _resolve_path(base_dir: Path, p: str | Path) -> Path:
+        p = Path(p)
+        return p if p.is_absolute() else (base_dir / p).resolve()
+
