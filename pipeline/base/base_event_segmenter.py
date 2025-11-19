@@ -1,6 +1,7 @@
 import os
 import gc
 import warnings
+import traceback
 import pandas as pd
 from utils.signal_mdf import SignalMDF
 from utils.load_params import load_params_from_class, load_params_from_config
@@ -80,7 +81,12 @@ class BaseEventSegmenter:
                 gc.collect()
 
             except Exception as e:
-                print(f"⚠️ Error processing {fname}: {e}")
+                print(f"\n🚨 ERROR while processing file: {fname}")
+                print(f"   ➝ Exception Type: {type(e).__name__}")
+                print(f"   ➝ Message: {e}")
+
+                print("   ➝ Full Traceback:")
+                traceback.print_exc()
 
     # -------------------- Common event extraction -------------------- #
 
