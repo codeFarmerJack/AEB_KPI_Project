@@ -3,7 +3,7 @@ import gc
 import warnings
 import traceback
 import pandas as pd
-from utils.signal_mdf import SignalMDF
+from utils.signal_mdf import SignalMDF, safe_load_mdf
 from utils.load_params import load_params_from_class, load_params_from_config
 
 class BaseEventSegmenter:
@@ -58,7 +58,7 @@ class BaseEventSegmenter:
 
             try:
                 print(f"🔍 Reading MF4 file: {fname}")
-                mdf = SignalMDF(file_path)
+                mdf = safe_load_mdf(file_path)
 
                 # Validate required signal
                 if not hasattr(mdf, self.signal_name):

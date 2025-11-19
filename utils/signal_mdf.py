@@ -1,6 +1,7 @@
 import warnings
 import numpy as np
 from asammdf import MDF
+import traceback
 
 
 class SignalMDF(MDF):
@@ -86,3 +87,17 @@ class SignalMDF(MDF):
             self._injected[name] = np.asarray(value)
         else:
             super().__setattr__(name, value)
+
+def safe_load_mdf(file_path):
+    try:
+        print(f"   🟦 Loading MF4 → {file_path}")
+        mdf = SignalMDF(file_path)
+        print("   🟩 Loaded OK")
+        return mdf
+    except Exception as e:
+        print("   🟥 Failed to load MF4")
+        print("      Type:", type(e).__name__)
+        print("      Message:", e)
+        traceback.print_exc()
+        return None
+
