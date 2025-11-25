@@ -21,17 +21,21 @@ datas = [
 # ----------------------------------------------------------
 # Add Tcl/Tk support (REQUIRED for Tkinter)
 # ----------------------------------------------------------
-# These paths are correct for official python.org installers + Homebrew Python
-# macOS ARM uses these exact library names
-tcl_path = os.path.join(sys.base_prefix, "lib", "tcl8.6")
-tk_path  = os.path.join(sys.base_prefix, "lib", "tk8.6")
+import tkinter
 
-# Add Tcl/Tk folders to bundle if they exist
-if os.path.isdir(tcl_path) and os.path.isdir(tk_path):
-    datas += [
-        (tcl_path, "tcl"),
-        (tk_path, "tk"),
-    ]
+# Tkinter stores its Tcl files inside its own package directory:
+# <python>/Lib/tkinter/tcl/tcl8.6
+tcl_dir = os.path.join(os.path.dirname(tkinter.__file__), "tcl")
+
+for name in ("tcl8.6", "tk8.6"):
+    full_path = os.path.join(tcl_dir, name)
+    if os.path.isdir(full_path):
+        datas.append((full_path, os.path.join("tcl", name)))
+
+# Include other tkinter assets
+from PyInstaller.utils.hooks import collect_data_files
+datas += collect_data_files("tkinter", include_py_files=True)
+
 
 # Tkinter required modules
 hiddenimports = [
