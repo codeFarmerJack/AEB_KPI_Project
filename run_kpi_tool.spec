@@ -25,15 +25,24 @@ datas = [
 # ----------------------------------------------------------
 # Add Tcl/Tk support (REQUIRED for Tkinter)
 # ----------------------------------------------------------
-# Auto-detect where tkinter stores Tcl/Tk (works on BOTH macOS + Windows)
-tcl_dir = os.path.join(os.path.dirname(tkinter.__file__), "tcl")
 
-for name in os.listdir(tcl_dir):
-    full_path = os.path.join(tcl_dir, name)
-    if os.path.isdir(full_path):
-        datas.append((full_path, os.path.join("tcl", name)))
+# Windows stores Tcl/Tk in <python>/tcl/
+# macOS/Linux store in <python>/Lib/tkinter/tcl/
+if sys.platform.startswith("win"):
+    # Example: C:\Users\xxx\AppData\Local\Programs\Python\Python312\tcl
+    tcl_base = os.path.join(sys.base_prefix, "tcl")
+else:
+    # Example macOS: .../Python.framework/Versions/3.12/lib/python3.12/tkinter/tcl
+    tcl_base = os.path.join(os.path.dirname(tkinter.__file__), "tcl")
 
-# Add extra tkinter resources
+# Add all Tcl/Tk subdirectories (e.g., tcl8.6, tk8.6, tcl8.6.13)
+if os.path.isdir(tcl_base):
+    for name in os.listdir(tcl_base):
+        full_path = os.path.join(tcl_base, name)
+        if os.path.isdir(full_path):
+            datas.append((full_path, os.path.join("tcl", name)))
+
+# Add tkinter runtime files
 datas += collect_data_files("tkinter", include_py_files=True)
 
 
