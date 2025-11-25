@@ -1,4 +1,5 @@
 import os
+import sys
 import warnings
 import numpy as np
 from typing import List
@@ -49,15 +50,26 @@ class InputHandler:
 
         # --- Prompt user for MF4 folder ---
         print("📂 Please select the MF4 folder...")
+
+        # Ensure Tcl/Tk paths work inside PyInstaller (important!)
+        if getattr(sys, "frozen", False):
+            tk_root = os.path.join(sys._MEIPASS, "tk")
+            tcl_root = os.path.join(sys._MEIPASS, "tcl")
+            os.environ["TCL_LIBRARY"] = tcl_root
+            os.environ["TK_LIBRARY"] = tk_root
+
+        # Always show folder selection dialog
         root = tk.Tk()
-        root.withdraw()  # hide main window
+        root.withdraw()
         folder = filedialog.askdirectory(title="Select MF4 Folder")
+
 
         if not folder:
             raise ValueError("No MF4 folder selected. Aborting.")
-        
+
         self.in_path_raw_data = os.path.abspath(folder)
         print(f"✅ Selected MF4 folder: {self.in_path_raw_data}")
+
 
         # --- Create subfolder for extracted files ---
         self.out_path_extracted = os.path.join(self.in_path_raw_data, "extracted")
@@ -125,7 +137,11 @@ class InputHandler:
 
                 # --- 4️⃣ Save both raw + filtered signals to new MDF ---
 
-                mapper = EnumMapper("config/enum_definitions.yaml")
+                # Detect bundle directory
+                base_path = getattr(sys, "_MEIPASS", os.path.abspath("."))
+                enum_file = os.path.join(base_path, "config", "enum_definitions.yaml")
+                mapper = EnumMapper(enum_file)
+
                 
                 new_mdf = MDF()
                 for col in data.columns:

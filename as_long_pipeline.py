@@ -1,30 +1,49 @@
+import os 
+import sys
 from pathlib import Path
 from config.config import Config
 from pipeline.input_handler import InputHandler
+
+# Longitudinal feature pipelines
 from pipeline.as_long.aeb.aeb_pipeline import AebPipeline
 from pipeline.as_long.fcw.fcw_pipeline import FcwPipeline
 from pipeline.as_long.lsaeb.lsaeb_pipeline import LsaebPipeline
 
 
-# --- Define paths ---
-config_path = Path("/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_kpi_extractor/python/config/config_as_long.json")
+def main(config_file: Path = None):
+    """
+    Entry point for AS_LONG KPI extractor.
+    This MUST be callable by the launcher OR standalone.
+    """
 
-# --- Shared input handler ---
-cfg = Config.from_json(config_path)
-ih  = InputHandler(cfg)
-ih.process_mf4_files()   # Process MF4 files once for both pipelines
+    # 1) Determine config path
+    if config_file is None:
+        base_path = getattr(sys, "_MEIPASS", os.path.abspath("."))
+        config_file = Path(base_path) / "config" / "config_as_long.json"
 
-# --- Create and run AEB pipeline ---
-aeb = AebPipeline(config_path, input_handler=ih)
-aeb.run(skip_mf4_processing=True)
+    print(f"\n📘 Loading config: {config_file}")
 
-# --- Create and run FCW pipeline ---
-fcw = FcwPipeline(config_path, input_handler=ih)
-fcw.run(skip_mf4_processing=True)
+    # 2) Load configuration and initialize shared input handler
+    cfg = Config.from_json(config_file)
+    ih  = InputHandler(cfg)
 
-# --- Create and run LSAEB pipeline ---
-lsaeb = LsaebPipeline(config_path, input_handler=ih)
-lsaeb.run(skip_mf4_processing=True)
+    print("🔄 Processing MF4 files (shared for all AS_LONG pipelines)...")
+    ih.process_mf4_files()
 
-print("\n🎯 All as_long pipelines completed successfully.\n")
+    print("\n🚀 Running AEB pipeline...")
+    aeb = AebPipeline(config_file, input_handler=ih)
+    aeb.run(skip_mf4_processing=True)
 
+    print("\n🚀 Running FCW pipeline...")
+    fcw = FcwPipeline(config_file, input_handler=ih)
+    fcw.run(skip_mf4_processing=True)
+
+    print("\n🚀 Running LSAEB pipeline...")
+    lsaeb = LsaebPipeline(config_file, input_handler=ih)
+    lsaeb.run(skip_mf4_processing=True)
+
+    print("\n🎯 All AS_LONG pipelines completed successfully.\n")
+
+
+if __name__ == "__main__":
+    main()
