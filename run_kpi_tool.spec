@@ -27,22 +27,21 @@ datas = [
 # ----------------------------------------------------------
 
 # Windows stores Tcl/Tk in <python>/tcl/
-# macOS/Linux store in <python>/Lib/tkinter/tcl/
+# macOS/Linux store Tcl/Tk in <python>/Lib/tkinter/tcl/
 if sys.platform.startswith("win"):
-    # Example: C:\Users\xxx\AppData\Local\Programs\Python\Python312\tcl
     tcl_base = os.path.join(sys.base_prefix, "tcl")
 else:
-    # Example macOS: .../Python.framework/Versions/3.12/lib/python3.12/tkinter/tcl
     tcl_base = os.path.join(os.path.dirname(tkinter.__file__), "tcl")
 
-# Add all Tcl/Tk subdirectories (e.g., tcl8.6, tk8.6, tcl8.6.13)
+# Only include directories that actually exist
 if os.path.isdir(tcl_base):
-    for name in os.listdir(tcl_base):
+    # For your Windows Python312, these will be: tcl8.6 and tk8.6
+    for name in ("tcl8.6", "tk8.6"):
         full_path = os.path.join(tcl_base, name)
         if os.path.isdir(full_path):
             datas.append((full_path, os.path.join("tcl", name)))
 
-# Add tkinter runtime files
+# Include tkinter runtime files
 datas += collect_data_files("tkinter", include_py_files=True)
 
 
