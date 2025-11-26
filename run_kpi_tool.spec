@@ -1,56 +1,52 @@
 # -*- mode: python ; coding: utf-8 -*-
-
 import os
 import sys
-import tkinter
 from PyInstaller.utils.hooks import collect_data_files
-
-project_root = os.getcwd()
-is_macos = sys.platform == "darwin"
-is_windows = sys.platform.startswith("win")
-
-# ----------------------------------------------------------
-# Include project folders
-# ----------------------------------------------------------
-datas = [
-    (os.path.join(project_root, "config"), "config"),
-    (os.path.join(project_root, "pipeline"), "pipeline"),
-    (os.path.join(project_root, "utils"), "utils"),
-#    (os.path.join(project_root, "AS_KPI.slx"), "."),
-]
-
-# ----------------------------------------------------------
-# Force include Tcl/Tk for Windows
-# ----------------------------------------------------------
-if is_windows:
-    python_root = sys.base_prefix
-    tcl_source = os.path.join(python_root, "tcl")
-
-    datas.append((os.path.join(tcl_source, "tcl8.6"), "tcl/tcl8.6"))
-    datas.append((os.path.join(tcl_source, "tk8.6"), "tcl/tk8.6"))
-
-# Tkinter assets
-datas += collect_data_files("tkinter", include_py_files=True)
-
-hiddenimports = [
-    "tkinter",
-    "tkinter.filedialog",
-    "tkinter._fix",
-]
 
 block_cipher = None
 
-# ----------------------------------------------------------
-# Build
-# ----------------------------------------------------------
+# -------------------------------
+# Your project files
+# -------------------------------
+datas = [
+    ('config', 'config'),
+    ('pipeline', 'pipeline'),
+    ('utils', 'utils'),
+    # ('AS_KPI.slx', '.'),
+]
+
+hiddenimports = [
+    'tkinter',
+    'tkinter.filedialog',
+]
+
+# -------------------------------
+# Windows: include Tcl/Tk correctly
+# -------------------------------
+if sys.platform.startswith('win'):
+    # Find where Python installed tcl/tk
+    tcl_src = os.path.join(sys.base_prefix, 'tcl', 'tcl8.6')
+    tk_src  = os.path.join(sys.base_prefix, 'tcl', 'tk8.6')
+    
+    if os.path.exists(tcl_src):
+        datas += [(tcl_src, 'tcl8.6')]
+    if os.path.exists(tk_src):
+        datas += [(tk_src, 'tk8.6')]
+
+# Collect all tkinter internal files
+datas += collect_data_files('tkinter', include_py_files=True)
+
+# -------------------------------
+# Analysis
+# -------------------------------
 a = Analysis(
     ['run_kpi_tool.py'],
-    pathex=[project_root],
+    pathex=[os.getcwd()],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
-    hookspath=['hooks'],
-    runtime_hooks=['hooks/fix_tk_path.py'],
+    hookspath=['hooks'],                    # keep your hooks folder
+    runtime_hooks=['hooks/fix_tk_path.py'], # keep your runtime hook
     excludes=[],
     cipher=block_cipher,
 )
@@ -60,33 +56,31 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
+    [],                       # ← important
+    exclude_binaries=True,    # ← THIS makes it onedir mode
+    name='ADAS_KPI_Tool',
+    console=True,
+    icon=None,                # put your .ico here if you have one
+)
+
+# -------------------------------
+# On Windows → onedir, on macOS → .app bundle
+# -------------------------------
+coll = COLLECT(
+    exe,
     a.binaries,
     a.zipfiles,
     a.datas,
-    name='ADAS_KPI_Tool',
-    console=True,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='ADAS_KPI_Tool'
 )
 
-# ----------------------------------------------------------
-# ONEDIR MODE (required for Windows Tkinter)
-# ----------------------------------------------------------
-if is_windows:
-    coll = COLLECT(
-        exe,
-        a.binaries,
-        a.zipfiles,
-        a.datas,
-        strip=False,
-        upx=False,
-        name='ADAS_KPI_Tool'
-    )
-
-# ----------------------------------------------------------
-# macOS .app bundle
-# ----------------------------------------------------------
-if is_macos:
-    app = BUNDLE(
-        exe,
+if sys.platform == "darwin":
+    APP = BUNDLE(
+        coll,
         name='ADAS_KPI_Tool.app',
         icon=None,
+        bundle_identifier=None,
     )
