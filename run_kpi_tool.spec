@@ -57,8 +57,8 @@ a = Analysis(
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
-    hookspath=[],
-    runtime_hooks=[],
+    hookspath=['hooks'],
+    runtime_hooks=['hooks/fix_tcl_path.py'],
     excludes=[],
     cipher=block_cipher,
 )
