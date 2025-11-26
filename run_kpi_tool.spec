@@ -21,21 +21,23 @@ hiddenimports = [
 ]
 
 # -------------------------------
-# Windows: include Tcl/Tk correctly
+# Windows: include Tcl/Tk correctly (flat dest—no _internal prefix)
 # -------------------------------
 if sys.platform.startswith('win'):
     # Find where Python installed tcl/tk
     tcl_src = os.path.join(sys.base_prefix, 'tcl', 'tcl8.6')
     tk_src  = os.path.join(sys.base_prefix, 'tcl', 'tk8.6')
     
-    datas += [(tcl_src, '_internal/tcl8.6')]
-    datas += [(tk_src,  '_internal/tk8.6')]
+    if os.path.exists(tcl_src):
+        datas += [(tcl_src, 'tcl8.6')]  # Flat: PyInstaller puts in _internal automatically
+    if os.path.exists(tk_src):
+        datas += [(tk_src, 'tk8.6')]
 
 # Collect all tkinter internal files
 datas += collect_data_files('tkinter', include_py_files=True)
 
 # -------------------------------
-# Analysis
+# Analysis (exclude the built-in rthook to avoid early failure)
 # -------------------------------
 a = Analysis(
     ['run_kpi_tool.py'],
@@ -43,9 +45,9 @@ a = Analysis(
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
-    hookspath=['hooks'],                    # keep your hooks folder
-    runtime_hooks=['hooks/fix_tk_path.py'], # keep your runtime hook
-    excludes=[],
+    hookspath=['hooks'],
+    runtime_hooks=['hooks/fix_tk_path.py'],
+    excludes=['pyi_rth__tkinter'],  # ← CRUCIAL: Disable built-in hook
     cipher=block_cipher,
 )
 
@@ -54,16 +56,13 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    [],                       # ← important
-    exclude_binaries=True,    # ← THIS makes it onedir mode
+    [],
+    exclude_binaries=True,
     name='ADAS_KPI_Tool',
     console=True,
-    icon=None,                # put your .ico here if you have one
+    icon=None,
 )
 
-# -------------------------------
-# On Windows → onedir, on macOS → .app bundle
-# -------------------------------
 coll = COLLECT(
     exe,
     a.binaries,
