@@ -86,7 +86,6 @@ if is_macos:
     )
 
 elif is_windows:
-    # Windows .exe
     exe = EXE(
         pyz,
         a.scripts,
@@ -95,4 +94,14 @@ elif is_windows:
         a.datas,
         name='ADAS_KPI_Tool',
         console=True,
+    )
+
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.zipfiles,
+        a.datas,
+        strip=False,
+        upx=False,
+        name='ADAS_KPI_Tool'
     )
