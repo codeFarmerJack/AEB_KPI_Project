@@ -16,7 +16,7 @@ datas = [
     (os.path.join(project_root, "config"), "config"),
     (os.path.join(project_root, "pipeline"), "pipeline"),
     (os.path.join(project_root, "utils"), "utils"),
-    (os.path.join(project_root, "AS_KPI.slx"), "."),
+#    (os.path.join(project_root, "AS_KPI.slx"), "."),
 ]
 
 # ----------------------------------------------------------
@@ -49,8 +49,8 @@ a = Analysis(
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
-    hookspath=[],
-    runtime_hooks=[],
+    hookspath=['hooks'],
+    runtime_hooks=['hooks/fix_tk_path.py'],
     excludes=[],
     cipher=block_cipher,
 )
