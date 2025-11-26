@@ -21,27 +21,19 @@ datas = [
     (os.path.join(project_root, "AS_KPI.slx"), "."),
 ]
 
-
 # ----------------------------------------------------------
-# Add Tcl/Tk support (REQUIRED for Tkinter)
+# Force-include Tcl/Tk folders (100% reliable)
 # ----------------------------------------------------------
 
-# Windows stores Tcl/Tk in <python>/tcl/
-# macOS/Linux store Tcl/Tk in <python>/Lib/tkinter/tcl/
-if sys.platform.startswith("win"):
-    tcl_base = os.path.join(sys.base_prefix, "tcl")
-else:
-    tcl_base = os.path.join(os.path.dirname(tkinter.__file__), "tcl")
+if is_windows:
+    python_root = sys.base_prefix      # ex: C:\Users\jwang79\AppData\Local\Programs\Python\Python312
+    tcl_source = os.path.join(python_root, "tcl")
 
-# Only include directories that actually exist
-if os.path.isdir(tcl_base):
-    # For your Windows Python312, these will be: tcl8.6 and tk8.6
-    for name in ("tcl8.6", "tk8.6"):
-        full_path = os.path.join(tcl_base, name)
-        if os.path.isdir(full_path):
-            datas.append((full_path, os.path.join("tcl", name)))
+    # Explicitly include your two real Tcl/Tk folders
+    datas.append((os.path.join(tcl_source, "tcl8.6"), "tcl/tcl8.6"))
+    datas.append((os.path.join(tcl_source, "tk8.6"),  "tcl/tk8.6"))
 
-# Include tkinter runtime files
+# Include tkinter assets (must stay)
 datas += collect_data_files("tkinter", include_py_files=True)
 
 
