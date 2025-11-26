@@ -28,10 +28,8 @@ if sys.platform.startswith('win'):
     tcl_src = os.path.join(sys.base_prefix, 'tcl', 'tcl8.6')
     tk_src  = os.path.join(sys.base_prefix, 'tcl', 'tk8.6')
     
-    if os.path.exists(tcl_src):
-        datas += [(tcl_src, 'tcl8.6')]
-    if os.path.exists(tk_src):
-        datas += [(tk_src, 'tk8.6')]
+    datas += [(tcl_src, '_internal/tcl8.6')]
+    datas += [(tk_src,  '_internal/tk8.6')]
 
 # Collect all tkinter internal files
 datas += collect_data_files('tkinter', include_py_files=True)
