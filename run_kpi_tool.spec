@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 import sys
+import matplotlib
 from PyInstaller.utils.hooks import collect_data_files
 
 block_cipher = None
@@ -15,10 +16,28 @@ datas = [
     # ('AS_KPI.slx', '.'),
 ]
 
+datas += [(matplotlib.get_data_path(), "matplotlib/mpl-data")]
+
 hiddenimports = [
-    'tkinter',
-    'tkinter.filedialog',
+    "matplotlib",
+    "matplotlib.backends.backend_agg",
+    "matplotlib.backends.backend_pdf",
+    "matplotlib.backends.backend_ps",
+    "matplotlib.backends.backend_svg",
+    "matplotlib.backends.backend_tkagg",
+    "matplotlib.font_manager",
+
+    "plotly",
+    "plotly.graph_objs",
+    "plotly.io._json",
+    "plotly.io._renderers",
+    "plotly.matplotlylib",
+    "plotly.subplots",
+    "plotly.utils._plotly_jsonencoder",
+
+    "jsonschema",
 ]
+
 
 # -------------------------------
 # Windows: include Tcl/Tk correctly (flat dest—no _internal prefix)
