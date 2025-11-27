@@ -13,11 +13,6 @@ if getattr(sys, 'frozen', False) and sys.platform.startswith('win'):
     tcl_dir = os.path.join(base_dir, '_internal', 'tcl8.6')
     tk_dir = os.path.join(base_dir, '_internal', 'tk8.6')
     
-    # Debug: Uncomment to check paths (remove later)
-    print(f"[DEBUG] Base dir: {base_dir}")
-    print(f"[DEBUG] TCL candidate: {tcl_dir} (exists: {os.path.isdir(tcl_dir)})")
-    print(f"[DEBUG] TK candidate: {tk_dir} (exists: {os.path.isdir(tk_dir)})")
-    
     # Set only if files exist
     if os.path.isdir(tcl_dir) and os.path.isfile(os.path.join(tcl_dir, 'init.tcl')):
         os.environ['TCL_LIBRARY'] = tcl_dir

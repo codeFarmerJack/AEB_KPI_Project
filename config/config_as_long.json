@@ -5,25 +5,14 @@
     },
     "KpiAsLong": {
         "FilePath": "kpi_as_long.xlsx",
-        "Sheets": ["graphSpec", "lineColors","markerShapes","KPI","params"]
-    },
-    "Calibration": {
-        "FilePath": "/Users/wangjianhai/02_ADAS/01_repo/01_Tools/01_kpi_extractor/Active_Safety_Long_Calibration_Plan.xlsx",
-        "Sheets": {
-            "steering_precond_abrt_aeb": {
-                "SteeringWheelAngle_Th": "M7:X8",
-                "AEB_SteeringAngleRate_Override": "M13:X14"
-            },
-            "throttle_abrt_aeb": {
-                "PedalPosProIncrease_Th": "L12:P13",
-                "PedalPosPro_Override": "L10:P11"
-            },
-            "lat_accel": {
-                "LateralAcceleration_th": "I6:N7"
-            },
-            "yaw_rate": {
-                "YawrateSuspension_Th": "K6:P7"
-            }
+        "Sheets": ["graphSpec", "lineColors","markerShapes","KPI","params", "calParam"],
+        "Calibratables": {
+            "SteeringWheelAngle_Th": "K8:V9",
+            "AEB_SteeringAngleRate_Override": "K17:V18",
+            "PedalPosProIncrease_Th": "Y17:AC18",
+            "PedalPosPro_Override": "Y7:AC8",
+            "LateralAcceleration_th": "C19:H20",
+            "YawrateSuspension_Th": "C8:H9"
         }			
     }
 }

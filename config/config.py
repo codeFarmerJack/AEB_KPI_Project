@@ -135,18 +135,26 @@ class Config:
                 warnings.warn("⚠️ No valid R,G,B columns found in lineColors sheet.")
 
         # =====================================================
-        # 5️⃣ Load Calibration (optional)
+        # 5️⃣ Load calibratables from calParam in KPI workbook (Optional)
         # =====================================================
-        if "Calibration" in config_struct:
-            calib_cfg  = config_struct["Calibration"]
-            calib_file = calib_cfg.get("FilePath")
-            sheet_defs = calib_cfg.get("Sheets", [])
-            print(f"📗 Loading Calibration workbook: {calib_file}")
-            cfg.calibratables = cls._load_calibratables(calib_file, sheet_defs)
+        cal_defs = spec_cfg.get("Calibratables", None)
+
+        if cal_defs:
+            print(f"📗 Loading calibratables from '{cfg.kpi_excel_path.name}' (sheet 'calParam')")
+
+            # wrap in dict so _load_calibratables understands it
+            sheet_map = {"calParam": cal_defs}
+
+            cfg.calibratables = cls._load_calibratables(
+                cfg.kpi_excel_path,
+                sheet_map
+            )
+
             cfg._apply_calibration_scaling()
         else:
-            print("⚙️ No 'Calibration' section found — skipping calibration load.")
             cfg.calibratables = {}
+            print("⚙️ No Calibratables defined under KPI section.")
+
 
         # =====================================================
         # 6️⃣ Normalize graph_spec columns
@@ -183,15 +191,6 @@ class Config:
         if "Sheets" not in params["SignalMap"]:
             raise ValueError("SignalMap.Sheets must be defined in config.")
 
-        # --- Optional Calibration section ---
-        if "Calibration" in params:
-            calib = params["Calibration"]
-            if "FilePath" not in calib:
-                raise ValueError("Missing Calibration.FilePath in config.")
-            if "Sheets" not in calib:
-                raise ValueError("Calibration.Sheets must be defined in config.")
-        else:
-            print("⚙️ Skipping 'Calibration' section (not required for this config).")
 
         # --- Detect KPI section automatically (any key starting with 'KpiAs') ---
         kpi_section_key = next(
