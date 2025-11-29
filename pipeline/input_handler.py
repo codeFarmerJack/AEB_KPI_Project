@@ -1,5 +1,6 @@
 import os
 import sys
+import gc
 import warnings
 import numpy as np
 from typing import List
@@ -106,6 +107,14 @@ class InputHandler:
                     convert_to_tact_unit=True,
                 )
 
+                # --- right after extraction, immediately close raw MF4 ---
+                try:
+                    if hasattr(mdf_obj, "close"):
+                        mdf_obj.close()
+                        print("   🔒 Closed raw MF4 file handle.")
+                except Exception as e:
+                    print(f"⚠️ Failed to close mdf_obj: {e}")
+
                 if data.empty:
                     print(f"⚠️ Warning: no data extracted from {file}")
                     continue
@@ -198,6 +207,21 @@ class InputHandler:
 
                 # Save to the extracted folder
                 new_mdf.save(extracted_file, overwrite=True)
+
+                # 🔒 IMPORTANT: close the new MDF file too!
+                try:
+                    new_mdf.close()
+                    print("   🔒 Closed new extracted MDF file.")
+                finally:
+                    # ---------- CRITICAL CLEANUP ----------
+                    # remove references
+                    try:
+                        del data, sigs, summary, used, raster, mods, new_mdf
+                    except Exception:
+                        pass
+                    
+                    # Force garbage collection to free memory
+                    gc.collect()
                 
                 print(f"💾 Saved extracted + filtered signals → {extracted_file}")
 
