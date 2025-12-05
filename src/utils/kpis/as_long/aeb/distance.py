@@ -15,7 +15,7 @@ class AebDistanceCalculator:
     # ------------------------------------------------------------------
     def __init__(self, extractor):
         """
-        Initialize from parent AebKpiExtractor instance.
+        Initialize from parent AebEventKpiExtractor instance.
         """
         # No calibrations or params needed; placeholder for extensibility
         self.extractor = extractor

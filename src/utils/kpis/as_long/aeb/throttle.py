@@ -17,7 +17,7 @@ class AebThrottleCalculator:
 
     # ------------------------------------------------------------------
     def __init__(self, extractor):
-        """Initialize from parent AebKpiExtractor instance."""
+        """Initialize from parent AebEventKpiExtractor instance."""
         pass  # no attributes needed
 
     # ------------------------------------------------------------------

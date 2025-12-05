@@ -15,7 +15,7 @@ class LsaebDistanceCalculator:
     # ------------------------------------------------------------------
     def __init__(self, extractor):
         """
-        Initialize from parent LsaebKpiExtractor instance.
+        Initialize from parent LsaebEventKpiExtractor instance.
         """
         self.extractor = extractor
 

@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import warnings
 from dataclasses import dataclass
-from src.pipeline.base.base_kpi_extractor import BaseKpiExtractor
+from src.pipeline.base.base_event_kpi_extractor import BaseEventKpiExtractor
 from src.utils.data_utils import safe_scalar
 from src.utils.event_detector.as_lat.lka import detect_lka_events  
 
@@ -11,7 +11,7 @@ from src.utils.event_detector.as_lat.lka import detect_lka_events
 # ------------------------------------------------------------------ #
 # LKA KPI Extractor
 # ------------------------------------------------------------------ #
-class LkaKpiExtractor(BaseKpiExtractor):
+class LkaEventKpiExtractor(BaseEventKpiExtractor):
     """Extracts LKA (Lane Keeping Assist) KPI metrics."""
 
     FEATURE_NAME = "LKA"

@@ -1,14 +1,12 @@
 import os
 import warnings
 import numpy as np
-import pandas as pd
 from src.utils.signal_mdf import SignalMDF
 from src.utils.create_kpi_table import create_kpi_table_from_df
 from src.utils.exporter import export_kpi_to_excel
-from src.utils.data_utils import safe_scalar
 
 
-class BaseKpiExtractor:
+class BaseEventKpiExtractor:
     """
     Base class for KPI extractors (AEB, FCW, etc.)
     Handles shared setup, parameter loading, and export logic.
@@ -178,11 +176,6 @@ class BaseKpiExtractor:
 
         except Exception as e:
             warnings.warn(f"⚠️ Failed to export KPI results to Excel ({output_path}): {e}")
-
-
-
-
-
 
     # ------------------------------------------------------------------ #
     def process_all_mdf_files(self):

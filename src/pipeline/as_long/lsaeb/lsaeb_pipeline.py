@@ -1,7 +1,7 @@
 from pathlib import Path
 from src.pipeline.base.base_pipeline import BasePipeline
 from src.pipeline.as_long.lsaeb.lsaeb_event_segmenter import LsaebEventSegmenter
-from src.pipeline.as_long.lsaeb.lsaeb_kpi_extractor import LsaebKpiExtractor
+from src.pipeline.as_long.lsaeb.lsaeb_event_kpi_extractor import LsaebEventKpiExtractor
 from src.pipeline.as_long.lsaeb.lsaeb_visualizer import LsaebVisualizer
 
 
@@ -23,7 +23,7 @@ class LsaebPipeline(BasePipeline):
     def _extract_kpis(self):
         print("\n➡️ [4/5] Extracting LSAEB KPIs...")
         try:
-            self.kpi = LsaebKpiExtractor(self.cfg, self.event)
+            self.kpi = LsaebEventKpiExtractor(self.cfg, self.event)
             self.kpi.process_all_mdf_files()
             self.kpi.export_to_excel()
             print("✅ LSAEB KPI extraction and Excel export done.")

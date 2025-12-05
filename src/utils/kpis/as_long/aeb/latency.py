@@ -14,7 +14,7 @@ class AebLatencyCalculator:
     # ------------------------------------------------------------------
     def __init__(self, extractor):
         """
-        Initialize using parameters from the parent AebKpiExtractor instance.
+        Initialize using parameters from the parent AebEventKpiExtractor instance.
         """
         self.aeb_jerk_neg_thd       = extractor.aeb_jerk_neg_thd
         self.fb_jerk_neg_thd        = extractor.fb_jerk_neg_thd

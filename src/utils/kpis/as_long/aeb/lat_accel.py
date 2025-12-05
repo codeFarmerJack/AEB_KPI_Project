@@ -15,7 +15,7 @@ class AebLatAccelCalculator:
     # ------------------------------------------------------------------
     def __init__(self, extractor):
         """
-        Initialize from parent AebKpiExtractor instance.
+        Initialize from parent AebEventKpiExtractor instance.
         """
         self.time_idx_offset = extractor.time_idx_offset
 

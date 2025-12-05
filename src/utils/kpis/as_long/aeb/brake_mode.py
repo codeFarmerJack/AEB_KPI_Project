@@ -12,7 +12,7 @@ class AebBrakeModeCalculator:
     # ------------------------------------------------------------------
     def __init__(self, extractor):
         """
-        Initialize from parent AebKpiExtractor instance.
+        Initialize from parent AebEventKpiExtractor instance.
         """
         self.pb_tgt_decel = extractor.pb_tgt_decel
         self.fb_tgt_decel = extractor.fb_tgt_decel

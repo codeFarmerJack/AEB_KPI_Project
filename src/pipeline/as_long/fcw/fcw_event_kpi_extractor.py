@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import warnings
-from src.pipeline.base.base_kpi_extractor import BaseKpiExtractor
+from src.pipeline.base.base_event_kpi_extractor import BaseEventKpiExtractor
 from src.utils.event_detector.as_long.fcw import detect_fcw_events
 from src.utils.data_utils import safe_scalar
 from src.utils.kpis.as_long.fcw.brake_jerk import FcwBrakeJerkCalculator
@@ -11,7 +11,7 @@ from src.utils.kpis.as_long.fcw.fcw_warning import FcwWarningCalculator
 # ------------------------------------------------------------------ #
 # FCW KPI Extractor
 # ------------------------------------------------------------------ #
-class FcwKpiExtractor(BaseKpiExtractor):
+class FcwEventKpiExtractor(BaseEventKpiExtractor):
     """Extracts FCW KPI metrics from MF4 chunks."""
 
     FEATURE_NAME = "FCW"

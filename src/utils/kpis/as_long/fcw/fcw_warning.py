@@ -17,7 +17,7 @@ class FcwWarningCalculator:
     # ------------------------------------------------------------------
     def __init__(self, extractor):
         """
-        Initialize using parameters from the parent FcwKpiExtractor instance.
+        Initialize using parameters from the parent FcwEventKpiExtractor instance.
         """
         # placeholder for future parameters
         pass

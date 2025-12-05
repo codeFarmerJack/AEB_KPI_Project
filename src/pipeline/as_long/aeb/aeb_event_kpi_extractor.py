@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import warnings
 from dataclasses import dataclass
-from src.pipeline.base.base_kpi_extractor import BaseKpiExtractor
+from src.pipeline.base.base_event_kpi_extractor import BaseEventKpiExtractor
 from src.utils.event_detector.as_long.aeb import find_aeb_intv_start, find_aeb_intv_end
 from src.utils.process_calibratables import interpolate_threshold_clamped
 from src.utils.data_utils import safe_scalar
@@ -30,7 +30,7 @@ class Thresholds:
 # ------------------------------------------------------------------ #
 # AEB KPI Extractor
 # ------------------------------------------------------------------ #
-class AebKpiExtractor(BaseKpiExtractor):
+class AebEventKpiExtractor(BaseEventKpiExtractor):
     """Extracts AEB KPI metrics from MF4 chunks."""
 
     FEATURE_NAME = "AEB"

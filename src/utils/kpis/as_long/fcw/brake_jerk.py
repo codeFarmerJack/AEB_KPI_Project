@@ -12,7 +12,7 @@ class FcwBrakeJerkCalculator:
     # ------------------------------------------------------------------
     def __init__(self, extractor):
         """
-        Initialize using parameters from the parent FcwKpiExtractor instance.
+        Initialize using parameters from the parent FcwEventKpiExtractor instance.
         """
         self.brakejerk_jerk_neg_thd = extractor.brakejerk_jerk_neg_thd
         self.brakejerk_jerk_pos_thd = extractor.brakejerk_jerk_pos_thd

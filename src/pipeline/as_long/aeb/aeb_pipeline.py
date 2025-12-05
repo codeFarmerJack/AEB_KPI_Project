@@ -1,7 +1,7 @@
 from pathlib import Path
 from src.pipeline.base.base_pipeline import BasePipeline
 from src.pipeline.as_long.aeb.aeb_event_segmenter import AebEventSegmenter
-from src.pipeline.as_long.aeb.aeb_kpi_extractor import AebKpiExtractor
+from src.pipeline.as_long.aeb.aeb_event_kpi_extractor import AebEventKpiExtractor
 from src.pipeline.as_long.aeb.aeb_visualizer import AebVisualizer
 
 
@@ -21,7 +21,7 @@ class AebPipeline(BasePipeline):
     def _extract_kpis(self):
         print("\n➡️ [4/5] Extracting AEB KPIs...")
         try:
-            self.kpi = AebKpiExtractor(self.cfg, self.event)
+            self.kpi = AebEventKpiExtractor(self.cfg, self.event)
             self.kpi.process_all_mdf_files()
             self.kpi.export_to_excel()
             print("✅ AEB KPI extraction and Excel export done.")

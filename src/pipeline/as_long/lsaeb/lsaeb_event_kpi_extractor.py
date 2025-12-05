@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import warnings
 from dataclasses import dataclass
-from src.pipeline.base.base_kpi_extractor import BaseKpiExtractor
+from src.pipeline.base.base_event_kpi_extractor import BaseEventKpiExtractor
 from src.utils.event_detector.as_long.lsaeb import detect_lsaeb_events
 from src.utils.data_utils import safe_scalar
 from src.utils.kpis.as_long.lsaeb.distance import LsaebDistanceCalculator
@@ -12,7 +12,7 @@ from src.utils.kpis.as_long.lsaeb.distance import LsaebDistanceCalculator
 # ------------------------------------------------------------------ #
 # LSAEB KPI Extractor
 # ------------------------------------------------------------------ #
-class LsaebKpiExtractor(BaseKpiExtractor):
+class LsaebEventKpiExtractor(BaseEventKpiExtractor):
     """Extracts LSAEB KPI metrics from MF4 chunks (distance + timing)."""
 
     FEATURE_NAME = "LSAEB"
