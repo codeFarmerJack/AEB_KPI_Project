@@ -9,7 +9,8 @@ from src.utils.path_manager import get_resource
 class Config:
     def __init__(self):
         self.signal_map     = None       # vbRcSignals sheet
-        self.event_kpi_list       = None       # KPI sheet
+        self.event_kpi_list = None       # event KPI sheet
+        self.cycle_kpi_list = None       # cycle KPI sheet
         self.graph_spec     = None       # graphSpec sheet
         self.line_colors    = None       # lineColors sheet
         self.marker_shapes  = None       # markerShapes sheet
@@ -34,11 +35,16 @@ class Config:
         sig_sheets = sig_cfg["Sheets"]
         sig_data   = cls._load_signal_map_kpi_plot_spec(sig_path, sig_sheets)
 
-        sig_map = {k.lower(): v for k, v in sig_data.items()}
-        cfg.signal_map = sig_map.get("vbrcsignals")
+        sig_data = {k.lower(): v for k, v in sig_data.items()}
+        sheet_name = sig_sheets[0].lower()     
 
-        if cfg.signal_map is not None:
-            cfg.signal_map.columns = cfg.signal_map.columns.str.strip().str.lower()
+        cfg.signal_map = sig_data.get(sheet_name)
+
+        if cfg.signal_map is None:
+            raise ValueError(f"Signal sheet '{sig_sheets[0]}' not found in {sig_path}")
+        
+        # Normalize columns
+        cfg.signal_map.columns = cfg.signal_map.columns.str.strip().str.lower()
 
         # =====================================================
         # 2️⃣ Load KPI/PlotSpec-related sheets (auto-detect Long/Lat/etc.)

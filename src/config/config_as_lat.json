@@ -1,7 +1,7 @@
 {
     "SignalMap": {
         "FilePath": "signal_map.xlsx",
-        "Sheets": ["vbRcSignals"]
+        "Sheets": ["vbRcSignalsLat"]
     },
     "KpiAsLat": {
         "FilePath": "kpi_as_lat.xlsx",
