@@ -81,54 +81,51 @@ class BaseCycleKpiExtractor(ABC):
     # ------------------------------------------------------------------ #
     def process_mdf_cycles(self):
         """
-        One row per MF4 file.
-        Columns come from KPI schema (Common + feature KPIs).
+        For cycle KPIs, produce ONE ROW PER (file × feature).
+        Example:
+            file1 - AEB
+            file1 - FCW
+            file1 - EBA
         """
 
-        df_out = self.cycle_kpi_table
-        schema = self.config.cycle_kpi_list
+        rows = []  # collect rows for final DataFrame
 
-        # Pre-extract feature mapping from KPI schema
-        feature_lookup = {}
-        for _, row in schema.iterrows():
-            name = str(row["name"]).strip()
-            feat = str(row["feature"]).strip()
-            feature_lookup[name] = feat
-
-        for i, fname in enumerate(self.file_list_extracted):
+        for fname in self.file_list_extracted:
             fpath = os.path.join(self.in_path_extracted, fname)
 
-            # -------------------------
-            # Common KPIs
-            # -------------------------
-            if "label" in df_out.columns:
-                df_out.loc[i, "label"] = fname
-
-            if "feature" in df_out.columns:
-                # Feature column is per-row, not per-KPI
-                df_out.loc[i, "feature"] = self.feature_name
-
-            # -------------------------
             # Load MDF
-            # -------------------------
             mdf = safe_load_mdf(fpath)
             if mdf is None:
                 continue
 
-            # -------------------------
-            # Compute KPIs for this file
-            # -------------------------
-            result = self.extract_cycle_kpis(mdf, fname, i)
-            if not result:
+            # Compute KPIs for ALL features in this file
+            # Should return:
+            # {
+            #   "AEB": {"AvailDistPctLeft": 67.3, "AvailDistPctRight": 67.3},
+            #   "FCW": {...},
+            #   "EBA": {...},
+            # }
+            feature_results = self.extract_cycle_kpis(mdf, fname)
+
+            if not feature_results:
                 continue
 
-            # -------------------------
-            # Assign KPI values to SAME row
-            # -------------------------
-            for kpi_name, val in result.items():
-                if kpi_name in df_out.columns:
-                    df_out.loc[i, kpi_name] = val
+            # Append one row per feature
+            for feature_name, kpi_dict in feature_results.items():
+                row = {
+                    "label": fname,
+                    "feature": feature_name,
+                }
+                row.update(kpi_dict)  # add KPI columns
+                rows.append(row)
 
-        self.cycle_kpi_table = df_out.round(3)
+        # Convert collected rows to DataFrame
+        self.cycle_kpi_table = (
+            pd.DataFrame(rows)
+            .reindex(columns=self.cycle_kpi_table.columns, fill_value=None)
+            .round(3)
+        )
+
         print(f"\n✅ {self.FEATURE_NAME} Cycle KPI extraction completed successfully.")
+
 

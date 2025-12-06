@@ -16,8 +16,13 @@ class LkaCycleKpiExtractor(BaseCycleKpiExtractor):
 
     def extract_cycle_kpis(self, mdf, fname, index):
         """
-        Compute availability percentages for one MF4 file.
-        Returns a dict of KPIs.
+        Compute availability KPIs for all features in cycle_kpi_list.
+        Returns:
+            {
+            "LKA": {"AvailDistPctLeft": x, "AvailDistPctRight": y},
+            "LSS": {...},
+            ...
+            }
         """
 
         try:
@@ -41,9 +46,14 @@ class LkaCycleKpiExtractor(BaseCycleKpiExtractor):
         total_dist = dist.sum()
 
         if total_dist <= 0:
+            # every feature gets zero
             return {
-                "AvailDistPctLeft": 0.0,
-                "AvailDistPctRight": 0.0,
+                feature: {
+                    "AvailDistPctLeft":  0.0,
+                    "AvailDistPctRight": 0.0
+                }
+                for feature in self.config.cycle_kpi_list["Feature"].unique()
+                if feature != "Common"
             }
 
         # -----------------------------
@@ -56,7 +66,17 @@ class LkaCycleKpiExtractor(BaseCycleKpiExtractor):
         pct_left  = np.sum(dist[avail_left])  / total_dist * 100
         pct_right = np.sum(dist[avail_right]) / total_dist * 100
 
+        # -----------------------------
+        # Build output for ALL features
+        # -----------------------------
+        features = self.config.cycle_kpi_list["Feature"].unique()
+        features = [f for f in features if f != "Common"]  # ignore label + feature row
+
         return {
-            "AvailDistPctLeft": round(pct_left, 2),
-            "AvailDistPctRight": round(pct_right, 2),
+            feature: {
+                "AvailDistPctLeft":  round(pct_left, 2),
+                "AvailDistPctRight": round(pct_right, 2),
+            }
+            for feature in features
         }
+
