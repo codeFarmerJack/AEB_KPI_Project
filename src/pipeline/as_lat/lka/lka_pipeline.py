@@ -2,6 +2,7 @@ from pathlib import Path
 from src.pipeline.base.base_pipeline import BasePipeline
 from src.pipeline.as_lat.lka.lka_event_segmenter import LkaEventSegmenter
 from src.pipeline.as_lat.lka.lka_event_kpi_extractor import LkaEventKpiExtractor
+from src.pipeline.as_lat.lka.lka_cycle_kpi_extractor import LkaCycleKpiExtractor
 from src.pipeline.as_lat.lka.lka_visualizer import LkaVisualizer
 
 
@@ -22,20 +23,33 @@ class LkaPipeline(BasePipeline):
     # --------------------------------------------------------------
     def _extract_kpis(self):
         print("\n➡️ [4/5] Extracting LKA KPIs...")
+
         try:
-            self.kpi = LkaEventKpiExtractor(self.cfg, self.event)
-            self.kpi.process_all_mdf_files()
-            self.kpi.process_lka_availability(self.kpi.in_path_extracted)
-            self.kpi.export_to_excel()
-            print("✅ LKA KPI extraction and Excel export done.")
+            # ----------------------------------------------------------
+            # 1) EVENT KPIs (segment-level)
+            # ----------------------------------------------------------
+            self.event_kpi = LkaEventKpiExtractor(self.cfg, self.event)
+            self.event_kpi.process_mdf_events()     # compute event KPIs
+            self.event_kpi.export_event_kpis()      # save event sheet
+
+            # ----------------------------------------------------------
+            # 2) CYCLE KPIs
+            # ----------------------------------------------------------
+            self.cycle_kpi = LkaCycleKpiExtractor(self.ih, self.cfg)
+            self.cycle_kpi.process_mdf_cycles()     # compute cycle KPIs
+            self.cycle_kpi.export_cycle_kpis()      # save cycle sheet
+
+            print("✅ LKA KPI extraction and Excel export done.\n")
+
         except Exception as e:
             raise RuntimeError(f"❌ LKA KPI extraction failed: {e}")
+
 
     # --------------------------------------------------------------
     def _visualize_results(self):
         print("\n➡️ [5/5] Launching LKA visualization...\n")
         try:
-            self.viz = LkaVisualizer(self.cfg, self.kpi)
+            self.viz = LkaVisualizer(self.cfg, self.event_kpi)
             self.viz.interactive = getattr(self, "default_interactive", False)
             self.viz.plot()
         except Exception as e:

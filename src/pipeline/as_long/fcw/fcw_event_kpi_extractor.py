@@ -32,46 +32,47 @@ class FcwEventKpiExtractor(BaseEventKpiExtractor):
         self.fcw_warning_calc   = FcwWarningCalculator(self)
 
     # ------------------------------------------------------------------ #
-    def process_all_mdf_files(self):
-        """Process all FCW MF4 chunk files and calculate KPIs."""
-        for i, fname in enumerate(self.file_list):
-            fpath = os.path.join(self.out_path_chunks, fname)
-            self._insert_label(i, fname)
+    def extract_event_kpis(self, mdf, fname, i):
+        """
+        Extract KPI values for a single FCW MF4 file.
+        Returns a dict of KPI values to write into kpi_table.
+        """
 
-            # print progress
-            print(f"\n📊 Processing FCW KPI for file {i + 1}/{len(self.file_list)}: {fname}")
+        result = {}
 
-            mdf = self._load_mdf(fpath)
-            if mdf is None:
-                continue
+        # --- Extract signals ---
+        time        = self._prepare_time(mdf)
+        accel       = mdf.longActAccelFlt
+        fcw_request = mdf.fcwRequest
+        ego_speed   = mdf.egoSpeedKph
 
-            # --- Extract signals ---
-            time        = self._prepare_time(mdf)
-            accel       = mdf.longActAccelFlt
-            fcw_request = mdf.fcwRequest
-            ego_speed   = mdf.egoSpeedKph
+        # Required signals missing
+        if accel is None or fcw_request is None:
+            warnings.warn(f"⚠️ Missing accel or fcwRequest in {fname} → skipped.")
+            return None
 
-            if accel is None or fcw_request is None:
-                warnings.warn(f"⚠️ Missing accel or fcwRequest in {fname} → skipped.")
-                continue
-
-            # --- FCW event detection ---
+        # --- FCW event detection ---
+        try:
             start_times, end_times = detect_fcw_events(time, fcw_request)
-            if len(start_times) == 0:
-                print(f"⚠️ No FCW events detected in {fname}")
-                continue
+        except Exception as e:
+            warnings.warn(f"[{fname}] detect_fcw_events failed: {e}")
+            return None
 
-            fcw_start_time = start_times[0]
-            self.kpi_table.loc[i, "logTime"] = safe_scalar(fcw_start_time)
+        if len(start_times) == 0:
+            warnings.warn(f"⚠️ No FCW events detected in {fname}")
+            return None
 
-            # --- Vehicle speed at FCW start ---
-            fcw_start_idx = int(np.argmin(np.abs(time - fcw_start_time)))
-            veh_spd = safe_scalar(ego_speed[fcw_start_idx]) if ego_speed is not None else np.nan
-            self.kpi_table.loc[i, "vehSpd"] = veh_spd
+        # Use first event
+        fcw_start_time = start_times[0]
+        result["logTime"] = safe_scalar(fcw_start_time)
 
-            # --- KPI metrics ---
-            self.brake_jerk_calc.compute_brake_jerk(mdf, self.kpi_table, i)
-            self.fcw_warning_calc.compute_fcw_warning(mdf, self.kpi_table, i)
+        # --- Vehicle speed at event start ---
+        fcw_start_idx = int(np.argmin(np.abs(time - fcw_start_time)))
+        veh_spd = safe_scalar(ego_speed[fcw_start_idx]) if ego_speed is not None else np.nan
+        result["vehSpd"] = veh_spd
 
+        # --- KPI computations (these write directly into kpi_table) ---
+        self.brake_jerk_calc.compute_brake_jerk(mdf, self.kpi_table, i)
+        self.fcw_warning_calc.compute_fcw_warning(mdf, self.kpi_table, i)
 
-            self.kpi_table = self.kpi_table.round(3)
+        return result

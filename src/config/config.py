@@ -9,7 +9,7 @@ from src.utils.path_manager import get_resource
 class Config:
     def __init__(self):
         self.signal_map     = None       # vbRcSignals sheet
-        self.kpi_spec       = None       # KPI sheet
+        self.event_kpi_list       = None       # KPI sheet
         self.graph_spec     = None       # graphSpec sheet
         self.line_colors    = None       # lineColors sheet
         self.marker_shapes  = None       # markerShapes sheet
@@ -64,12 +64,12 @@ class Config:
         spec_data  = cls._load_signal_map_kpi_plot_spec(spec_path, sheet_list)
         sheet_map  = {k.lower(): v for k, v in spec_data.items()}
 
-        cfg.graph_spec    = sheet_map.get("graphspec")
-        cfg.line_colors   = sheet_map.get("linecolors")
-        cfg.marker_shapes = sheet_map.get("markershapes")
-        cfg.kpi_spec      = sheet_map.get("kpi")
-        cfg.params        = sheet_map.get("params")
-        cfg.overall_kpi   = sheet_map.get("overallkpi")
+        cfg.graph_spec     = sheet_map.get("graphspec")
+        cfg.line_colors    = sheet_map.get("linecolors")
+        cfg.marker_shapes  = sheet_map.get("markershapes")
+        cfg.event_kpi_list = sheet_map.get("kpi")
+        cfg.params         = sheet_map.get("params")
+        cfg.cycle_kpi_list = sheet_map.get("overallkpi")
 
 
         # =====================================================

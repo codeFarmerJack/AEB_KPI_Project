@@ -15,7 +15,7 @@ class ScatterPlotter:
         self.line_colors     = obj.line_colors
         self.marker_shapes   = self._extract_marker_shapes(obj.marker_shapes)
         self.calibratables   = obj.calibratables
-        self.kpi_spec        = obj.kpi_spec
+        self.event_kpi_list        = obj.event_kpi_list
         self.kpi_data        = obj.kpi_data
         self.in_path_output  = obj.out_path_output
         self.interactive     = getattr(obj, "interactive", False)
@@ -83,10 +83,10 @@ class ScatterPlotter:
         marker, color = self._select_marker_and_color(row_in_group)
 
         x_var_global  = str(self.graph_spec.loc[0, "reference"])
-        var_names     = self.kpi_spec["name"].astype(str).tolist()
+        var_names     = self.event_kpi_list["name"].astype(str).tolist()
         display_names = [
             f"{row['name']} [{row['unit']}]" if pd.notna(row.get("unit")) else str(row["name"])
-            for _, row in self.kpi_spec.iterrows()
+            for _, row in self.event_kpi_list.iterrows()
         ]
         x_col, y_col = self._resolve_xy_columns(x_var_global, y_var, var_names, display_names)
 

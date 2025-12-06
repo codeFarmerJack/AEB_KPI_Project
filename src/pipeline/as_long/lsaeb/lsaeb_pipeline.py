@@ -24,8 +24,8 @@ class LsaebPipeline(BasePipeline):
         print("\n➡️ [4/5] Extracting LSAEB KPIs...")
         try:
             self.kpi = LsaebEventKpiExtractor(self.cfg, self.event)
-            self.kpi.process_all_mdf_files()
-            self.kpi.export_to_excel()
+            self.kpi.process_mdf_events()
+            self.kpi.export_event_kpis()
             print("✅ LSAEB KPI extraction and Excel export done.")
         except Exception as e:
             raise RuntimeError(f"❌ LSAEB KPI extraction failed: {e}")

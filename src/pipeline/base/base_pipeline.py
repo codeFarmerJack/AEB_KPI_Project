@@ -68,12 +68,12 @@ class BasePipeline(ABC):
         print(f"✅ Config loaded: {self.config_path}")
 
         # Optional summaries
-        if isinstance(self.cfg.kpi_spec, pd.DataFrame):
+        if isinstance(self.cfg.event_kpi_list, pd.DataFrame):
             print("\n📑 KPI Specification:")
-            print(f"   ➝ Shape: {self.cfg.kpi_spec.shape}")
-            print(self.cfg.kpi_spec.head(8).to_string(index=False))
+            print(f"   ➝ Shape: {self.cfg.event_kpi_list.shape}")
+            print(self.cfg.event_kpi_list.head(8).to_string(index=False))
         else:
-            print(f"⚠️ Unexpected type for cfg.kpi_spec: {type(self.cfg.kpi_spec)}")
+            print(f"⚠️ Unexpected type for cfg.event_kpi_list: {type(self.cfg.event_kpi_list)}")
 
         print("\n⚙️ Calibratables Summary:")
         for cal_name, val in self.cfg.calibratables.items():

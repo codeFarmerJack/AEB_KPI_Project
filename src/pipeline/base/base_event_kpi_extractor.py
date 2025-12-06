@@ -13,7 +13,7 @@ class BaseEventKpiExtractor:
     Subclasses must define:
         - FEATURE_NAME
         - PARAM_SPECS
-        - process_all_mdf_files()
+        - process_mdf_events()
     """
 
     FEATURE_NAME = "BASE"
@@ -40,27 +40,9 @@ class BaseEventKpiExtractor:
         if not self.file_list:
             raise FileNotFoundError(f"No .mf4 files found in {self.out_path_chunks}")
 
-        # ---- Extracted MF4 files (for availability KPI extraction)
-        self.file_list_extracted = [
-            f for f in os.listdir(self.in_path_extracted) if f.endswith(".mf4")
-        ]
-        if not self.file_list_extracted:
-            raise FileNotFoundError(f"No .mf4 extracted files found in {self.in_path_extracted}")
-
         # --- KPI table ---
         self.feature_name = feature_name or self.FEATURE_NAME
-        self.kpi_table = create_kpi_table_from_df(config.kpi_spec, feature=self.feature_name)
-
-        # ---------------------------------------------------------
-        # OPTIONAL: Create overall_kpi_table if config.overall_kpi exists
-        # ---------------------------------------------------------
-        if hasattr(config, "overall_kpi") and config.overall_kpi is not None:
-            self.overall_kpi_table = create_kpi_table_from_df(
-                config.overall_kpi,
-                feature=self.feature_name
-            )
-        else:
-            self.overall_kpi_table = None
+        self.kpi_table = create_kpi_table_from_df(config.event_kpi_list, feature=self.feature_name)
 
         # --- Parameter loading ---
         self._load_params(config)
@@ -122,62 +104,62 @@ class BaseEventKpiExtractor:
             self.kpi_table.insert(0, "label", "")
         self.kpi_table.loc[index, "label"] = fname
 
-    # ------------------------------------------------------------------ #
-    def export_to_excel(self, sheet_name=None):
-        """
-        Export KPI results to Excel using the shared helper (export_kpi_to_excel).
-        - Always export `kpi_table` as one sheet.
-        - Export `overall_kpi_table` as an additional sheet (if it exists).
-        - Ensures consistent sheet naming and correct Excel file naming.
-        """
+# ------------------------------------------------------------------ #
+    def extract_event_kpis(self, mdf, fname, index):
+        """Subclasses must implement and return a dict of KPI values."""
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement extract_event_kpis()"
+        )
 
-        # ------------------------------------------------------------
-        # 1. Determine sheet name (normalize to lowercase)
-        # ------------------------------------------------------------
+    # ------------------------------------------------------------------ #
+    def export_event_kpis(self, sheet_name=None):
+        """
+        Export ONLY event-based KPIs to Excel.
+        Cycle/availability KPIs are handled by cycle extractors.
+        """
         event_sheet = (sheet_name or self.feature_name).lower()
 
-        # ------------------------------------------------------------
-        # 2. Determine FINAL Excel file output path
-        # ------------------------------------------------------------
-        # Use config if provided, else fallback
         filename = getattr(self.config, "kpi_result_filename", "kpi_results.xlsx")
-
-        # Full path: <results_folder>/<filename>
         output_path = os.path.join(self.out_path_results, filename)
 
-        try:
-            # =====================================================
-            # 1) MAIN KPI TABLE — always exported
-            # =====================================================
-            df_main = self.kpi_table.copy()
+        df_main = self.kpi_table.copy()
 
-            # Sort BEFORE renaming
-            if "vehSpd" in df_main.columns:
-                df_main = df_main.sort_values("vehSpd")
-            else:
-                print("⚠️ 'vehSpd' not found in main KPI table — skipping sort.")
+        # Sort BEFORE export
+        if "vehSpd" in df_main.columns:
+            df_main = df_main.sort_values("vehSpd")
 
-            # Write/append sheet using helper
-            export_kpi_to_excel(df_main, output_path, sheet_name=event_sheet)
-            print(f"📄 Exported '{event_sheet}' sheet → {output_path}")
+        export_kpi_to_excel(df_main, output_path, sheet_name=event_sheet)
 
-            # =====================================================
-            # 2) OVERALL TABLE — only exported when available
-            # =====================================================
-            if self.overall_kpi_table is not None and not self.overall_kpi_table.empty:
-                df_overall = self.overall_kpi_table.copy()
-
-                export_kpi_to_excel(df_overall, output_path, sheet_name="overall")
-                print("📄 Exported 'overall' KPI sheet.")
-            else:
-                print("ℹ️ No overall KPI table — only main sheet exported.")
-
-            print(f"✅ KPI export completed successfully → {output_path}")
-
-        except Exception as e:
-            warnings.warn(f"⚠️ Failed to export KPI results to Excel ({output_path}): {e}")
+        print(f"📄 Exported EVENT KPIs → sheet '{event_sheet}' in {output_path}")
 
     # ------------------------------------------------------------------ #
-    def process_all_mdf_files(self):
-        """To be implemented by subclasses."""
-        raise NotImplementedError("Subclasses must implement process_all_mdf_files()")
+    def process_mdf_events(self):
+        """
+        Unified loop for all event-based KPI extractors (AEB, FCW, LSAEB, etc.)
+        Subclasses must implement extract_event_kpis(mdf, fname, index)
+        which returns a dict of KPI values.
+        """
+
+        for i, fname in enumerate(self.file_list):
+            fpath = os.path.join(self.out_path_chunks, fname)
+
+            # Insert filename label into table
+            self._insert_label(i, fname)
+
+            # Load MDF
+            mdf = self._load_mdf(fpath)
+            if mdf is None:
+                continue
+
+            # Each subclass handles 1 event file → return dict of KPI values
+            result = self.extract_event_kpis(mdf, fname, i)
+            if result is None:
+                continue
+
+            # Write dict values into the KPI table
+            for key, value in result.items():
+                self.kpi_table.loc[i, key] = value
+
+        # Final cleanup
+        self.kpi_table = self.kpi_table.round(3)
+        print(f"\n✅ {self.feature_name} Event KPI extraction completed successfully.")

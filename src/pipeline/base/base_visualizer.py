@@ -34,7 +34,7 @@ class BaseVisualizer:
         self.line_colors    = config.line_colors
         self.marker_shapes  = config.marker_shapes
         self.calibratables  = config.calibratables
-        self.kpi_spec       = config.kpi_spec
+        self.event_kpi_list       = config.event_kpi_list
         # --- Load KPI sheet for this feature ---
         self.kpi_data       = self._load_kpi_data()
 

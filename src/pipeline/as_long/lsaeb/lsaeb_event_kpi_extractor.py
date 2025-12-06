@@ -1,8 +1,5 @@
-import os
 import numpy as np
-import pandas as pd
 import warnings
-from dataclasses import dataclass
 from src.pipeline.base.base_event_kpi_extractor import BaseEventKpiExtractor
 from src.utils.event_detector.as_long.lsaeb import detect_lsaeb_events
 from src.utils.data_utils import safe_scalar
@@ -25,81 +22,73 @@ class LsaebEventKpiExtractor(BaseEventKpiExtractor):
         super().__init__(config, event_segmenter, "in_path_lsaeb_chunks", feature_name="LSAEB")
         self.distance_calc = LsaebDistanceCalculator(self)
 
-    # ------------------------------------------------------------------ #
-    def process_all_mdf_files(self):
-        """Process all LSAEB MF4 chunk files and extract KPI metrics."""
-        for i, fname in enumerate(self.file_list):
-            fpath = os.path.join(self.out_path_chunks, fname)
-            self._insert_label(i, fname)
-            print(f"\n📊 Processing LSAEB KPI for file {i + 1}/{len(self.file_list)}: {fname}")
 
-            # --- Load MDF segment ---
-            mdf = self._load_mdf(fpath)
-            if mdf is None:
-                continue
+    def extract_event_kpis(self, mdf, fname, i):
+        """
+        Extract KPI values for a single LSAEB MF4 file.
+        Returns a dict of KPI values to write into kpi_table.
+        """
 
-            # --- Extract signals (segment-level) ---
-            try:
-                time = self._prepare_time(mdf)
-                ego_speed = np.asarray(mdf.egoSpeedKph)
+        result = {}
 
-                # Try to get event-type signal from segment
-                if hasattr(mdf, "cpmEventType"):
-                    lsaeb_event_type = np.asarray(mdf.cpmEventType)
-                elif hasattr(mdf, "lsaeb_event_type"):
-                    lsaeb_event_type = np.asarray(mdf.lsaeb_event_type)
-                else:
-                    raise AttributeError("Missing CPM event type signal (cpmEventType or lsaeb_event_type).")
+        # --- Extract signals ---
+        try:
+            time = self._prepare_time(mdf)
+            ego_speed = np.asarray(mdf.egoSpeedKph)
 
-            except AttributeError as e:
-                warnings.warn(f"[Row {i}] Missing required signal: {e}")
-                continue
+            # Event-type signal
+            if hasattr(mdf, "cpmEventType"):
+                lsaeb_event_type = np.asarray(mdf.cpmEventType)
+            elif hasattr(mdf, "lsaeb_event_type"):
+                lsaeb_event_type = np.asarray(mdf.lsaeb_event_type)
+            else:
+                raise AttributeError("Missing CPM event type signal (cpmEventType or lsaeb_event_type).")
 
-            # --- Basic sanity check ---
-            if len(time) != len(lsaeb_event_type):
-                n = min(len(time), len(lsaeb_event_type))
-                warnings.warn(f"[Row {i}] Signal length mismatch — trimming to {n} samples.")
-                time = time[:n]
-                ego_speed = ego_speed[:n]
-                lsaeb_event_type = lsaeb_event_type[:n]
+        except AttributeError as e:
+            warnings.warn(f"[{fname}] Missing required signal: {e}")
+            return None
 
-            if np.all(lsaeb_event_type == 0):
-                warnings.warn(f"[Row {i}] No LSAEB activation found (all zeros).")
-                continue
+        # --- Length mismatch trimming ---
+        if len(time) != len(lsaeb_event_type):
+            n = min(len(time), len(lsaeb_event_type))
+            warnings.warn(f"[{fname}] Signal length mismatch — trimming to {n} samples.")
+            time = time[:n]
+            ego_speed = ego_speed[:n]
+            lsaeb_event_type = lsaeb_event_type[:n]
 
-            # --- Detect events *inside this segment* ---
-            try:
-                start_indices, end_indices = detect_lsaeb_events(time, lsaeb_event_type)
-            except Exception as e:
-                warnings.warn(f"[Row {i}] detect_lsaeb_events failed: {e}")
-                continue
+        # --- No event found ---
+        if np.all(lsaeb_event_type == 0):
+            warnings.warn(f"[{fname}] No LSAEB activation found (all zeros).")
+            return None
 
-            if len(start_indices) == 0:
-                warnings.warn(f"[Row {i}] No LSAEB events detected.")
-                continue
+        # --- Detect events ---
+        try:
+            start_indices, end_indices = detect_lsaeb_events(time, lsaeb_event_type)
+        except Exception as e:
+            warnings.warn(f"[{fname}] detect_lsaeb_events failed: {e}")
+            return None
 
-            # --- Use first event (you can extend to loop through all later) ---
-            lsaeb_start_idx = int(start_indices[0])
-            lsaeb_end_idx = int(end_indices[0]) if len(end_indices) > 0 else len(time) - 1
+        if len(start_indices) == 0:
+            warnings.warn(f"[{fname}] No LSAEB events detected.")
+            return None
 
-            # --- Clip indices safely within segment length ---
-            lsaeb_start_idx = max(0, min(lsaeb_start_idx, len(time) - 1))
-            lsaeb_end_idx = max(0, min(lsaeb_end_idx, len(time) - 1))
+        # Use 1st event
+        start_idx = int(start_indices[0])
+        end_idx = int(end_indices[0]) if len(end_indices) > 0 else len(time) - 1
 
-            # --- Derive timing ---
-            lsaeb_start_time = time[lsaeb_start_idx]
+        # Clip safely
+        start_idx = max(0, min(start_idx, len(time) - 1))
+        end_idx = max(0, min(end_idx, len(time) - 1))
 
-            # --- Save timing info ---
-            self.kpi_table.loc[i, "logTime"] = safe_scalar(lsaeb_start_time)
+        # --- Timing KPI ---
+        start_time = time[start_idx]
+        result["logTime"] = safe_scalar(start_time)
 
-            # --- Vehicle speed at start ---
-            veh_spd = safe_scalar(ego_speed[lsaeb_start_idx])
-            self.kpi_table.loc[i, "vehSpd"] = veh_spd
+        # --- Veh speed at event start ---
+        veh_spd = safe_scalar(ego_speed[start_idx])
+        result["vehSpd"] = veh_spd
 
-            # --- Compute distance KPIs ---
-            self.distance_calc.compute_distance(mdf, self.kpi_table, i, lsaeb_start_idx, lsaeb_end_idx)
+        # --- Distance KPIs (write directly into table via calculator API) ---
+        self.distance_calc.compute_distance(mdf, self.kpi_table, i, start_idx, end_idx)
 
-            # --- Round and finalize ---
-            self.kpi_table = self.kpi_table.round(3)
-
-        print("\n✅ LSAEB KPI extraction completed successfully.")
+        return result
