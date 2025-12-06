@@ -49,7 +49,7 @@ class LkaCycleKpiExtractor(BaseCycleKpiExtractor):
         # -----------------------------
         # availability conditions
         # -----------------------------
-        global_ok = (lka_block == 0) & (lka_abort == 0)
+        global_ok   = (lka_block == 0) & (lka_abort == 0)
         avail_left  = (ready_left == 1) & global_ok
         avail_right = (ready_right == 1) & global_ok
 

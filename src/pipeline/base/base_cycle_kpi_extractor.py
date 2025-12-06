@@ -66,9 +66,8 @@ class BaseCycleKpiExtractor(ABC):
         filename = getattr(self.config, "kpi_result_filename", "kpi_results.xlsx")
 
         # Save under analysis_results
-        output_path = os.path.join(
-            self.in_path_extracted, "..", "analysis_results", filename
-        )
+        output_path = os.path.join(self.out_path_results, filename)
+
         output_path = os.path.abspath(output_path)
 
         export_kpi_to_excel(
@@ -82,33 +81,54 @@ class BaseCycleKpiExtractor(ABC):
     # ------------------------------------------------------------------ #
     def process_mdf_cycles(self):
         """
-        Unified loop for all cycle/availability KPI extractors.
-        Subclasses must implement extract_cycle_kpis(mdf, fname, index),
-        which returns a dict of KPI values.
+        One row per MF4 file.
+        Columns come from KPI schema (Common + feature KPIs).
         """
+
+        df_out = self.cycle_kpi_table
+        schema = self.config.cycle_kpi_list
+
+        # Pre-extract feature mapping from KPI schema
+        feature_lookup = {}
+        for _, row in schema.iterrows():
+            name = str(row["name"]).strip()
+            feat = str(row["feature"]).strip()
+            feature_lookup[name] = feat
 
         for i, fname in enumerate(self.file_list_extracted):
             fpath = os.path.join(self.in_path_extracted, fname)
 
-            # Insert filename label into cycle_kpi_table
-            if "label" not in self.cycle_kpi_table.columns:
-                self.cycle_kpi_table.insert(0, "label", "")
-            self.cycle_kpi_table.loc[i, "label"] = fname
+            # -------------------------
+            # Common KPIs
+            # -------------------------
+            if "label" in df_out.columns:
+                df_out.loc[i, "label"] = fname
 
+            if "feature" in df_out.columns:
+                # Feature column is per-row, not per-KPI
+                df_out.loc[i, "feature"] = self.feature_name
+
+            # -------------------------
             # Load MDF
+            # -------------------------
             mdf = safe_load_mdf(fpath)
             if mdf is None:
                 continue
 
-            # Subclass returns cycle KPI dict for this MF4 file
+            # -------------------------
+            # Compute KPIs for this file
+            # -------------------------
             result = self.extract_cycle_kpis(mdf, fname, i)
-            if result is None:
+            if not result:
                 continue
 
-            # Write returned KPI values into the cycle table
-            for key, value in result.items():
-                self.cycle_kpi_table.loc[i, key] = value
+            # -------------------------
+            # Assign KPI values to SAME row
+            # -------------------------
+            for kpi_name, val in result.items():
+                if kpi_name in df_out.columns:
+                    df_out.loc[i, kpi_name] = val
 
-        # Final cleanup
-        self.cycle_kpi_table = self.cycle_kpi_table.round(3)
+        self.cycle_kpi_table = df_out.round(3)
         print(f"\n✅ {self.FEATURE_NAME} Cycle KPI extraction completed successfully.")
+
