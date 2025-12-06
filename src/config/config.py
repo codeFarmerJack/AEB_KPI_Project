@@ -75,7 +75,7 @@ class Config:
         cfg.marker_shapes  = sheet_map.get("markershapes")
         cfg.event_kpi_list = sheet_map.get("kpi")
         cfg.params         = sheet_map.get("params")
-        cfg.cycle_kpi_list = sheet_map.get("overallkpi")
+        cfg.cycle_kpi_list = sheet_map.get("cyclekpi")
 
 
         # =====================================================
