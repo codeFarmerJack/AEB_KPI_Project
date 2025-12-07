@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 from abc import ABC, abstractmethod
 from src.utils.signal_mdf import safe_load_mdf
 from src.utils.create_kpi_table import create_kpi_table_from_df
@@ -46,7 +47,7 @@ class BaseCycleKpiExtractor(ABC):
 
     # ------------------------------------------------------------------ #
     @abstractmethod
-    def extract_cycle_kpis(self, mdf, fname, index):
+    def extract_cycle_kpis(self, mdf, fname):
         """
         Subclass must implement cycle/availability KPI logic.
 

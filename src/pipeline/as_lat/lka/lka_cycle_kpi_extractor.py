@@ -14,17 +14,7 @@ class LkaCycleKpiExtractor(BaseCycleKpiExtractor):
     def __init__(self, input_handler, config):
         super().__init__(input_handler, config)
 
-    def extract_cycle_kpis(self, mdf, fname, index):
-        """
-        Compute availability KPIs for all features in cycle_kpi_list.
-        Returns:
-            {
-            "LKA": {"AvailDistPctLeft": x, "AvailDistPctRight": y},
-            "LSS": {...},
-            ...
-            }
-        """
-
+    def extract_cycle_kpis(self, mdf, fname):
         try:
             time        = np.asarray(mdf.time)
             speed_mps   = np.asarray(mdf.egoSpeed)
@@ -36,6 +26,17 @@ class LkaCycleKpiExtractor(BaseCycleKpiExtractor):
             warnings.warn(f"Missing required LKA signal: {e}")
             return {}
 
+        # ------------------------------------------------------------
+        # Normalize schema to avoid future KeyError issues
+        # ------------------------------------------------------------
+        schema = self.config.cycle_kpi_list.copy()
+        schema.columns = schema.columns.str.strip().str.lower()
+
+        features = [
+            f for f in schema["feature"].unique()
+            if f.lower() != "common"
+        ]
+
         # -----------------------------
         # distance per sample
         # -----------------------------
@@ -45,15 +46,14 @@ class LkaCycleKpiExtractor(BaseCycleKpiExtractor):
         dist       = speed_mps * dt
         total_dist = dist.sum()
 
+        # Zero distance → return zeros for all features
         if total_dist <= 0:
-            # every feature gets zero
             return {
                 feature: {
                     "AvailDistPctLeft":  0.0,
                     "AvailDistPctRight": 0.0
                 }
-                for feature in self.config.cycle_kpi_list["Feature"].unique()
-                if feature != "Common"
+                for feature in features
             }
 
         # -----------------------------
@@ -69,9 +69,6 @@ class LkaCycleKpiExtractor(BaseCycleKpiExtractor):
         # -----------------------------
         # Build output for ALL features
         # -----------------------------
-        features = self.config.cycle_kpi_list["Feature"].unique()
-        features = [f for f in features if f != "Common"]  # ignore label + feature row
-
         return {
             feature: {
                 "AvailDistPctLeft":  round(pct_left, 2),
@@ -79,4 +76,5 @@ class LkaCycleKpiExtractor(BaseCycleKpiExtractor):
             }
             for feature in features
         }
+
 
