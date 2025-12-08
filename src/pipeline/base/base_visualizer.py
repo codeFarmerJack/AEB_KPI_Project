@@ -37,6 +37,8 @@ class BaseVisualizer:
         self.event_kpi_list       = config.event_kpi_list
         # --- Load KPI sheet for this feature ---
         self.kpi_data       = self._load_kpi_data()
+        # --- UI preference propagated to viz module ---
+        self.interactive    = getattr(config, "interactive", False)
 
         print(f"✅ BaseVisualizer initialized for feature: {self.feature.upper()}")
 
@@ -90,4 +92,3 @@ class BaseVisualizer:
             f"(including '{common_label}' rows if present).")
 
         return filtered
-
