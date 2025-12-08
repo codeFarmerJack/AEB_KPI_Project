@@ -75,7 +75,9 @@ class Config:
         cfg.marker_shapes  = sheet_map.get("markershapes")
         cfg.event_kpi_list = sheet_map.get("kpi")
         cfg.params         = sheet_map.get("params")
-        cfg.cycle_kpi_list = sheet_map.get("cyclekpi")
+        cfg.cycle_kpi_list = sheet_map.get("cyclekpi") or sheet_map.get("overallkpi")
+        if cfg.cycle_kpi_list is None:
+            warnings.warn("⚠️ No cycleKPI/overallKPI sheet found in config workbook.")
 
 
         # =====================================================
@@ -314,5 +316,3 @@ class Config:
                             v * 100 if v is not None else None for v in y_vals
                         ]
                         print(f"📏 Scaled '{key}' *100 (0-1 → 0-100).")
-
-

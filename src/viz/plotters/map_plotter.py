@@ -16,13 +16,13 @@ class MapPlotter(BasePlotter):
 
     def __init__(self, visualizer):
         super().__init__(visualizer)
-        self.graph_spec = self.viz.graph_spec
-        self.figure_mgr = FigureManager()
-        self.style_mgr = StyleManager(self.viz.marker_shapes, self.viz.line_colors)
-        self.filter_mgr = FilterManager()
-        self.exporter = Exporter(self.viz.out_path_output)
+        self.graph_spec     = self.viz.graph_spec
+        self.figure_mgr     = FigureManager()
+        self.style_mgr      = StyleManager(self.viz.marker_shapes, self.viz.line_colors)
+        self.filter_mgr     = FilterManager()
+        self.exporter       = Exporter(self.viz.out_path_output)
         self._group_counter = getattr(self.viz, "_group_counter", iter(range(1, 200)))
-        self.interactive = getattr(self.viz, "interactive", False)
+        self.interactive    = getattr(self.viz, "interactive", False)
 
     def plot_row(self, graph_idx: int) -> None:
         data = self.viz.kpi_data
@@ -68,7 +68,7 @@ class MapPlotter(BasePlotter):
         self.figure_mgr.add_label(title, legend_name)
 
         if is_last:
-            labels = self.figure_mgr.get_labels(title)
+            labels   = self.figure_mgr.get_labels(title)
             group_id = next(self._group_counter)
             self.exporter.export_html(
                 fig,

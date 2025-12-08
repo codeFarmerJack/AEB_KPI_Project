@@ -9,6 +9,10 @@ SignalToEnumMap:
   cpmEventType: DIActiveSafetyCPMEvent
   lkaInterventionStatus: DIActiveSafetyEvent
   useCase: LssUseCase
+  cpmRunSetting: DIActiveSafetyRunSettings
+  aebRunSetting: DIActiveSafetyRunSettings
+  fcwRunSetting: DIActiveSafetyRunSettings
+  dbsRunSetting: DIActiveSafetyRunSettings
 
 # Enums used to convert symbolic MDF signal values into numeric codes.
 
@@ -53,6 +57,13 @@ DIActiveSafetyEvent:
   DI_ACTIVE_SAFETY_EVENT_LEVEL_3: 3    # Level 3 warning or event is active
   DI_ACTIVE_SAFETY_EVENT_LEVEL_4: 4    # Level 4 warning or event is active
   DI_ACTIVE_SAFETY_EVENT_COUNT: 5      # Total number of defined event levels
+
+DIActiveSafetyRunSettings:
+  DI_ACTIVE_SAFETY_RUN_SETTINGS_INVALID: 0      # upstream not set
+  DI_ACTIVE_SAFETY_RUN_SETTINGS_DONT_RUN: 1     # feature off
+  DI_ACTIVE_SAFETY_RUN_SETTINGS_ENABLED: 2      # feature on / monitoring
+  DI_ACTIVE_SAFETY_RUN_SETTINGS_EXTERNALLY_FAULTED: 3  # faulted state command
+  DI_ACTIVE_SAFETY_RUN_SETTINGS_COUNT: 4        # number of values
 
 LssUseCase:
   LSS_USE_CASE_UNSPECIFIED: 0      # Unspecified use case

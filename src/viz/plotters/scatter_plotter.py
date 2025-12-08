@@ -27,12 +27,12 @@ class ScatterPlotter(BasePlotter):
     def __init__(self, visualizer):
         super().__init__(visualizer)
 
-        self.graph_spec = self.viz.graph_spec
-        self.figure_mgr = FigureManager()
-        self.style_mgr  = StyleManager(self.viz.marker_shapes, self.viz.line_colors)
-        self.filter_mgr = FilterManager()
-        self.layer_mgr  = LayerManager(self.viz.calibratables)
-        self.exporter   = Exporter(self.viz.out_path_output)
+        self.graph_spec    = self.viz.graph_spec
+        self.figure_mgr    = FigureManager()
+        self.style_mgr     = StyleManager(self.viz.marker_shapes, self.viz.line_colors)
+        self.filter_mgr    = FilterManager()
+        self.layer_mgr     = LayerManager(self.viz.calibratables)
+        self.exporter      = Exporter(self.viz.out_path_output)
 
         self._group_counter = getattr(self.viz, "_group_counter", iter(range(1, 200)))
         self.interactive    = getattr(self.viz, "interactive", False)
@@ -136,7 +136,7 @@ class ScatterPlotter(BasePlotter):
         # ---- if this is last row in group -> finalize + export ----
         if is_last:
             # add calibration curves for all enabled rows
-            labels = self.figure_mgr.get_labels(title)
+            labels   = self.figure_mgr.get_labels(title)
             for row_idx in enabled_rows:
                 cal_limit = str(self.graph_spec.loc[row_idx, "calibration_lim"]).strip()
                 if cal_limit and cal_limit.lower() not in ["none", "nan", ""]:

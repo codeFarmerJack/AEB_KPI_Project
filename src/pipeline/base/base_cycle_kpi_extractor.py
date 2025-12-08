@@ -1,4 +1,5 @@
 import os
+import warnings
 import pandas as pd
 from abc import ABC, abstractmethod
 from src.utils.signal_mdf import safe_load_mdf
@@ -37,10 +38,19 @@ class BaseCycleKpiExtractor(ABC):
 
         # Cycle KPI table (from config.cycle_kpi_list)
         self.feature_name = self.FEATURE_NAME
-        self.cycle_kpi_table = create_kpi_table_from_df(
-            config.cycle_kpi_list,
-            feature=self.feature_name
-        )
+        schema_df = getattr(config, "cycle_kpi_list", None)
+        if not isinstance(schema_df, pd.DataFrame) or schema_df.empty:
+            warnings.warn("⚠️ cycle_kpi_list is missing or empty; skipping cycle KPI extraction.")
+            self.cycle_kpi_table = pd.DataFrame(columns=["label", "feature"])
+            self.cycle_kpi_schema = None
+        else:
+            schema_df = schema_df.copy()
+            schema_df.columns = schema_df.columns.str.strip().str.lower()
+            self.cycle_kpi_schema = schema_df
+            self.cycle_kpi_table = create_kpi_table_from_df(
+                self.cycle_kpi_schema,
+                feature=self.feature_name
+            )
 
         self.config = config
 
@@ -60,8 +70,8 @@ class BaseCycleKpiExtractor(ABC):
     def export_cycle_kpis(self):
         """Export cycle KPIs into Excel."""
 
-        if self.cycle_kpi_table is None:
-            print("ℹ️ No cycle KPI table defined in config.")
+        if self.cycle_kpi_table is None or self.cycle_kpi_table.empty:
+            print("ℹ️ No cycle KPIs to export; skipping cycleKPI sheet.")
             return
 
         filename = getattr(self.config, "kpi_result_filename", "kpi_results.xlsx")
@@ -74,10 +84,10 @@ class BaseCycleKpiExtractor(ABC):
         export_kpi_to_excel(
             self.cycle_kpi_table.copy(),
             output_path,
-            sheet_name="overall",
+            sheet_name="cycleKPI",
         )
 
-        print(f"📄 Exported CYCLE KPIs → sheet 'overall' in {output_path}")
+        print(f"📄 Exported CYCLE KPIs → sheet 'cycleKPI' in {output_path}")
 
     # ------------------------------------------------------------------ #
     def process_mdf_cycles(self):
@@ -88,6 +98,10 @@ class BaseCycleKpiExtractor(ABC):
             file1 - FCW
             file1 - EBA
         """
+
+        if self.cycle_kpi_table is None:
+            warnings.warn("⚠️ cycle_kpi_table not initialized; skipping cycle KPI processing.")
+            return
 
         rows = []  # collect rows for final DataFrame
 
@@ -120,13 +134,37 @@ class BaseCycleKpiExtractor(ABC):
                 row.update(kpi_dict)  # add KPI columns
                 rows.append(row)
 
-        # Convert collected rows to DataFrame
-        self.cycle_kpi_table = (
-            pd.DataFrame(rows)
-            .reindex(columns=self.cycle_kpi_table.columns, fill_value=None)
-            .round(3)
-        )
+        # Convert collected rows to DataFrame and preserve any KPI keys
+        new_df = pd.DataFrame(rows)
+
+        # Build desired columns: existing schema columns (if any) plus any new KPI keys
+        desired_cols = list(self.cycle_kpi_table.columns)
+        for col in new_df.columns:
+            if col not in desired_cols:
+                desired_cols.append(col)
+
+        self.cycle_kpi_table = new_df.reindex(columns=desired_cols, fill_value=None).round(3)
+
+        if self.cycle_kpi_table.empty:
+            warnings.warn("⚠️ No cycle KPIs produced; cycleKPI sheet will not be written.")
+        else:
+            print(f"🧾 Collected {len(self.cycle_kpi_table)} cycle KPI rows.")
 
         print(f"\n✅ {self.FEATURE_NAME} Cycle KPI extraction completed successfully.")
 
+    # ------------------------------------------------------------------ #
+    def get_feature_kpi_names(self, feature_name: str):
+        """
+        Return the list of KPI 'name' entries defined for a feature in the cycle schema.
+        """
+        if self.cycle_kpi_schema is None:
+            return []
+        if "feature" not in self.cycle_kpi_schema.columns or "name" not in self.cycle_kpi_schema.columns:
+            return []
 
+        feat = str(feature_name).strip().lower()
+        names = self.cycle_kpi_schema.loc[
+            self.cycle_kpi_schema["feature"].astype(str).str.strip().str.lower() == feat,
+            "name",
+        ]
+        return [str(n) for n in names.dropna().tolist()]
