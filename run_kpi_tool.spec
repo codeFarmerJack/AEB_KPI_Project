@@ -17,6 +17,7 @@ datas = [
     (str(SRC / "config"), "config"),
     (str(SRC / "pipeline"), "pipeline"),
     (str(SRC / "utils"), "utils"),
+    (str(SRC / "viz"), "viz"),
 ]
 
 # Matplotlib assets
@@ -64,6 +65,7 @@ a = Analysis(
     runtime_hooks=['hooks/fix_tk_path.py'],
     excludes=['pyi_rth__tkinter'],
     cipher=block_cipher,
+    noarchive=False,
 )
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
