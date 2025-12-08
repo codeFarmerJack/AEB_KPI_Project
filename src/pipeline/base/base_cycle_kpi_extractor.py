@@ -43,6 +43,7 @@ class BaseCycleKpiExtractor(ABC):
             warnings.warn("⚠️ cycle_kpi_list is missing or empty; skipping cycle KPI extraction.")
             self.cycle_kpi_table = pd.DataFrame(columns=["label", "feature"])
             self.cycle_kpi_schema = None
+            self.cycle_display_map = {}
         else:
             schema_df = schema_df.copy()
             schema_df.columns = schema_df.columns.str.strip().str.lower()
@@ -51,6 +52,7 @@ class BaseCycleKpiExtractor(ABC):
                 self.cycle_kpi_schema,
                 feature=self.feature_name
             )
+            self.cycle_display_map = self.cycle_kpi_table.attrs.get("display_names", {})
 
         self.config = config
 
@@ -81,8 +83,23 @@ class BaseCycleKpiExtractor(ABC):
 
         output_path = os.path.abspath(output_path)
 
+        df_out = self.cycle_kpi_table.copy()
+
+        # Merge with existing cycleKPI sheet so multiple features coexist
+        if os.path.exists(output_path):
+            try:
+                prev = pd.read_excel(output_path, sheet_name="cycleKPI")
+                df_out = (
+                    pd.concat([prev, df_out], ignore_index=True, sort=False)
+                    .drop_duplicates(subset=["label", "feature"], keep="last")
+                    .reset_index(drop=True)
+                )
+                print(f"🔁 Merged existing cycleKPI sheet with {len(self.cycle_kpi_table)} new rows.")
+            except Exception as e:
+                warnings.warn(f"⚠️ Could not merge existing cycleKPI sheet; writing new one. Details: {e}")
+
         export_kpi_to_excel(
-            self.cycle_kpi_table.copy(),
+            df_out,
             output_path,
             sheet_name="cycleKPI",
         )
@@ -135,6 +152,15 @@ class BaseCycleKpiExtractor(ABC):
                 rows.append(row)
 
         # Convert collected rows to DataFrame and preserve any KPI keys
+        # Prefer display map from current table; if missing, rebuild from schema
+        display_map = self.cycle_kpi_table.attrs.get("display_names", {}) or getattr(self, "cycle_display_map", {})
+        if not display_map and self.cycle_kpi_schema is not None:
+            try:
+                rebuilt = create_kpi_table_from_df(self.cycle_kpi_schema, feature=self.feature_name)
+                display_map = rebuilt.attrs.get("display_names", {})
+                print("ℹ️ Rebuilt cycle KPI display map from schema.")
+            except Exception:
+                pass
         new_df = pd.DataFrame(rows)
 
         # Build desired columns: existing schema columns (if any) plus any new KPI keys
@@ -144,6 +170,19 @@ class BaseCycleKpiExtractor(ABC):
                 desired_cols.append(col)
 
         self.cycle_kpi_table = new_df.reindex(columns=desired_cols, fill_value=None).round(3)
+
+        # restore / extend display map so exporter can rename columns (add [%] for new numeric KPIs)
+        if not display_map:
+            display_map = {}
+        for col in self.cycle_kpi_table.columns:
+            if col in ["label", "feature"]:
+                display_map.setdefault(col, col)
+                continue
+            if col not in display_map:
+                display_map[col] = col
+
+        self.cycle_kpi_table.attrs["display_names"] = display_map
+        self.cycle_display_map = display_map
 
         if self.cycle_kpi_table.empty:
             warnings.warn("⚠️ No cycle KPIs produced; cycleKPI sheet will not be written.")

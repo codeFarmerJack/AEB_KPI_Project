@@ -40,10 +40,13 @@ def export_kpi_to_excel(kpi_df: pd.DataFrame, output_dir: str, sheet_name: str):
             df = df.sort_values("vehSpd")
 
         # --- Apply display names (if defined) ---
-        display_map = df.attrs.get("display_names", {})
-        renamed = {col: display_map.get(col, col) for col in df.columns}
-        renamed["label"] = "label"
-        df = df.rename(columns=renamed)
+        display_map = df.attrs.get("display_names", {}) or {}
+        if display_map:
+            renamed = {col: display_map.get(col, col) for col in df.columns}
+            # never rename label/feature
+            renamed["label"] = "label"
+            renamed["feature"] = "feature"
+            df = df.rename(columns=renamed)
 
         # --- Determine whether to create or update ---
         file_exists = os.path.exists(output_filename)

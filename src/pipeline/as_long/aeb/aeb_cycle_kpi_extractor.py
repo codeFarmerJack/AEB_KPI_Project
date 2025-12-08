@@ -41,9 +41,14 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
         dist       = speed_mps * dt
         total_dist = dist.sum()
 
+        # Determine KPI column names from schema (fallback defaults)
+        kpi_names = self.get_feature_kpi_names(self.FEATURE_NAME)
+        default_names = ["AvailDistPct", "runSetting", "inputHealthy", "precondBlk", "abort"]
+        kpi_keys = kpi_names if kpi_names else default_names
+
         if total_dist <= 0:
             warnings.warn("⚠️ Total distance is zero; availability cannot be computed.")
-            return {self.FEATURE_NAME: {"AvailDistPct": 0.0}}
+            return {self.FEATURE_NAME: {k: 0.0 for k in kpi_keys}}
 
         cond_run      = run_setting == 2
         cond_healthy  = input_healthy == 1
@@ -54,6 +59,11 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
 
         enabled_dist    = np.sum(dist[avail_mask])
         pct_avail       = enabled_dist / total_dist * 100
+        pct_run         = np.sum(dist[cond_run]) / total_dist * 100
+        pct_healthy     = np.sum(dist[cond_healthy]) / total_dist * 100
+        pct_precond     = np.sum(dist[cond_precond]) / total_dist * 100
+        pct_abort_ok    = np.sum(dist[cond_abort_ok]) / total_dist * 100
+
         samples_total   = len(dist)
         samples_enabled = int(np.sum(avail_mask))
 
@@ -72,9 +82,13 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
             f"| aebAbort==0: {_count(cond_abort_ok)}"
         )
 
-        # Determine KPI column name from schema (fallback to AvailDistPct)
-        kpi_names = self.get_feature_kpi_names(self.FEATURE_NAME)
-        kpi_name = kpi_names[0] if kpi_names else "AvailDistPct"
+        # Build output only for KPI keys requested in schema (or defaults)
+        metrics = {
+            "AvailDistPct": round(pct_avail, 2),
+            "runSetting": round(pct_run, 2),
+            "inputHealthy": round(pct_healthy, 2),
+            "precondBlk": round(pct_precond, 2),
+            "abort": round(pct_abort_ok, 2),
+        }
 
-        # Return KPI dict keyed by this feature only
-        return {self.FEATURE_NAME: {kpi_name: round(pct_avail, 2)}}
+        return {self.FEATURE_NAME: {k: metrics.get(k, None) for k in kpi_keys}}

@@ -2,6 +2,7 @@ from pathlib import Path
 from src.pipeline.base.base_pipeline import BasePipeline
 from src.pipeline.as_long.fcw.fcw_event_segmenter import FcwEventSegmenter
 from src.pipeline.as_long.fcw.fcw_event_kpi_extractor import FcwEventKpiExtractor
+from src.pipeline.as_long.fcw.fcw_cycle_kpi_extractor import FcwCycleKpiExtractor
 from src.pipeline.as_long.fcw.fcw_visualizer import FcwVisualizer
 
 
@@ -21,9 +22,16 @@ class FcwPipeline(BasePipeline):
     def _extract_kpis(self):
         print("\n➡️ [4/5] Extracting FCW KPIs...")
         try:
+            # Event-level KPIs
             self.kpi = FcwEventKpiExtractor(self.cfg, self.event)
             self.kpi.process_mdf_events()
             self.kpi.export_event_kpis()
+
+            # Cycle/availability KPIs
+            self.cycle_kpi = FcwCycleKpiExtractor(self.ih, self.cfg)
+            self.cycle_kpi.process_mdf_cycles()
+            self.cycle_kpi.export_cycle_kpis()
+
             print("✅ FCW KPI extraction and Excel export done.")
         except Exception as e:
             raise RuntimeError(f"❌ FCW KPI extraction failed: {e}")
