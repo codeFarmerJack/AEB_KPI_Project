@@ -3,6 +3,7 @@ import warnings
 
 from src.pipeline.base.base_cycle_kpi_extractor import BaseCycleKpiExtractor
 from src.utils.signal_mdf import get_signal
+from src.utils.process_calibratables import interpolate_threshold_clamped
 
 
 class AebCycleKpiExtractor(BaseCycleKpiExtractor):
@@ -33,10 +34,10 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
             time            = get_signal(mdf, "time", required=True)
             speed_mps       = get_signal(mdf, "egoSpeed", required=True)
             precond_blocked = get_signal(mdf, "aebPrecondBlk", required=True)
-            throttle        = get_signal(mdf, "throttleValue", required=True)
-            steer_angle     = get_signal(mdf, "steerWheelAngle", required=True)
-            steer_rate      = get_signal(mdf, "steerWheelAngleSpeed", required=True)
-            yaw_rate        = get_signal(mdf, "yawRate", required=True)
+            throttle        = get_signal(mdf, "throttleValuePct", required=True)
+            steer_angle     = get_signal(mdf, "steerWheelAngleDeg", required=True)
+            steer_rate      = get_signal(mdf, "steerWheelAngleSpeedDeg", required=True)
+            yaw_rate        = get_signal(mdf, "yawRateDeg", required=True)
             lat_accel       = get_signal(mdf, "latActAccel", required=True)
         except AttributeError as e:
             warnings.warn(f"Missing required AEB signal: {e}")
@@ -64,17 +65,6 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
             return {self.FEATURE_NAME: {k: 0.0 for k in kpi_keys}}
 
         # ----- Suppression metrics ----- #
-        def _interp_thresh(curve_name):
-            curve = (self.config.calibratables or {}).get(curve_name, None)
-            if not curve or "x" not in curve or "y" not in curve:
-                return None
-            try:
-                x = np.asarray(curve["x"], dtype=float)
-                y = np.asarray(curve["y"], dtype=float)
-                return np.interp(speed_mps, x, y, left=y[0], right=y[-1])
-            except Exception:
-                return None
-
         def _dist_pct(signal, thresh):
             if signal is None or thresh is None:
                 return np.nan
@@ -85,46 +75,36 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
         suppress_pct = {}
 
         # Precondition block flag as a suppression
-        if precond_blocked is not None:
-            mask_precond = precond_blocked != 0
-            suppress_masks.append(mask_precond)
+        if precond_blocked is None:
+            warnings.warn("⚠️ Missing aebPrecondBlk signal — availability cannot be computed.")
+            avail_mask = np.zeros_like(speed_mps, dtype=bool)
         else:
-            mask_precond = None
+            avail_mask = (precond_blocked == 0)
 
-        # Threshold-based suppressions
-        thr_pedal  = _interp_thresh("PedalPosPro_th")
-        thr_steer  = _interp_thresh("SteeringWheelAngle_Th")
-        thr_rate   = _interp_thresh("AEB_SteeringAngleRate_Override")
-        thr_yaw    = _interp_thresh("YawrateSuspension_Th")
-        thr_lat    = _interp_thresh("LateralAcceleration_th")
 
-        suppress_pct["PedalPosProSuppression"] = round(_dist_pct(throttle, thr_pedal), 2) if throttle is not None and thr_pedal is not None else np.nan
-        suppress_pct["SteeringWheelAngle"]     = round(_dist_pct(steer_angle, thr_steer), 2) if steer_angle is not None and thr_steer is not None else np.nan
-        suppress_pct["SteeringWheelAngleRate"] = round(_dist_pct(steer_rate, thr_rate), 2) if steer_rate is not None and thr_rate is not None else np.nan
-        suppress_pct["YawRate"]                = round(_dist_pct(yaw_rate, thr_yaw), 2) if yaw_rate is not None and thr_yaw is not None else np.nan
-        suppress_pct["LatAccel"]               = round(_dist_pct(lat_accel, thr_lat), 2) if lat_accel is not None and thr_lat is not None else np.nan
+        # Threshold-based suppressions (vectorized per-sample interpolation)
+        def _safe_interp(name):
+            cal = (self.config.calibratables or {}).get(name)
+            if cal is None:
+                return None
+            try:
+                return interpolate_threshold_clamped(cal, speed_mps)
+            except Exception as e:
+                warnings.warn(f"⚠️ Failed to interpolate calibratable '{name}': {e}")
+                return None
 
-        # Build combined availability mask = NOT(any suppression)
-        if thr_pedal is not None and throttle is not None:
-            suppress_masks.append(np.asarray(throttle, dtype=float) > thr_pedal)
-        if thr_steer is not None and steer_angle is not None:
-            suppress_masks.append(np.asarray(steer_angle, dtype=float) > thr_steer)
-        if thr_rate is not None and steer_rate is not None:
-            suppress_masks.append(np.asarray(steer_rate, dtype=float) > thr_rate)
-        if thr_yaw is not None and yaw_rate is not None:
-            suppress_masks.append(np.asarray(yaw_rate, dtype=float) > thr_yaw)
-        if thr_lat is not None and lat_accel is not None:
-            suppress_masks.append(np.asarray(lat_accel, dtype=float) > thr_lat)
+        pedal_thd      = _safe_interp("PedalPosPro_th")
+        steer_thd      = _safe_interp("SteeringWheelAngle_Th")
+        steer_rate_thd = _safe_interp("AEB_SteeringAngleRate_Override")
+        yaw_rate_thd   = _safe_interp("YawrateSuspension_Th")
+        lat_accel_thd  = _safe_interp("LateralAcceleration_th")
 
-        if suppress_masks:
-            suppress_union = suppress_masks[0]
-            for m in suppress_masks[1:]:
-                suppress_union = suppress_union | m
-            avail_mask = ~suppress_union
-        else:
-            # fallback to precond flag only if no suppressions available
-            avail_mask = precond_blocked == 0 if precond_blocked is not None else np.ones_like(speed_mps, dtype=bool)
-
+        suppress_pct["PedalPosProSuppression"] = round(_dist_pct(throttle, pedal_thd), 2) if throttle is not None and pedal_thd is not None else np.nan
+        suppress_pct["SteeringWheelAngle"]     = round(_dist_pct(steer_angle, steer_thd), 2) if steer_angle is not None and steer_thd is not None else np.nan
+        suppress_pct["SteeringWheelAngleRate"] = round(_dist_pct(steer_rate, steer_rate_thd), 2) if steer_rate is not None and steer_rate_thd is not None else np.nan
+        suppress_pct["YawRate"]                = round(_dist_pct(yaw_rate, yaw_rate_thd), 2) if yaw_rate is not None and yaw_rate_thd is not None else np.nan
+        suppress_pct["LatAccel"]               = round(_dist_pct(lat_accel, lat_accel_thd), 2) if lat_accel is not None and lat_accel_thd is not None else np.nan
+        
         enabled_dist = np.sum(dist[avail_mask])
         pct_avail    = enabled_dist / total_dist * 100
 

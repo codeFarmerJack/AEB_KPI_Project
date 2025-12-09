@@ -20,25 +20,33 @@ def extract_calibratables(cal_struct):
 
 
 def interpolate_threshold_clamped(table, x):
+    """
+    Linearly interpolate calibration thresholds for scalar or array x.
+    Accepts:
+      - dict with 'x'/'y' arrays
+      - 2 x N array-like (first row x, second row y)
+    Returns scalar if x is scalar, ndarray if x is array-like.
+    """
+    if table is None:
+        raise ValueError("Calibration table is None")
+
     if isinstance(table, dict) and "x" in table and "y" in table:
-        x_arr = np.asarray(table["x"], dtype=float)
-        y_arr = np.asarray(table["y"], dtype=float)
-
-        if len(x_arr) != len(y_arr):
-            raise ValueError(
-                f"Calibration table mismatch: x has {len(x_arr)} points, y has {len(y_arr)} points"
-            )
-
-        table = np.vstack([x_arr, y_arr])
+        x_vals = np.asarray(table["x"], dtype=float)
+        y_vals = np.asarray(table["y"], dtype=float)
     else:
-        table = np.asarray(table, dtype=float)
+        arr = np.asarray(table, dtype=float)
+        if arr.ndim != 2 or arr.shape[0] != 2:
+            raise ValueError(
+                f"table must be 2 x N (two rows: breakpoints and values), got shape {arr.shape}"
+            )
+        x_vals, y_vals = arr[0], arr[1]
 
-    if table.shape[0] != 2:
+    if x_vals.shape != y_vals.shape:
         raise ValueError(
-            f"table must be 2 x N (two rows: breakpoints and values), got shape {table.shape}"
+            f"Calibration table mismatch: x has {x_vals.shape} points, y has {y_vals.shape} points"
         )
 
-    x_vals, y_vals = table[0], table[1]
-    x_clamped = np.clip(x, np.min(x_vals), np.max(x_vals))
-    return float(np.interp(x_clamped, x_vals, y_vals))
-
+    x_in = np.asarray(x, dtype=float)
+    x_clamped = np.clip(x_in, np.min(x_vals), np.max(x_vals))
+    result = np.interp(x_clamped, x_vals, y_vals)
+    return float(result) if np.isscalar(x) or np.ndim(x_in) == 0 else result

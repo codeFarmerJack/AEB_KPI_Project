@@ -73,14 +73,56 @@ class InputHandler:
         self.out_path_extracted = os.path.join(self.in_path_raw_data, "extracted")
         os.makedirs(self.out_path_extracted, exist_ok=True)
 
+        # -------------------- Helper: Unit Conversions -------------------- #
+    def _apply_conversions(self, data):
+        """
+        Apply all unit conversions to extracted MF4 signals.
+        Adds new converted columns without overwriting originals.
+        """
+
+        CONVERSIONS = {
+            "egoSpeed":            ("egoSpeedKph", lambda x: x * 3.6,    "m/s → km/h"),
+            "throttleValue":       ("throttleValuePct", lambda x: x * 100.0, "0–1 → %"),
+            "steerWheelAngle":     ("steerWheelAngleDeg", np.degrees,    "rad → deg"),
+            "steerWheelAngleSpeed":("steerWheelAngleSpeedDeg", np.degrees, "rad/s → deg/s"),
+            "yawRate":             ("yawRateDeg", np.degrees,            "rad/s → deg/s"),
+        }
+
+        for src, (dst, func, desc) in CONVERSIONS.items():
+            if src not in data.columns:
+                warnings.warn(f"⚠️ Signal '{src}' not found in extracted data.")
+                continue
+
+            try:
+                data[dst] = func(data[src])
+                print(f"   ✅ Converted {src} → {dst} ({desc})")
+            except Exception as e:
+                warnings.warn(f"⚠️ Failed to convert {src}: {e}")
+
+        return data
+
+
     # -------------------- Public API -------------------- #
     def process_mf4_files(self) -> None:
         """
         Process MF4 files:
-        1. Extract specified signals using mf4_extractor()
-        2. Filter longActAccel & latActAccel
-        3. Convert egoSpeed (m/s → km/h)
-        4. Save all signals to '_extracted.mf4'
+
+        Workflow:
+        1. Load and extract signals using mf4_extractor()
+        2. Close the raw MF4 handle immediately after extraction
+        3. Apply signal filtering:
+            - longActAccel  → longActAccelFlt
+            - latActAccel   → latActAccelFlt
+        4. Apply unit conversions:
+            - egoSpeed               (m/s → km/h)
+            - throttleValue          (0–1 → %)
+            - steerWheelAngle        (rad → deg)
+            - steerWheelAngleSpeed   (rad/s → deg/s)
+            - yawRate                (rad/s → deg/s)
+        5. Map enum/categorical signals to integer values using enum_definitions.yaml
+        6. Save all signals (original + filtered + converted) into a new MDF file
+        named '<original>_extracted.mf4' inside the 'extracted' subfolder
+        7. Close the new MDF file and force memory cleanup
         """
 
         mf4_files = [f for f in os.listdir(self.in_path_raw_data) if f.lower().endswith(".mf4")]
@@ -131,15 +173,9 @@ class InputHandler:
                             warnings.warn(f"⚠️ Failed to filter {sig}: {e}")
                     else:
                         warnings.warn(f"⚠️ Signal '{sig}' not found in extracted data.")
-                # --- 3️⃣ Convert egoSpeed from m/s to km/h ---
-                if "egoSpeed" in data.columns:
-                    try:
-                        data["egoSpeedKph"] = data["egoSpeed"] * 3.6
-                        print("   ✅ Converted egoSpeed → egoSpeedKph (m/s → km/h)")
-                    except Exception as e:
-                        warnings.warn(f"⚠️ Failed to convert egoSpeed: {e}")
-                else:
-                    warnings.warn("⚠️ Signal 'egoSpeed' not found in extracted data.")
+                # --- 3️⃣ Apply unit conversions (throttle, steering, egoSpeed, yaw, etc.) ---
+                data = self._apply_conversions(data)
+
 
                 # --- 4️⃣ Save both raw + filtered signals to new MDF ---
 
