@@ -2,7 +2,7 @@ from pathlib import Path
 from src.pipeline.base.base_pipeline import BasePipeline
 from src.pipeline.as_long.lsaeb.lsaeb_event_segmenter import LsaebEventSegmenter
 from src.pipeline.as_long.lsaeb.lsaeb_event_kpi_extractor import LsaebEventKpiExtractor
-from src.pipeline.as_long.lsaeb.lsaeb_visualizer import LsaebVisualizer
+from src.pipeline.as_long.lsaeb.lsaeb_visualizer import LsaebEventVisualizer
 
 
 class LsaebPipeline(BasePipeline):
@@ -34,7 +34,7 @@ class LsaebPipeline(BasePipeline):
     def _visualize_results(self):
         print("\n➡️ [5/5] Launching LSAEB visualization...\n")
         try:
-            self.viz = LsaebVisualizer(self.cfg, self.kpi)
+            self.viz = LsaebEventVisualizer(self.cfg, self.kpi)
             self.viz.interactive = getattr(self, "default_interactive", False)
             self.viz.plot()
         except Exception as e:

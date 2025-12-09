@@ -3,7 +3,7 @@ from src.pipeline.base.base_pipeline import BasePipeline
 from src.pipeline.as_long.fcw.fcw_event_segmenter import FcwEventSegmenter
 from src.pipeline.as_long.fcw.fcw_event_kpi_extractor import FcwEventKpiExtractor
 from src.pipeline.as_long.fcw.fcw_cycle_kpi_extractor import FcwCycleKpiExtractor
-from src.pipeline.as_long.fcw.fcw_visualizer import FcwVisualizer
+from src.pipeline.as_long.fcw.fcw_visualizer import FcwEventVisualizer
 
 
 class FcwPipeline(BasePipeline):
@@ -40,7 +40,7 @@ class FcwPipeline(BasePipeline):
     def _visualize_results(self):
         print("\n➡️ [5/5] Launching FCW visualization...\n")
         try:
-            self.viz = FcwVisualizer(self.cfg, self.kpi)
+            self.viz = FcwEventVisualizer(self.cfg, self.kpi)
             self.viz.interactive = getattr(self, "default_interactive", False)
             self.viz.plot()
         except Exception as e:

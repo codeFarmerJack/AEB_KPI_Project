@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from src.utils.signal_mdf import safe_load_mdf, get_signal
 from src.utils.create_kpi_table import create_kpi_table_from_df
 from src.utils.exporter import export_kpi_to_excel
-from src.viz.visualizers.cycle_visualizer import CycleVisualizer
+from src.viz.visualizers.cycle_visualizer import BaseCycleVisualizer
 
 
 class BaseCycleKpiExtractor(ABC):
@@ -213,7 +213,7 @@ class BaseCycleKpiExtractor(ABC):
             return
 
         out_dir = os.path.join(self.out_path_results, feature_name.lower(), "cycle")
-        viz = CycleVisualizer(out_dir)
+        viz = BaseCycleVisualizer(out_dir)
 
         for _, row in self.cycle_kpi_table.iterrows():
             if str(row.get("feature", "")).strip().upper() != feature_name.strip().upper():

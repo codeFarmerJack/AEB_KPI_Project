@@ -1,7 +1,7 @@
-from src.viz.visualizers.event_visualizer import EventVisualizer
+from src.viz.visualizers.event_visualizer import BaseEventVisualizer
 
 
-class LsaebVisualizer(EventVisualizer):
+class LsaebEventVisualizer(BaseEventVisualizer):
     """LSAEB KPI visualizer."""
 
     def __init__(self, config, kpi_extractor):

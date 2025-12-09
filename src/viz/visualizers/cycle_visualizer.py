@@ -3,7 +3,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 
-class CycleVisualizer:
+class BaseCycleVisualizer:
     """
     Simple dashboard-style visualizer for cycle KPIs.
     Expects:
@@ -145,3 +145,4 @@ class CycleVisualizer:
         out_path = os.path.join(self.out_dir, f"{title.replace(' ', '_')}.html")
         fig.write_html(out_path, include_plotlyjs="cdn", full_html=True)
         print(f"💾 Cycle dashboard saved → {out_path}")
+

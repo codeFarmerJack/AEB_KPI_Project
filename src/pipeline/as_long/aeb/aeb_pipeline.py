@@ -3,7 +3,7 @@ from src.pipeline.base.base_pipeline import BasePipeline
 from src.pipeline.as_long.aeb.aeb_event_segmenter import AebEventSegmenter
 from src.pipeline.as_long.aeb.aeb_event_kpi_extractor import AebEventKpiExtractor
 from src.pipeline.as_long.aeb.aeb_cycle_kpi_extractor import AebCycleKpiExtractor
-from src.pipeline.as_long.aeb.aeb_visualizer import AebVisualizer
+from src.pipeline.as_long.aeb.aeb_visualizer import AebEventVisualizer
 
 
 class AebPipeline(BasePipeline):
@@ -40,7 +40,7 @@ class AebPipeline(BasePipeline):
     def _visualize_results(self):
         print("\n➡️ [5/5] Launching AEB visualization...\n")
         try:
-            self.viz = AebVisualizer(self.cfg, self.kpi)
+            self.viz = AebEventVisualizer(self.cfg, self.kpi)
             self.viz.interactive = getattr(self, "default_interactive", False)
             self.viz.plot()
         except Exception as e:

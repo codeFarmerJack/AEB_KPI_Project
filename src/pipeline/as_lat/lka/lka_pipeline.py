@@ -3,7 +3,7 @@ from src.pipeline.base.base_pipeline import BasePipeline
 from src.pipeline.as_lat.lka.lka_event_segmenter import LkaEventSegmenter
 from src.pipeline.as_lat.lka.lka_event_kpi_extractor import LkaEventKpiExtractor
 from src.pipeline.as_lat.lka.lka_cycle_kpi_extractor import LkaCycleKpiExtractor
-from src.pipeline.as_lat.lka.lka_visualizer import LkaVisualizer
+from src.pipeline.as_lat.lka.lka_visualizer import LkaEventVisualizer
 
 
 class LkaPipeline(BasePipeline):
@@ -49,7 +49,7 @@ class LkaPipeline(BasePipeline):
     def _visualize_results(self):
         print("\n➡️ [5/5] Launching LKA visualization...\n")
         try:
-            self.viz = LkaVisualizer(self.cfg, self.event_kpi)
+            self.viz = LkaEventVisualizer(self.cfg, self.event_kpi)
             self.viz.interactive = getattr(self, "default_interactive", False)
             self.viz.plot()
         except Exception as e:

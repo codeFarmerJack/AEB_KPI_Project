@@ -1,7 +1,7 @@
-from src.viz.visualizers.event_visualizer import EventVisualizer
+from src.viz.visualizers.event_visualizer import BaseEventVisualizer
 
 
-class FcwVisualizer(EventVisualizer):
+class FcwEventVisualizer(BaseEventVisualizer):
     """FCW KPI visualizer."""
 
     def __init__(self, config, kpi_extractor):
