@@ -31,6 +31,7 @@ class AebPipeline(BasePipeline):
             self.cycle_kpi = AebCycleKpiExtractor(self.ih, self.cfg)
             self.cycle_kpi.process_mdf_cycles()
             self.cycle_kpi.export_cycle_kpis()
+            self.cycle_kpi.render_cycle_dashboards(feature_name="AEB")
 
             print("✅ AEB KPI extraction and Excel export done.")
         except Exception as e:

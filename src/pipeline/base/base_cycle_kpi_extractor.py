@@ -1,10 +1,12 @@
 import os
 import warnings
+from pathlib import Path
 import pandas as pd
 from abc import ABC, abstractmethod
-from src.utils.signal_mdf import safe_load_mdf
+from src.utils.signal_mdf import safe_load_mdf, get_signal
 from src.utils.create_kpi_table import create_kpi_table_from_df
 from src.utils.exporter import export_kpi_to_excel
+from src.viz.visualizers.cycle_visualizer import CycleVisualizer
 
 
 class BaseCycleKpiExtractor(ABC):
@@ -163,23 +165,17 @@ class BaseCycleKpiExtractor(ABC):
                 pass
         new_df = pd.DataFrame(rows)
 
-        # Build desired columns: existing schema columns (if any) plus any new KPI keys
-        desired_cols = list(self.cycle_kpi_table.columns)
-        for col in new_df.columns:
-            if col not in desired_cols:
-                desired_cols.append(col)
+        # Build desired columns: keep label/feature + keys present in data
+        desired_cols = ["label", "feature"]
+        desired_cols += [c for c in new_df.columns if c not in desired_cols]
 
         self.cycle_kpi_table = new_df.reindex(columns=desired_cols, fill_value=None).round(3)
 
-        # restore / extend display map so exporter can rename columns (add [%] for new numeric KPIs)
+        # restore display map so exporter can rename columns
         if not display_map:
             display_map = {}
         for col in self.cycle_kpi_table.columns:
-            if col in ["label", "feature"]:
-                display_map.setdefault(col, col)
-                continue
-            if col not in display_map:
-                display_map[col] = col
+            display_map.setdefault(col, col)
 
         self.cycle_kpi_table.attrs["display_names"] = display_map
         self.cycle_display_map = display_map
@@ -207,3 +203,58 @@ class BaseCycleKpiExtractor(ABC):
             "name",
         ]
         return [str(n) for n in names.dropna().tolist()]
+
+    # ------------------------------------------------------------------ #
+    def render_cycle_dashboards(self, feature_name: str):
+        """
+        Generate per-file cycle dashboards using CycleVisualizer.
+        """
+        if self.cycle_kpi_table is None or self.cycle_kpi_table.empty:
+            return
+
+        out_dir = os.path.join(self.out_path_results, feature_name.lower(), "cycle")
+        viz = CycleVisualizer(out_dir)
+
+        for _, row in self.cycle_kpi_table.iterrows():
+            if str(row.get("feature", "")).strip().upper() != feature_name.strip().upper():
+                continue
+
+            label = str(row.get("label", "")).strip()
+            if not label:
+                continue
+
+            fpath = os.path.join(self.in_path_extracted, label)
+            if not os.path.exists(fpath):
+                warnings.warn(f"⚠️ Cycle dashboard skipped — file not found: {fpath}")
+                continue
+
+            mdf = safe_load_mdf(fpath)
+            if mdf is None:
+                continue
+
+            signals = self._extract_cycle_signals(mdf)
+            title = f"{feature_name.upper()} - {Path(label).stem}"
+            try:
+                viz.plot_cycle(row, signals, title=title)
+            except Exception as e:
+                warnings.warn(f"⚠️ Failed to render cycle dashboard for {label}: {e}")
+
+    # ------------------------------------------------------------------ #
+    def _extract_cycle_signals(self, mdf):
+        """Pull common signals used by the cycle visualizer."""
+        def pick(candidates):
+            for c in candidates:
+                try:
+                    val = get_signal(mdf, c)
+                    if val is not None:
+                        return val
+                except Exception:
+                    continue
+            return None
+
+        return {
+            "time": pick(["time"]),
+            "lon": pick(["lon", "longitude", "egoLon", "egoLongitude"]),
+            "lat": pick(["lat", "latitude", "egoLat", "egoLatitude"]),
+            "speed": pick(["egoSpeed", "vehSpd", "speed"]),
+        }

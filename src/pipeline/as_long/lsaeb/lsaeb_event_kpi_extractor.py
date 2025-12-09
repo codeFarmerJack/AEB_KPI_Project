@@ -4,6 +4,7 @@ from src.pipeline.base.base_event_kpi_extractor import BaseEventKpiExtractor
 from src.utils.event_detector.as_long.lsaeb import detect_lsaeb_events
 from src.utils.data_utils import safe_scalar
 from src.utils.kpis.as_long.lsaeb.distance import LsaebDistanceCalculator
+from src.utils.signal_mdf import get_signal
 
 
 # ------------------------------------------------------------------ #
@@ -34,14 +35,15 @@ class LsaebEventKpiExtractor(BaseEventKpiExtractor):
         # --- Extract signals ---
         try:
             time = self._prepare_time(mdf)
-            ego_speed = np.asarray(mdf.egoSpeedKph)
+            ego_speed = get_signal(mdf, "egoSpeedKph", required=True)
 
-            # Event-type signal
-            if hasattr(mdf, "cpmEventType"):
-                lsaeb_event_type = np.asarray(mdf.cpmEventType)
-            elif hasattr(mdf, "lsaeb_event_type"):
-                lsaeb_event_type = np.asarray(mdf.lsaeb_event_type)
-            else:
+            # Event-type signal (try multiple aliases)
+            lsaeb_event_type = None
+            for sig_name in ["cpmEventType", "lsaeb_event_type"]:
+                lsaeb_event_type = get_signal(mdf, sig_name)
+                if lsaeb_event_type is not None:
+                    break
+            if lsaeb_event_type is None:
                 raise AttributeError("Missing CPM event type signal (cpmEventType or lsaeb_event_type).")
 
         except AttributeError as e:

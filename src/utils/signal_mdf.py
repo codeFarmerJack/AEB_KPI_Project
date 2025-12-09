@@ -4,6 +4,28 @@ from asammdf import MDF
 import traceback
 
 
+def get_signal(mdf, name: str, *, required: bool = False, default=None, as_array: bool = True):
+    """
+    Unified helper to fetch signals from MDF/SignalMDF with optional requirement.
+    - required=True raises AttributeError if missing.
+    - default is returned when available and signal is missing.
+    - as_array=True converts to numpy array.
+    """
+    if not hasattr(mdf, name):
+        if required:
+            raise AttributeError(name)
+        return default
+    val = getattr(mdf, name)
+    if as_array:
+        try:
+            return np.asarray(val)
+        except Exception:
+            if required:
+                raise AttributeError(name)
+            return default
+    return val
+
+
 class SignalMDF(MDF):
     """
     Extended MDF class with:
@@ -100,4 +122,3 @@ def safe_load_mdf(file_path):
         print("      Message:", e)
         traceback.print_exc()
         return None
-

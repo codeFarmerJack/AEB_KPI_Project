@@ -6,6 +6,7 @@ from src.utils.event_detector.as_long.fcw import detect_fcw_events
 from src.utils.data_utils import safe_scalar
 from src.utils.kpis.as_long.fcw.brake_jerk import FcwBrakeJerkCalculator
 from src.utils.kpis.as_long.fcw.fcw_warning import FcwWarningCalculator
+from src.utils.signal_mdf import get_signal
 
 
 # ------------------------------------------------------------------ #
@@ -42,9 +43,9 @@ class FcwEventKpiExtractor(BaseEventKpiExtractor):
 
         # --- Extract signals ---
         time        = self._prepare_time(mdf)
-        accel       = mdf.longActAccelFlt
-        fcw_request = mdf.fcwRequest
-        ego_speed   = mdf.egoSpeedKph
+        accel       = get_signal(mdf, "longActAccelFlt")
+        fcw_request = get_signal(mdf, "fcwRequest")
+        ego_speed   = get_signal(mdf, "egoSpeedKph")
 
         # Required signals missing
         if accel is None or fcw_request is None:

@@ -1,7 +1,7 @@
 import os
 import warnings
 import numpy as np
-from src.utils.signal_mdf import SignalMDF
+from src.utils.signal_mdf import SignalMDF, get_signal
 from src.utils.create_kpi_table import create_kpi_table_from_df
 from src.utils.exporter import export_kpi_to_excel
 
@@ -88,7 +88,7 @@ class BaseEventKpiExtractor:
 
     def _prepare_time(self, mdf):
         """Extract or synthesize a time vector."""
-        time = getattr(mdf, "time", None)
+        time = get_signal(mdf, "time")
         if time is None or len(time) == 0:
             try:
                 time = mdf.get_master(0).flatten()

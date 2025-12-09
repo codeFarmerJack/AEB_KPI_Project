@@ -2,6 +2,7 @@ import numpy as np
 import warnings
 
 from src.pipeline.base.base_cycle_kpi_extractor import BaseCycleKpiExtractor
+from src.utils.signal_mdf import get_signal
 
 
 class AebCycleKpiExtractor(BaseCycleKpiExtractor):
@@ -18,18 +19,25 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
     def extract_cycle_kpis(self, mdf, fname):
         """
         Availability condition:
-            aebRunSetting == 2
-            AND aebInputHealthy == 1
-            AND aebPrecondBlk  == 0
-            AND aebAbort       == 0
+            Feature is available only when NONE of the suppression masks are true.
+
+        Suppression reasons (distance % each):
+            - PedalPosProSuppression: throttleValue > PedalPosPro_th(egoSpd)
+            - SteeringWheelAngle: steerWheelAngle > SteeringWheelAngle_Th(egoSpd)
+            - SteeringWheelAngleRate: steerWheelAngleSpeed > AEB_SteeringAngleRate_Override(egoSpd)
+            - YawRate: yawRate > YawrateSuspension_Th(egoSpd)
+            - LatAccel: latActAccel > LateralAcceleration_th(egoSpd)
+            - aebPrecondBlk != 0 (if provided)
         """
         try:
-            time            = np.asarray(mdf.time)
-            speed_mps       = np.asarray(mdf.egoSpeed)
-            run_setting     = np.asarray(mdf.aebRunSetting)
-            input_healthy   = np.asarray(mdf.aebInputHealthy)
-            precond_blocked = np.asarray(mdf.aebPrecondBlk)
-            aeb_abort       = np.asarray(mdf.aebAbort)
+            time            = get_signal(mdf, "time", required=True)
+            speed_mps       = get_signal(mdf, "egoSpeed", required=True)
+            precond_blocked = get_signal(mdf, "aebPrecondBlk", required=True)
+            throttle        = get_signal(mdf, "throttleValue", required=True)
+            steer_angle     = get_signal(mdf, "steerWheelAngle", required=True)
+            steer_rate      = get_signal(mdf, "steerWheelAngleSpeed", required=True)
+            yaw_rate        = get_signal(mdf, "yawRate", required=True)
+            lat_accel       = get_signal(mdf, "latActAccel", required=True)
         except AttributeError as e:
             warnings.warn(f"Missing required AEB signal: {e}")
             return {}
@@ -41,54 +49,88 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
         dist       = speed_mps * dt
         total_dist = dist.sum()
 
-        # Determine KPI column names from schema (fallback defaults)
-        kpi_names = self.get_feature_kpi_names(self.FEATURE_NAME)
-        default_names = ["AvailDistPct", "runSetting", "inputHealthy", "precondBlk", "abort"]
-        kpi_keys = kpi_names if kpi_names else default_names
+        # KPI keys (include suppression breakdowns)
+        kpi_keys = [
+            "AvailDistPct",
+            "PedalPosProSuppression",
+            "SteeringWheelAngle",
+            "SteeringWheelAngleRate",
+            "YawRate",
+            "LatAccel",
+        ]
 
         if total_dist <= 0:
             warnings.warn("⚠️ Total distance is zero; availability cannot be computed.")
             return {self.FEATURE_NAME: {k: 0.0 for k in kpi_keys}}
 
-        cond_run      = run_setting == 2
-        cond_healthy  = input_healthy == 1
-        cond_precond  = precond_blocked == 0
-        cond_abort_ok = aeb_abort == 0
+        # ----- Suppression metrics ----- #
+        def _interp_thresh(curve_name):
+            curve = (self.config.calibratables or {}).get(curve_name, None)
+            if not curve or "x" not in curve or "y" not in curve:
+                return None
+            try:
+                x = np.asarray(curve["x"], dtype=float)
+                y = np.asarray(curve["y"], dtype=float)
+                return np.interp(speed_mps, x, y, left=y[0], right=y[-1])
+            except Exception:
+                return None
 
-        avail_mask = cond_run & cond_healthy & cond_precond & cond_abort_ok
+        def _dist_pct(signal, thresh):
+            if signal is None or thresh is None:
+                return np.nan
+            mask = np.asarray(signal, dtype=float) > np.asarray(thresh, dtype=float)
+            return float(np.sum(dist[mask]) / total_dist * 100)
 
-        enabled_dist    = np.sum(dist[avail_mask])
-        pct_avail       = enabled_dist / total_dist * 100
-        pct_run         = np.sum(dist[cond_run]) / total_dist * 100
-        pct_healthy     = np.sum(dist[cond_healthy]) / total_dist * 100
-        pct_precond     = np.sum(dist[cond_precond]) / total_dist * 100
-        pct_abort_ok    = np.sum(dist[cond_abort_ok]) / total_dist * 100
+        suppress_masks = []
+        suppress_pct = {}
 
-        samples_total   = len(dist)
-        samples_enabled = int(np.sum(avail_mask))
+        # Precondition block flag as a suppression
+        if precond_blocked is not None:
+            mask_precond = precond_blocked != 0
+            suppress_masks.append(mask_precond)
+        else:
+            mask_precond = None
 
-        # Debug diagnostics
-        print(
-            f"[AEB cycle] total_dist={total_dist:.2f}, enabled_dist={enabled_dist:.2f}, "
-            f"samples_total={samples_total}, samples_enabled={samples_enabled}"
-        )
-        # Condition-level diagnostics
-        def _count(mask):
-            return int(np.sum(mask))
-        print(
-            f"   ├─ aebRunSetting==2: {_count(cond_run)} "
-            f"| aebInputHealthy==1: {_count(cond_healthy)} "
-            f"| aebPrecondBlk==0: {_count(cond_precond)} "
-            f"| aebAbort==0: {_count(cond_abort_ok)}"
-        )
+        # Threshold-based suppressions
+        thr_pedal  = _interp_thresh("PedalPosPro_th")
+        thr_steer  = _interp_thresh("SteeringWheelAngle_Th")
+        thr_rate   = _interp_thresh("AEB_SteeringAngleRate_Override")
+        thr_yaw    = _interp_thresh("YawrateSuspension_Th")
+        thr_lat    = _interp_thresh("LateralAcceleration_th")
 
-        # Build output only for KPI keys requested in schema (or defaults)
+        suppress_pct["PedalPosProSuppression"] = round(_dist_pct(throttle, thr_pedal), 2) if throttle is not None and thr_pedal is not None else np.nan
+        suppress_pct["SteeringWheelAngle"]     = round(_dist_pct(steer_angle, thr_steer), 2) if steer_angle is not None and thr_steer is not None else np.nan
+        suppress_pct["SteeringWheelAngleRate"] = round(_dist_pct(steer_rate, thr_rate), 2) if steer_rate is not None and thr_rate is not None else np.nan
+        suppress_pct["YawRate"]                = round(_dist_pct(yaw_rate, thr_yaw), 2) if yaw_rate is not None and thr_yaw is not None else np.nan
+        suppress_pct["LatAccel"]               = round(_dist_pct(lat_accel, thr_lat), 2) if lat_accel is not None and thr_lat is not None else np.nan
+
+        # Build combined availability mask = NOT(any suppression)
+        if thr_pedal is not None and throttle is not None:
+            suppress_masks.append(np.asarray(throttle, dtype=float) > thr_pedal)
+        if thr_steer is not None and steer_angle is not None:
+            suppress_masks.append(np.asarray(steer_angle, dtype=float) > thr_steer)
+        if thr_rate is not None and steer_rate is not None:
+            suppress_masks.append(np.asarray(steer_rate, dtype=float) > thr_rate)
+        if thr_yaw is not None and yaw_rate is not None:
+            suppress_masks.append(np.asarray(yaw_rate, dtype=float) > thr_yaw)
+        if thr_lat is not None and lat_accel is not None:
+            suppress_masks.append(np.asarray(lat_accel, dtype=float) > thr_lat)
+
+        if suppress_masks:
+            suppress_union = suppress_masks[0]
+            for m in suppress_masks[1:]:
+                suppress_union = suppress_union | m
+            avail_mask = ~suppress_union
+        else:
+            # fallback to precond flag only if no suppressions available
+            avail_mask = precond_blocked == 0 if precond_blocked is not None else np.ones_like(speed_mps, dtype=bool)
+
+        enabled_dist = np.sum(dist[avail_mask])
+        pct_avail    = enabled_dist / total_dist * 100
+
         metrics = {
             "AvailDistPct": round(pct_avail, 2),
-            "runSetting": round(pct_run, 2),
-            "inputHealthy": round(pct_healthy, 2),
-            "precondBlk": round(pct_precond, 2),
-            "abort": round(pct_abort_ok, 2),
+            **suppress_pct,
         }
 
         return {self.FEATURE_NAME: {k: metrics.get(k, None) for k in kpi_keys}}

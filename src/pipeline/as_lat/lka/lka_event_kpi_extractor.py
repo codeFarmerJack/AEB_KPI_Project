@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from src.pipeline.base.base_event_kpi_extractor import BaseEventKpiExtractor
 from src.utils.data_utils import safe_scalar
 from src.utils.event_detector.as_lat.lka import detect_lka_events  
+from src.utils.signal_mdf import get_signal
 
 
 # ------------------------------------------------------------------ #
@@ -40,15 +41,15 @@ class LkaEventKpiExtractor(BaseEventKpiExtractor):
         # --- Extract signals ---
         try:
             time            = self._prepare_time(mdf)
-            dtle            = np.asarray(mdf.dtle)
-            dtle_target     = np.asarray(getattr(mdf, "dtleTarget", np.full_like(dtle, np.nan)))
-            lka_status      = np.asarray(mdf.lkaInterventionStatus)
-            steer_torque    = np.asarray(mdf.steerWheelTorque)
-            RateOfDeparture = np.asarray(mdf.rateOfDeparture)
-            VehCurvature    = np.asarray(mdf.vehCurvature)
-            LaneCurvature   = np.asarray(mdf.laneCurvature)
-            use_case        = np.asarray(getattr(mdf, "useCase", np.full_like(dtle, np.nan)))
-            ego_speed       = np.asarray(getattr(mdf, "egoSpeedKph", np.full_like(dtle, np.nan)))
+            dtle            = get_signal(mdf, "dtle", required=True)
+            dtle_target     = get_signal(mdf, "dtleTarget", default=np.full_like(dtle, np.nan))
+            lka_status      = get_signal(mdf, "lkaInterventionStatus", required=True)
+            steer_torque    = get_signal(mdf, "steerWheelTorque", required=True)
+            RateOfDeparture = get_signal(mdf, "rateOfDeparture", required=True)
+            VehCurvature    = get_signal(mdf, "vehCurvature", required=True)
+            LaneCurvature   = get_signal(mdf, "laneCurvature", required=True)
+            use_case        = get_signal(mdf, "useCase", default=np.full_like(dtle, np.nan))
+            ego_speed       = get_signal(mdf, "egoSpeedKph", default=np.full_like(dtle, np.nan))
         except AttributeError as e:
             warnings.warn(f"[{fname}] Missing required signal: {e}")
             return None

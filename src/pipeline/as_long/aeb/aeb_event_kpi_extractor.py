@@ -13,6 +13,7 @@ from src.utils.kpis.as_long.aeb.steering_wheel import AebSteeringCalculator
 from src.utils.kpis.as_long.aeb.throttle import AebThrottleCalculator
 from src.utils.kpis.as_long.aeb.yaw_rate import AebYawRateCalculator   
 from src.utils.kpis.as_long.aeb.latency import AebLatencyCalculator 
+from src.utils.signal_mdf import get_signal
 
 # ------------------------------------------------------------------ #
 # Threshold container
@@ -87,8 +88,8 @@ class AebEventKpiExtractor(BaseEventKpiExtractor):
         time = self._prepare_time(mdf)
 
         # --- Signals ---
-        ego_speed     = mdf.egoSpeedKph
-        aeb_tgt_decel = mdf.aebTargetDecel
+        ego_speed     = get_signal(mdf, "egoSpeedKph")
+        aeb_tgt_decel = get_signal(mdf, "aebTargetDecel")
 
         # --- AEB event detection ---
         try:

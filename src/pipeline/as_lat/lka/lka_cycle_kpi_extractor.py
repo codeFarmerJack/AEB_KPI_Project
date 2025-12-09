@@ -1,6 +1,7 @@
 import numpy as np
 import warnings
 from src.pipeline.base.base_cycle_kpi_extractor import BaseCycleKpiExtractor
+from src.utils.signal_mdf import get_signal
 
 class LkaCycleKpiExtractor(BaseCycleKpiExtractor):
     """
@@ -16,12 +17,12 @@ class LkaCycleKpiExtractor(BaseCycleKpiExtractor):
 
     def extract_cycle_kpis(self, mdf, fname):
         try:
-            time        = np.asarray(mdf.time)
-            speed_mps   = np.asarray(mdf.egoSpeed)
-            ready_left  = np.asarray(mdf.lkaReadyLeft)
-            ready_right = np.asarray(mdf.lkaReadyRight)
-            lka_block   = np.asarray(mdf.lkaPrecondBlk)
-            lka_abort   = np.asarray(mdf.lkaAbort)
+            time        = get_signal(mdf, "time", required=True)
+            speed_mps   = get_signal(mdf, "egoSpeed", required=True)
+            ready_left  = get_signal(mdf, "lkaReadyLeft", required=True)
+            ready_right = get_signal(mdf, "lkaReadyRight", required=True)
+            lka_block   = get_signal(mdf, "lkaPrecondBlk", required=True)
+            lka_abort   = get_signal(mdf, "lkaAbort", required=True)
         except AttributeError as e:
             warnings.warn(f"Missing required LKA signal: {e}")
             return {}
@@ -76,5 +77,4 @@ class LkaCycleKpiExtractor(BaseCycleKpiExtractor):
             }
             for feature in features
         }
-
 
