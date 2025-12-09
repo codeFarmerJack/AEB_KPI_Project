@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import warnings
+from src.utils.signal_mdf import get_signal
 
 
 class AebSteeringCalculator:
@@ -41,10 +42,9 @@ class AebSteeringCalculator:
                 kpi_table[col] = pd.Series([default] * len(kpi_table), dtype=dtype)
 
         # --- Step 2: Extract required signals
-        try:
-            steer_angle = np.asarray(mdf.steerWheelAngle)
-            steer_rate = np.asarray(mdf.steerWheelAngleSpeed)
-        except AttributeError:
+        steer_angle = get_signal(mdf, "steerWheelAngle")
+        steer_rate  = get_signal(mdf, "steerWheelAngleSpeed")
+        if steer_angle is None or steer_rate is None:
             warnings.warn(f"[Row {row_idx}] Missing required steering signals")
             return
 

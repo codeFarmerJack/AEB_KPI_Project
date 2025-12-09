@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import warnings
+from src.utils.signal_mdf import get_signal
 
 
 class LsaebDistanceCalculator:
@@ -27,10 +28,9 @@ class LsaebDistanceCalculator:
         """
 
         # --- Step 1: Extract signals
-        try:
-            long_dist = np.asarray(mdf.cpmLongDist)
-            lat_dist = np.asarray(mdf.cpmLatDist)
-        except AttributeError:
+        long_dist = get_signal(mdf, "cpmLongDist")
+        lat_dist  = get_signal(mdf, "cpmLatDist")
+        if long_dist is None or lat_dist is None:
             warnings.warn(f"[Row {row_idx}] Missing required signals 'cpmLongDist' or 'cpmLatDist'")
             return
 

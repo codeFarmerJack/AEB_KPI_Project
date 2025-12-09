@@ -82,7 +82,6 @@ class InputHandler:
 
         CONVERSIONS = {
             "egoSpeed":            ("egoSpeedKph", lambda x: x * 3.6,    "m/s → km/h"),
-            "throttleValue":       ("throttleValuePct", lambda x: x * 100.0, "0–1 → %"),
             "steerWheelAngle":     ("steerWheelAngleDeg", np.degrees,    "rad → deg"),
             "steerWheelAngleSpeed":("steerWheelAngleSpeedDeg", np.degrees, "rad/s → deg/s"),
             "yawRate":             ("yawRateDeg", np.degrees,            "rad/s → deg/s"),
@@ -115,7 +114,6 @@ class InputHandler:
             - latActAccel   → latActAccelFlt
         4. Apply unit conversions:
             - egoSpeed               (m/s → km/h)
-            - throttleValue          (0–1 → %)
             - steerWheelAngle        (rad → deg)
             - steerWheelAngleSpeed   (rad/s → deg/s)
             - yawRate                (rad/s → deg/s)

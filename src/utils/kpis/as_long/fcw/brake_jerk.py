@@ -1,6 +1,7 @@
 import numpy as np
 from src.utils.data_utils import safe_scalar
 from src.utils.event_detector.as_long.decel import detect_decel_onset, detect_brake_jerk_end
+from src.utils.signal_mdf import get_signal
 
 
 class FcwBrakeJerkCalculator:
@@ -56,12 +57,11 @@ class FcwBrakeJerkCalculator:
             return
 
         # --- Extract signals safely ---
-        try:
-            time  = np.asarray(mdf.time)
-            accel = np.asarray(mdf.longActAccelFlt)
-            fcw   = np.asarray(mdf.fcwRequest)
-            spd   = np.asarray(mdf.egoSpeedKph)
-        except AttributeError:
+        time  = get_signal(mdf, "time")
+        accel = get_signal(mdf, "longActAccelFlt")
+        fcw   = get_signal(mdf, "fcwRequest")
+        spd   = get_signal(mdf, "egoSpeedKph")
+        if any(v is None or len(v) == 0 for v in [time, accel, fcw, spd]):
             _fill_zero("missing required signals")
             return
 

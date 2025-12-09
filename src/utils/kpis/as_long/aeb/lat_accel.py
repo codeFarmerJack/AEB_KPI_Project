@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import warnings
+from src.utils.signal_mdf import get_signal
 
 
 class AebLatAccelCalculator:
@@ -28,9 +29,8 @@ class AebLatAccelCalculator:
         Updates kpi_table in place.
         """
         # --- Step 1: Extract lateral acceleration signal
-        try:
-            lat_accel_flt = np.asarray(mdf.latActAccelFlt)
-        except AttributeError:
+        lat_accel_flt = get_signal(mdf, "latActAccelFlt")
+        if lat_accel_flt is None:
             warnings.warn(f"[Row {row_idx}] Missing signal 'latActAccelFlt'")
             self._fill_defaults(kpi_table, row_idx)
             return

@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import warnings
+from src.utils.signal_mdf import get_signal
 
 
 class AebYawRateCalculator:
@@ -36,9 +37,8 @@ class AebYawRateCalculator:
                 kpi_table[col] = pd.Series([default] * len(kpi_table), dtype=dtype)
 
         # --- Step 2: Extract signal
-        try:
-            yaw_rate = np.asarray(mdf.yawRate)
-        except AttributeError:
+        yaw_rate = get_signal(mdf, "yawRate")
+        if yaw_rate is None or len(yaw_rate) == 0:
             warnings.warn(f"[Row {row_idx}] Missing required signal 'yawRate'")
             self._fill_defaults(kpi_table, row_idx)
             return

@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import warnings
-
+from src.utils.signal_mdf import get_signal
 
 class AebBrakeModeCalculator:
     """
@@ -28,10 +28,9 @@ class AebBrakeModeCalculator:
         before transitioning to full braking (FB).
         Updates kpi_table in place.
         """
-        try:
-            target_decel = np.asarray(mdf.aebTargetDecel)
-            time = np.asarray(mdf.time)
-        except AttributeError:
+        target_decel = get_signal(mdf, "aebTargetDecel")
+        time         = get_signal(mdf, "time")
+        if target_decel is None or time is None:
             warnings.warn(f"[Row {row_idx}] Missing required signals 'aebTargetDecel' or 'time'")
             return
 

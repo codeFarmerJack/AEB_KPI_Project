@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import warnings
 from src.utils.event_detector.as_long.decel import detect_decel_onset
+from src.utils.signal_mdf import get_signal
 
 
 class AebLatencyCalculator:
@@ -43,8 +44,11 @@ class AebLatencyCalculator:
     # Vehicle latency (jerk-based)
     # ------------------------------------------------------------------
     def _compute_vehicle_latency(self, mdf, row_idx, aeb_start_idx):
-        time = np.asarray(mdf.time)
-        accel = np.asarray(mdf.longActAccelFlt)
+        time  = get_signal(mdf, "time")
+        accel = get_signal(mdf, "longActAccelFlt")
+        if time is None or accel is None or len(time) == 0 or len(accel) == 0:
+            warnings.warn(f"[Row {row_idx}] Missing signals for vehicle latency")
+            return {"resp_time": 0.0, "dead_time": 0.0}
 
         start_idx = aeb_start_idx
         end_idx = min(start_idx + self.latency_window_samples, len(time) - 1)
@@ -81,9 +85,12 @@ class AebLatencyCalculator:
         (knee point) based on jerk threshold.
         5. Latency = (decel knee time) - (PB→FB transition time)
         """
-        time = np.asarray(mdf.time)
-        tgt_decel = np.asarray(mdf.aebTargetDecel)
-        accel = np.asarray(mdf.longActAccelFlt)
+        time      = get_signal(mdf, "time")
+        tgt_decel = get_signal(mdf, "aebTargetDecel")
+        accel     = get_signal(mdf, "longActAccelFlt")
+        if time is None or tgt_decel is None or accel is None or len(time) == 0:
+            warnings.warn(f"[Row {row_idx}] Missing signals for comm latency")
+            return {"comm_latency": 0.0}
 
         # --- Step 1: detect partial braking (PB) phase sustained for ≥ pb_duration
         mask_pb = tgt_decel == self.pb_tgt_decel
@@ -145,4 +152,3 @@ class AebLatencyCalculator:
         #)
 
         return {"comm_latency": round(comm_latency, 3)}
-

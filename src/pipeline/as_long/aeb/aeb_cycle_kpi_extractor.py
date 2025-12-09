@@ -34,7 +34,7 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
             time            = get_signal(mdf, "time", required=True)
             speed_mps       = get_signal(mdf, "egoSpeed", required=True)
             precond_blocked = get_signal(mdf, "aebPrecondBlk", required=True)
-            throttle        = get_signal(mdf, "throttleValuePct", required=True)
+            throttle        = get_signal(mdf, "throttleValue", required=True)
             steer_angle     = get_signal(mdf, "steerWheelAngleDeg", required=True)
             steer_rate      = get_signal(mdf, "steerWheelAngleSpeedDeg", required=True)
             yaw_rate        = get_signal(mdf, "yawRateDeg", required=True)
@@ -58,20 +58,36 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
             "SteeringWheelAngleRate",
             "YawRate",
             "LatAccel",
+            "LowSpeed",
         ]
 
         if total_dist <= 0:
             warnings.warn("⚠️ Total distance is zero; availability cannot be computed.")
             return {self.FEATURE_NAME: {k: 0.0 for k in kpi_keys}}
 
+        def _dist_pct_lt(signal, thresh):
+            if signal is None or thresh is None:
+                return np.nan
+
+            s = np.asarray(signal, float)
+            mask = s < thresh
+
+            return float(np.sum(dist[mask]) / total_dist * 100)
+
         # ----- Suppression metrics ----- #
         def _dist_pct(signal, thresh):
             if signal is None or thresh is None:
                 return np.nan
-            mask = np.asarray(signal, dtype=float) > np.asarray(thresh, dtype=float)
+
+            # Convert to numpy arrays
+            s = np.asarray(signal, dtype=float)
+            t = np.asarray(thresh, dtype=float)
+
+            # Magnitude-based suppression check
+            mask = np.abs(s) > t
+
             return float(np.sum(dist[mask]) / total_dist * 100)
 
-        suppress_masks = []
         suppress_pct = {}
 
         # Precondition block flag as a suppression
@@ -104,6 +120,8 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
         suppress_pct["SteeringWheelAngleRate"] = round(_dist_pct(steer_rate, steer_rate_thd), 2) if steer_rate is not None and steer_rate_thd is not None else np.nan
         suppress_pct["YawRate"]                = round(_dist_pct(yaw_rate, yaw_rate_thd), 2) if yaw_rate is not None and yaw_rate_thd is not None else np.nan
         suppress_pct["LatAccel"]               = round(_dist_pct(lat_accel, lat_accel_thd), 2) if lat_accel is not None and lat_accel_thd is not None else np.nan
+        suppress_pct["LowSpeed"]               = round(_dist_pct_lt(speed_mps, 2/3.6), 2)
+
         
         enabled_dist = np.sum(dist[avail_mask])
         pct_avail    = enabled_dist / total_dist * 100

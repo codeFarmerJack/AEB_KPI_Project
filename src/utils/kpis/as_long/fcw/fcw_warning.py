@@ -1,6 +1,7 @@
 import numpy as np
 import warnings
 from src.utils.data_utils import safe_scalar
+from src.utils.signal_mdf import get_signal
 
 
 class FcwWarningCalculator:
@@ -53,13 +54,12 @@ class FcwWarningCalculator:
             return
 
         # --- Extract required signals ---
-        try:
-            time = np.asarray(mdf.time)
-            ttc  = np.asarray(mdf.fcwTTC)
-            lvl  = np.asarray(mdf.fcwSensitivity)
-            fcw  = np.asarray(mdf.fcwRequest)
-            spd  = np.asarray(mdf.egoSpeedKph)
-        except AttributeError:
+        time = get_signal(mdf, "time")
+        ttc  = get_signal(mdf, "fcwTTC")
+        lvl  = get_signal(mdf, "fcwSensitivity")
+        fcw  = get_signal(mdf, "fcwRequest")
+        spd  = get_signal(mdf, "egoSpeedKph")
+        if any(v is None or len(v) == 0 for v in [time, ttc, lvl, fcw, spd]):
             _fill_nan("missing required FCW signals")
             return
 
@@ -85,7 +85,7 @@ class FcwWarningCalculator:
         kpi_table.at[row_idx, "fcwSensitivityLvl"] = safe_scalar(lvl_warn)
         kpi_table.at[row_idx, "fcwWarningTTC"]     = safe_scalar(ttc_warn)
 
-        # Optional: you can include debug print if desired
+        # Optional: debug print if desired
         #print(
         #    f"   ✅ [Row {row_idx}] FCW warning detected: "
         #    f"time={t_warn:.3f}s | TTC={ttc_warn:.2f}s | "

@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import warnings
+from src.utils.signal_mdf import get_signal
 
 
 class AebThrottleCalculator:
@@ -40,9 +41,8 @@ class AebThrottleCalculator:
                 kpi_table[col] = pd.Series([default] * len(kpi_table), dtype=dtype)
 
         # --- Step 2: Extract throttle signal
-        try:
-            throttle = np.asarray(mdf.throttleValue)
-        except AttributeError:
+        throttle = get_signal(mdf, "throttleValue")
+        if throttle is None or len(throttle) == 0:
             warnings.warn(f"[Row {row_idx}] Missing required signal 'throttleValue'")
             self._fill_defaults(kpi_table, row_idx)
             return

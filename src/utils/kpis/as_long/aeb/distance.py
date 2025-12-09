@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import warnings
+from src.utils.signal_mdf import get_signal
 
 
 class AebDistanceCalculator:
@@ -29,9 +30,8 @@ class AebDistanceCalculator:
         Updates kpi_table in place.
         """
         # --- Step 1: Extract signal
-        try:
-            long_gap = np.asarray(mdf.longGap)
-        except AttributeError:
+        long_gap = get_signal(mdf, "longGap")
+        if long_gap is None or len(long_gap) == 0:
             warnings.warn(f"[Row {row_idx}] Missing required signal 'longGap'")
             return
 

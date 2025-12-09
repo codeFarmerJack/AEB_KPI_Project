@@ -7,12 +7,12 @@
         "FilePath": "kpi_as_long.xlsx",
         "Sheets": ["graphSpec", "lineColors","markerShapes","KPI","params", "calParam", "cycleKPI"],
         "Calibratables": {
-            "SteeringWheelAngle_Th": "K8:V9",
-            "AEB_SteeringAngleRate_Override": "K17:V18",
-            "PedalPosProIncrease_Th": "Y17:AC18",
-            "PedalPosPro_Override": "Y7:AC8",
-            "LateralAcceleration_th": "C19:H20",
-            "YawrateSuspension_Th": "C8:H9",
+            "SteeringWheelAngle_Th": "K4:V5",
+            "AEB_SteeringAngleRate_Override": "K15:P16",
+            "PedalPosProIncrease_Th": "Y15:AC16",
+            "PedalPosPro_Override": "Y4:AC5",
+            "LateralAcceleration_th": "C15:H16",
+            "YawrateSuspension_Th": "C4:H5",
             "PedalPosPro_th": "Y25:AE26"
         }			
     }
