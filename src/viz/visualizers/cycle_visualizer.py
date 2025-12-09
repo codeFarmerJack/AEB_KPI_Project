@@ -23,72 +23,72 @@ class CycleVisualizer:
         extra_traces: list | None = None,
     ):
         fig = make_subplots(
-            rows=3,
-            cols=1,
+            rows=2,
+            cols=3,
             shared_xaxes=False,
-            row_heights=[0.25, 0.45, 0.3],
-            subplot_titles=("Availability Summary", "Path (colored by speed)", "Signals"),
+            column_widths=[0.45, 0.18, 0.37],
+            row_heights=[0.55, 0.45],
+            specs=[
+                [{"type": "xy"}, {"type": "xy"}, {"type": "xy"}],
+                [{"type": "xy", "colspan": 3}, None, None],
+            ],
+            subplot_titles=(
+                "Path (colored by speed)",
+                "Availability",
+                "Suppression Breakdown",
+                "Signals",
+            ),
         )
 
-        # 1) Availability summary (hierarchical)
+        # 1) Availability + suppression reasons (mixed orientation)
         overall = kpi_row.get("AvailDistPct")
-        breakdown_keys = [k for k in ["runSetting", "inputHealthy", "precondBlk", "abort"] if k in kpi_row]
-        avail_values = [overall] + [kpi_row.get(k) for k in breakdown_keys]
+        reason_keys = [
+            k
+            for k in [
+                "PedalPosProSuppression",
+                "SteeringWheelAngle",
+                "SteeringWheelAngleRate",
+                "YawRate",
+                "LatAccel",
+                "LowSpeed",
+            ]
+            if k in kpi_row
+        ]
 
-        # Level 3 placeholders (precondition inputs) – reserve space, mark as TBD
-        precond_inputs = ["Steering", "Throttle", "YawRate", "LatAccel"]
-        precond_values = [None] * len(precond_inputs)
-
-        # Multi-category axes: Level1 groups, Level2 items
-        level1_avail = ["Availability"] * len(avail_values)
-        level2_avail = ["AvailDistPct"] + breakdown_keys
-
-        level1_pre = ["Precondition Inputs"] * len(precond_inputs)
-        level2_pre = precond_inputs
-
-        # Trace for availability hierarchy
-        fig.add_trace(
-            go.Bar(
-                x=[level1_avail, level2_avail],
-                y=avail_values,
-                name="Availability [%]",
-                marker=dict(
-                    color=["#4c6ef5"] + ["#7c9dfb"] * len(breakdown_keys)
+        if overall is not None:
+            fig.add_trace(
+                go.Bar(
+                    x=["AvailDistPct"],
+                    y=[overall],
+                    name="Availability",
+                    marker=dict(color="#4c6ef5"),
+                    texttemplate="%{y:.1f}%",
+                    textposition="auto",
                 ),
-                texttemplate="%{y:.1f}%",
-                textposition="auto",
-            ),
-            row=1,
-            col=1,
-        )
+                row=1,
+                col=2,
+            )
+            fig.update_yaxes(range=[0, 100], row=1, col=2, title="Percent")
 
-        # Trace for placeholder precondition drivers (shows hierarchy, reserved)
-        fig.add_trace(
-            go.Bar(
-                x=[level1_pre, level2_pre],
-                y=[0] * len(precond_inputs),
-                name="Precond drivers (reserved)",
-                marker=dict(
-                    color="#d0d7e2",
-                    line=dict(color="#94a3b8", width=1),
-                    pattern=dict(shape="/", fgcolor="#94a3b8"),
+        if reason_keys:
+            reason_labels = [k.replace("Suppression", "") for k in reason_keys]
+            reason_vals = [kpi_row.get(k, 0) for k in reason_keys]
+            fig.add_trace(
+                go.Bar(
+                    x=reason_vals,
+                    y=reason_labels,
+                    orientation="h",
+                    name="Suppression [%]",
+                    marker=dict(color="#74c0fc"),
+                    texttemplate="%{x:.1f}%",
+                    textposition="inside",
+                    insidetextanchor="middle",
                 ),
-                text=["TBD"] * len(precond_inputs),
-                textposition="outside",
-            ),
-            row=1,
-            col=1,
-        )
-
-        fig.add_annotation(
-            text="AvailDistPct = runSetting ∧ inputHealthy ∧ precondBlk ∧ abort (placeholders for precond drivers)",
-            xref="paper",
-            yref="paper",
-            x=0.01,
-            y=1.08,
-            showarrow=False,
-            font=dict(size=10, color="#444"),
-        )
+                row=1,
+                col=3,
+            )
+            fig.update_yaxes(autorange="reversed", row=1, col=3)
+            fig.update_xaxes(range=[0, 100], row=1, col=3, title="Percent")
 
         # 2) Path colored by speed
         lon   = signals.get("lon")
@@ -113,7 +113,7 @@ class CycleVisualizer:
                     name="Path",
                     marker=marker_kwargs,
                 ),
-                row=2,
+                row=1,
                 col=1,
             )
 
@@ -127,19 +127,19 @@ class CycleVisualizer:
                     mode="lines",
                     name="Speed",
                 ),
-                row=3,
+                row=2,
                 col=1,
             )
 
         # 4) Optional extra traces on the signals row
         if extra_traces:
             for tr in extra_traces:
-                fig.add_trace(tr, row=3, col=1)
+                fig.add_trace(tr, row=2, col=1)
 
         fig.update_layout(
             title=title,
             template="plotly_white",
-            height=900,
+            height=750,
         )
 
         out_path = os.path.join(self.out_dir, f"{title.replace(' ', '_')}.html")
