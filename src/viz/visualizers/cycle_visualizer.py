@@ -1,6 +1,11 @@
 import os
+import warnings
+from pathlib import Path
+
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+
+from src.utils.signal_mdf import safe_load_mdf
 
 
 class BaseCycleVisualizer:
@@ -146,3 +151,45 @@ class BaseCycleVisualizer:
         fig.write_html(out_path, include_plotlyjs="cdn", full_html=True)
         print(f"💾 Cycle dashboard saved → {out_path}")
 
+    # ------------------------------------------------------------------ #
+    def render_dashboards(self, kpi_table, feature_name, in_path_extracted, signal_extractor):
+        """
+        Render dashboards for each row in the KPI table.
+
+        Parameters
+        ----------
+        kpi_table : pd.DataFrame
+            Cycle KPI table containing 'label' and 'feature' columns.
+        feature_name : str
+            Feature to filter rows by (e.g., 'AEB').
+        in_path_extracted : str
+            Directory where MF4 files are located.
+        signal_extractor : callable
+            Function taking an MDF object and returning a signals dict for plotting.
+        """
+        if kpi_table is None or kpi_table.empty:
+            return
+
+        for _, row in kpi_table.iterrows():
+            if str(row.get("feature", "")).strip().upper() != str(feature_name).strip().upper():
+                continue
+
+            label = str(row.get("label", "")).strip()
+            if not label:
+                continue
+
+            fpath = os.path.join(in_path_extracted, label)
+            if not os.path.exists(fpath):
+                warnings.warn(f"⚠️ Cycle dashboard skipped — file not found: {fpath}")
+                continue
+
+            mdf = safe_load_mdf(fpath)
+            if mdf is None:
+                continue
+
+            signals = signal_extractor(mdf)
+            title = f"{str(feature_name).upper()} - {Path(label).stem}"
+            try:
+                self.plot_cycle(row, signals, title=title)
+            except Exception as e:
+                warnings.warn(f"⚠️ Failed to render cycle dashboard for {label}: {e}")

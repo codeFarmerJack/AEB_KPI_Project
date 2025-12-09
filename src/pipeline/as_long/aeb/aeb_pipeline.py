@@ -1,9 +1,10 @@
+import os
 from pathlib import Path
 from src.pipeline.base.base_pipeline import BasePipeline
 from src.pipeline.as_long.aeb.aeb_event_segmenter import AebEventSegmenter
 from src.pipeline.as_long.aeb.aeb_event_kpi_extractor import AebEventKpiExtractor
 from src.pipeline.as_long.aeb.aeb_cycle_kpi_extractor import AebCycleKpiExtractor
-from src.pipeline.as_long.aeb.aeb_visualizer import AebEventVisualizer
+from src.pipeline.as_long.aeb.aeb_visualizer import AebCycleVisualizer, AebEventVisualizer
 
 
 class AebPipeline(BasePipeline):
@@ -31,7 +32,6 @@ class AebPipeline(BasePipeline):
             self.cycle_kpi = AebCycleKpiExtractor(self.ih, self.cfg)
             self.cycle_kpi.process_mdf_cycles()
             self.cycle_kpi.export_cycle_kpis()
-            self.cycle_kpi.render_cycle_dashboards(feature_name="AEB")
 
             print("✅ AEB KPI extraction and Excel export done.")
         except Exception as e:
@@ -40,8 +40,17 @@ class AebPipeline(BasePipeline):
     def _visualize_results(self):
         print("\n➡️ [5/5] Launching AEB visualization...\n")
         try:
-            self.viz = AebEventVisualizer(self.cfg, self.kpi)
-            self.viz.interactive = getattr(self, "default_interactive", False)
-            self.viz.plot()
+            self.event_viz = AebEventVisualizer(self.cfg, self.kpi)
+            self.event_viz.interactive = getattr(self, "default_interactive", False)
+            self.event_viz.plot()
+            if getattr(self, "cycle_kpi", None) is not None and not self.cycle_kpi.cycle_kpi_table.empty:
+                out_dir = os.path.join(self.cycle_kpi.out_path_results, "aeb", "cycle")
+                cycle_viz = AebCycleVisualizer(out_dir)
+                cycle_viz.render_dashboards(
+                    self.cycle_kpi.cycle_kpi_table,
+                    feature_name="AEB",
+                    in_path_extracted=self.cycle_kpi.in_path_extracted,
+                    signal_extractor=self.cycle_kpi._extract_cycle_signals,
+                )
         except Exception as e:
             raise RuntimeError(f"❌ AEB visualization failed: {e}")

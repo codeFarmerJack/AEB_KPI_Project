@@ -5,7 +5,7 @@ from pathlib import Path
 
 from src.pipeline.base.base_cycle_kpi_extractor import BaseCycleKpiExtractor
 from src.pipeline.as_long.aeb.aeb_visualizer import AebCycleVisualizer
-from src.utils.signal_mdf import get_signal, safe_load_mdf
+from src.utils.signal_mdf import get_signal
 from src.utils.process_calibratables import interpolate_threshold_clamped
 
 
@@ -147,26 +147,9 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
         out_dir = os.path.join(self.out_path_results, feature_name.lower(), "cycle")
         viz = AebCycleVisualizer(out_dir)
 
-        for _, row in self.cycle_kpi_table.iterrows():
-            if str(row.get("feature", "")).strip().upper() != feature_name.strip().upper():
-                continue
-
-            label = str(row.get("label", "")).strip()
-            if not label:
-                continue
-
-            fpath = os.path.join(self.in_path_extracted, label)
-            if not os.path.exists(fpath):
-                warnings.warn(f"⚠️ Cycle dashboard skipped — file not found: {fpath}")
-                continue
-
-            mdf = safe_load_mdf(fpath)
-            if mdf is None:
-                continue
-
-            signals = self._extract_cycle_signals(mdf)
-            title = f"{feature_name.upper()} - {Path(label).stem}"
-            try:
-                viz.plot_cycle(row, signals, title=title)
-            except Exception as e:
-                warnings.warn(f"⚠️ Failed to render cycle dashboard for {label}: {e}")
+        viz.render_dashboards(
+            self.cycle_kpi_table,
+            feature_name,
+            self.in_path_extracted,
+            self._extract_cycle_signals,
+        )
