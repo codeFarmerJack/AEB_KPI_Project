@@ -37,7 +37,7 @@ class AebYawRateCalculator:
                 kpi_table[col] = pd.Series([default] * len(kpi_table), dtype=dtype)
 
         # --- Step 2: Extract signal
-        yaw_rate = get_signal(mdf, "yawRate")
+        yaw_rate = get_signal(mdf, "yawRateDeg")
         if yaw_rate is None or len(yaw_rate) == 0:
             warnings.warn(f"[Row {row_idx}] Missing required signal 'yawRate'")
             self._fill_defaults(kpi_table, row_idx)
@@ -50,16 +50,15 @@ class AebYawRateCalculator:
             return
 
         start_idx = max(0, aeb_start_idx - self.time_idx_offset)
-        segment = yaw_rate[start_idx:]
+        segment = np.abs(yaw_rate[start_idx:])
 
         if len(segment) == 0:
             self._fill_defaults(kpi_table, row_idx)
             return
 
         # --- Step 4: Compute maximum yaw rate in segment
-        idx_rel = int(np.argmax(np.abs(segment)))
-        yaw_rate_max = float(segment[idx_rel])
-        abs_yaw_rate_max_deg = round(abs(yaw_rate_max * 180 / np.pi), 2)
+        idx_rel = int(np.argmax(segment))
+        abs_yaw_rate_max_deg = round(float(segment[idx_rel]), 2)
 
         # --- Step 5: Write results
         kpi_table.at[row_idx, "absYawRateMaxDeg"] = abs_yaw_rate_max_deg

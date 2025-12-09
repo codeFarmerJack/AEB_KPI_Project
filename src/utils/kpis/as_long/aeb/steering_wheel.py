@@ -41,9 +41,9 @@ class AebSteeringCalculator:
             if col not in kpi_table.columns:
                 kpi_table[col] = pd.Series([default] * len(kpi_table), dtype=dtype)
 
-        # --- Step 2: Extract required signals
-        steer_angle = get_signal(mdf, "steerWheelAngle")
-        steer_rate  = get_signal(mdf, "steerWheelAngleSpeed")
+        # --- Step 2: Extract required signals (already in degrees)
+        steer_angle = get_signal(mdf, "steerWheelAngleDeg")
+        steer_rate  = get_signal(mdf, "steerWheelAngleSpeedDeg")
         if steer_angle is None or steer_rate is None:
             warnings.warn(f"[Row {row_idx}] Missing required steering signals")
             return
@@ -56,11 +56,10 @@ class AebSteeringCalculator:
         start_idx = max(0, aeb_start_idx - self.time_idx_offset)
 
         # --- Step 4: Compute steering angle metrics
-        segment_angle = steer_angle[start_idx:]
+        segment_angle = np.abs(steer_angle[start_idx:])
         if len(segment_angle) > 0:
-            idx_rel = int(np.argmax(np.abs(segment_angle)))
-            steer_max = float(segment_angle[idx_rel])
-            abs_steer_max_deg = round(abs(steer_max * 180 / np.pi), 2)
+            idx_rel = int(np.argmax(segment_angle))
+            abs_steer_max_deg = round(float(segment_angle[idx_rel]), 2)
         else:
             abs_steer_max_deg = np.nan
 
@@ -70,11 +69,10 @@ class AebSteeringCalculator:
         )
 
         # --- Step 5: Compute steering rate metrics
-        segment_rate = steer_rate[start_idx:]
+        segment_rate = np.abs(steer_rate[start_idx:])
         if len(segment_rate) > 0:
-            idx_rel_rate = int(np.argmax(np.abs(segment_rate)))
-            steer_rate_max = float(segment_rate[idx_rel_rate])
-            abs_steer_rate_max_deg = round(abs(steer_rate_max * 180 / np.pi), 2)
+            idx_rel_rate = int(np.argmax(segment_rate))
+            abs_steer_rate_max_deg = round(float(segment_rate[idx_rel_rate]), 2)
         else:
             abs_steer_rate_max_deg = np.nan
 
