@@ -26,29 +26,32 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             "posConf": ["posConf"],
             "velConf": ["velConf"],
             "aebTargetType": ["aebTargetType"],
+            "aebTargetId": ["aebTargetId"],
         }
         # Feature-specific layout defaults (override base if needed)
         self.layout_params = {
-            "rows": 5,
+            "rows": 6,
             "cols": 3,
             "shared_xaxes": False,
-            "column_widths": [0.45, 0.18, 0.37],
-            "row_heights": [0.5, 0.125, 0.125, 0.125, 0.125],
+            "column_widths": [0.45, 0.15, 0.40],
+            "row_heights": [0.5, 0.125, 0.125, 0.125, 0.125, 0.125],
+            "horizontal_spacing": 0.13,
             "specs": [
                 [{"type": "xy"}, {"type": "xy"}, {"type": "xy"}],
                 [{"type": "xy", "colspan": 3}, None, None],
                 [{"type": "xy", "colspan": 3}, None, None],
                 [{"type": "xy", "colspan": 3}, None, None],
                 [{"type": "xy", "colspan": 3}, None, None],
+                [{"type": "xy", "colspan": 3}, None, None],
             ],
             "subplot_titles": (
-                "AEB Path (colored by speed)",
+                "Path (colored by speed)",
                 "AEB Availability",
                 "AEB Suppression Breakdown",
-                "ObstConf",
-                "PosConf",
-                "VelConf",
-                "AEB Target Type",
+                #"ObstConf",
+                #"PosConf",
+                #"VelConf",
+                #"AEB Target Type",
             ),
         }
         enum_file = get_resource("config/enum_definitions.yaml")
@@ -223,6 +226,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 row=5,
                 col=1,
             )
+        add_line(6, signals.get("aebTargetId"), "AEB Target ID")
 
         if extra_traces:
             for tr in extra_traces:
