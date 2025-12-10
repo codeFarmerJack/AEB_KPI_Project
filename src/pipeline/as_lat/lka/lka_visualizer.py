@@ -1,4 +1,4 @@
-from src.viz.visualizers.event_visualizer import BaseEventVisualizer
+from src.viz.visualizers.base_event_visualizer import BaseEventVisualizer
 
 
 class LkaEventVisualizer(BaseEventVisualizer):

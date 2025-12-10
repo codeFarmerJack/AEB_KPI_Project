@@ -50,7 +50,6 @@ class AebPipeline(BasePipeline):
                     self.cycle_kpi.cycle_kpi_table,
                     feature_name="AEB",
                     in_path_extracted=self.cycle_kpi.in_path_extracted,
-                    signal_extractor=self.cycle_kpi._extract_cycle_signals,
                 )
         except Exception as e:
             raise RuntimeError(f"❌ AEB visualization failed: {e}")

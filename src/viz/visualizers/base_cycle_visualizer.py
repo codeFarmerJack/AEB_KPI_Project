@@ -5,7 +5,7 @@ from pathlib import Path
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from src.utils.signal_mdf import safe_load_mdf
+from src.utils.signal_mdf import safe_load_mdf, get_signal
 
 
 class BaseCycleVisualizer:
@@ -19,20 +19,22 @@ class BaseCycleVisualizer:
     def __init__(self, out_dir: str):
         self.out_dir = out_dir
         os.makedirs(self.out_dir, exist_ok=True)
-
-    def plot_cycle(
-        self,
-        kpi_row,
-        signals: dict,
-        title: str = "Cycle KPI",
-        extra_traces: list | None = None,
-    ):
-        fig = make_subplots(
+        # default mapping of logical signal names to candidate mdf channels
+        self.signal_candidates = {
+            "time": ["time"],
+            "lon": ["longitude"],
+            "lat": ["latitude"],
+            "speed": ["egoSpeedKph"],
+        }
+        # default layout params (top row widths and spacing are user-tunable)
+        self.top_column_widths = [0.55, 0.10, 0.35]
+        self.top_horizontal_spacing = 0.13
+        self.top_row_height = 0.6
+        self.bottom_row_height = 0.4
+        self.layout_params = dict(
             rows=2,
             cols=3,
             shared_xaxes=False,
-            column_widths=[0.45, 0.18, 0.37],
-            row_heights=[0.55, 0.45],
             specs=[
                 [{"type": "xy"}, {"type": "xy"}, {"type": "xy"}],
                 [{"type": "xy", "colspan": 3}, None, None],
@@ -44,6 +46,62 @@ class BaseCycleVisualizer:
                 "Signals",
             ),
         )
+
+    # ------------------------------------------------------------------ #
+    # Overridable hooks
+    # ------------------------------------------------------------------ #
+    def get_layout_params(self):
+        """
+        Return kwargs for plotly.subplots.make_subplots.
+        Subclasses can override to change layout (rows/cols/sizes/titles).
+        """
+        params = dict(self.layout_params)
+        params["horizontal_spacing"] = self.top_horizontal_spacing
+        params["column_widths"] = self.top_column_widths
+        params["row_heights"] = [
+            self.top_row_height,
+            self.bottom_row_height,
+        ]
+        return params
+
+    def prepare_signals(self, signals: dict) -> dict:
+        """
+        Hook to tweak/augment signals before plotting.
+        Subclasses can override (e.g., unit conversion, custom keys).
+        """
+        return signals or {}
+
+    def extract_cycle_signals(self, mdf):
+        """
+        Default signal extraction for cycle dashboards.
+        Subclasses can override for feature-specific signals.
+        """
+        def pick(candidates):
+            for c in candidates:
+                try:
+                    val = get_signal(mdf, c)
+                    if val is not None:
+                        return val
+                except Exception:
+                    continue
+            return None
+
+        candidates = self.signal_candidates
+
+        return {key: pick(vals) for key, vals in candidates.items()}
+
+    def plot_cycle(
+        self,
+        kpi_row,
+        signals: dict,
+        title: str = "Cycle KPI",
+        extra_traces: list | None = None,
+    ):
+        # allow subclasses to control layout and signals
+        layout_kwargs = self.get_layout_params()
+        signals = self.prepare_signals(signals)
+
+        fig = make_subplots(**layout_kwargs)
 
         # 1) Availability + suppression reasons (mixed orientation)
         overall = kpi_row.get("AvailDistPct")
@@ -105,10 +163,7 @@ class BaseCycleVisualizer:
             if speed is not None:
                 marker_kwargs.update(
                     color=speed,
-                    colorscale="Turbo",
-                    cmin=0,
-                    cmax=120,
-                    colorbar=dict(title="Speed [kph]"),
+                    coloraxis="coloraxis",
                 )
             fig.add_trace(
                 go.Scatter(
@@ -122,7 +177,7 @@ class BaseCycleVisualizer:
                 col=1,
             )
 
-        # 3) Time-series signals (example: speed)
+        # 3) Time-series signals (speed)
         time = signals.get("time")
         if time is not None and speed is not None:
             fig.add_trace(
@@ -141,6 +196,35 @@ class BaseCycleVisualizer:
             for tr in extra_traces:
                 fig.add_trace(tr, row=2, col=1)
 
+        # If a coloraxis was used, position its colorbar beside the path subplot
+        if speed is not None and lon is not None and lat is not None:
+            xaxis = getattr(fig.layout, "xaxis", None)
+            yaxis = getattr(fig.layout, "yaxis", None)
+            xdomain = xaxis.domain if xaxis and hasattr(xaxis, "domain") else None
+            ydomain = yaxis.domain if yaxis and hasattr(yaxis, "domain") else None
+            cb_x = (xdomain[1] + 0.015) if xdomain else 0.46
+            if ydomain:
+                cb_len = ydomain[1] - ydomain[0]
+                cb_y = (ydomain[0] + ydomain[1]) / 2
+            else:
+                cb_len = 0.45
+                cb_y = 0.75
+            fig.update_layout(
+                coloraxis=dict(
+                    colorscale="Turbo",
+                    cmin=0,
+                    cmax=120,
+                    colorbar=dict(
+                        title="Speed [kph]",
+                        title_side="right",
+                        x=cb_x,
+                        y=cb_y,
+                        lenmode="fraction",
+                        len=cb_len,
+                    ),
+                )
+            )
+
         fig.update_layout(
             title=title,
             template="plotly_white",
@@ -152,7 +236,7 @@ class BaseCycleVisualizer:
         print(f"💾 Cycle dashboard saved → {out_path}")
 
     # ------------------------------------------------------------------ #
-    def render_dashboards(self, kpi_table, feature_name, in_path_extracted, signal_extractor):
+    def render_dashboards(self, kpi_table, feature_name, in_path_extracted, signal_extractor=None):
         """
         Render dashboards for each row in the KPI table.
 
@@ -164,11 +248,14 @@ class BaseCycleVisualizer:
             Feature to filter rows by (e.g., 'AEB').
         in_path_extracted : str
             Directory where MF4 files are located.
-        signal_extractor : callable
+        signal_extractor : callable, optional
             Function taking an MDF object and returning a signals dict for plotting.
+            If None, uses self.extract_cycle_signals().
         """
         if kpi_table is None or kpi_table.empty:
             return
+
+        extractor = signal_extractor or (lambda mdf: self.extract_cycle_signals(mdf))
 
         for _, row in kpi_table.iterrows():
             if str(row.get("feature", "")).strip().upper() != str(feature_name).strip().upper():
@@ -187,7 +274,7 @@ class BaseCycleVisualizer:
             if mdf is None:
                 continue
 
-            signals = signal_extractor(mdf)
+            signals = extractor(mdf)
             title = f"{str(feature_name).upper()} - {Path(label).stem}"
             try:
                 self.plot_cycle(row, signals, title=title)

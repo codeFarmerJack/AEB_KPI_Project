@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from src.utils.signal_mdf import safe_load_mdf, get_signal
 from src.utils.create_kpi_table import create_kpi_table_from_df
 from src.utils.exporter import export_kpi_to_excel
-from src.viz.visualizers.cycle_visualizer import BaseCycleVisualizer
+from src.viz.visualizers.base_cycle_visualizer import BaseCycleVisualizer
 
 
 class BaseCycleKpiExtractor(ABC):
@@ -219,25 +219,7 @@ class BaseCycleKpiExtractor(ABC):
             self.cycle_kpi_table,
             feature_name,
             self.in_path_extracted,
-            self._extract_cycle_signals,
         )
 
     # ------------------------------------------------------------------ #
-    def _extract_cycle_signals(self, mdf):
-        """Pull common signals used by the cycle visualizer."""
-        def pick(candidates):
-            for c in candidates:
-                try:
-                    val = get_signal(mdf, c)
-                    if val is not None:
-                        return val
-                except Exception:
-                    continue
-            return None
-
-        return {
-            "time": pick(["time"]),
-            "lon": pick(["lon", "longitude", "egoLon", "egoLongitude"]),
-            "lat": pick(["lat", "latitude", "egoLat", "egoLatitude"]),
-            "speed": pick(["egoSpeed", "vehSpd", "speed"]),
-        }
+    # (no per-feature signal extraction here; handled by visualizer classes)

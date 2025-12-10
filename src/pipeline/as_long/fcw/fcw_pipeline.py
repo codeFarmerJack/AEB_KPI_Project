@@ -3,7 +3,8 @@ from src.pipeline.base.base_pipeline import BasePipeline
 from src.pipeline.as_long.fcw.fcw_event_segmenter import FcwEventSegmenter
 from src.pipeline.as_long.fcw.fcw_event_kpi_extractor import FcwEventKpiExtractor
 from src.pipeline.as_long.fcw.fcw_cycle_kpi_extractor import FcwCycleKpiExtractor
-from src.pipeline.as_long.fcw.fcw_visualizer import FcwEventVisualizer
+import os
+from src.pipeline.as_long.fcw.fcw_visualizer import FcwEventVisualizer, FcwCycleVisualizer
 
 
 class FcwPipeline(BasePipeline):
@@ -43,5 +44,13 @@ class FcwPipeline(BasePipeline):
             self.viz = FcwEventVisualizer(self.cfg, self.kpi)
             self.viz.interactive = getattr(self, "default_interactive", False)
             self.viz.plot()
+            if getattr(self, "cycle_kpi", None) is not None and not self.cycle_kpi.cycle_kpi_table.empty:
+                out_dir = os.path.join(self.cycle_kpi.out_path_results, "fcw", "cycle")
+                cycle_viz = FcwCycleVisualizer(out_dir)
+                cycle_viz.render_dashboards(
+                    self.cycle_kpi.cycle_kpi_table,
+                    feature_name="FCW",
+                    in_path_extracted=self.cycle_kpi.in_path_extracted,
+                )
         except Exception as e:
             raise RuntimeError(f"❌ FCW visualization failed: {e}")

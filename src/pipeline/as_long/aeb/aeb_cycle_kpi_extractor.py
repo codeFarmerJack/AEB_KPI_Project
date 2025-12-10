@@ -151,5 +151,5 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
             self.cycle_kpi_table,
             feature_name,
             self.in_path_extracted,
-            self._extract_cycle_signals,
+            signal_extractor=viz.extract_cycle_signals,
         )

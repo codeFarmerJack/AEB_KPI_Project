@@ -6,12 +6,21 @@ class EnumMapper:
     def __init__(self, yaml_path):
         with open(yaml_path, "r", encoding="utf-8") as f:
             content = yaml.safe_load(f)
-        self.enums = {k: v for k, v in content.items() if k != "SignalToEnumMap"}
-        self.signal_to_enum = content.get("SignalToEnumMap", {})
+        self.enums = {
+            k: v
+            for k, v in content.items()
+            if k not in {"EnumToValueMap", "ValueToEnumMap"}
+        }
+        self.signal_to_enum = content.get("EnumToValueMap", {})
+        self.value_to_enum = content.get("ValueToEnumMap", {})
 
     def get_enum_for_signal(self, signal_name):
         """Return enum group name mapped to a given MDF signal name."""
         return self.signal_to_enum.get(signal_name)
+
+    def get_enum_for_value(self, signal_name):
+        """Return enum group name to decode numeric signal values."""
+        return self.value_to_enum.get(signal_name)
 
     def to_number(self, enum_name, value):
         """Convert symbolic value → number."""

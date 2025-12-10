@@ -48,6 +48,10 @@ def export_kpi_to_excel(kpi_df: pd.DataFrame, output_dir: str, sheet_name: str):
             renamed["feature"] = "feature"
             df = df.rename(columns=renamed)
 
+        # --- Drop accidental duplicates (e.g., both raw and unit-labelled availability) ---
+        if "AvailDistPct [%]" in df.columns and "AvailDistPct" in df.columns:
+            df = df.drop(columns=["AvailDistPct"])
+
         # --- Determine whether to create or update ---
         file_exists = os.path.exists(output_filename)
 
