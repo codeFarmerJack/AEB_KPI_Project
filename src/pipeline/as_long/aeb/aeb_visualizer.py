@@ -30,29 +30,15 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         }
         # Feature-specific layout defaults (override base if needed)
         self.layout_params = {
-            "rows": 6,
-            "cols": 3,
+            "num_rows": 6,
+            "num_cols": 3,
             "shared_xaxes": False,
             "column_widths": [0.45, 0.15, 0.40],
-            "row_heights": [0.5, 0.125, 0.125, 0.125, 0.125, 0.125],
-            "horizontal_spacing": 0.13,
-            "specs": [
-                [{"type": "xy"}, {"type": "xy"}, {"type": "xy"}],
-                [{"type": "xy", "colspan": 3}, None, None],
-                [{"type": "xy", "colspan": 3}, None, None],
-                [{"type": "xy", "colspan": 3}, None, None],
-                [{"type": "xy", "colspan": 3}, None, None],
-                [{"type": "xy", "colspan": 3}, None, None],
-            ],
-            "subplot_titles": (
-                "Path (colored by speed)",
-                "AEB Availability",
-                "AEB Suppression Breakdown",
-                #"ObstConf",
-                #"PosConf",
-                #"VelConf",
-                #"AEB Target Type",
-            ),
+            "row_heights": [0.32, 0.16, 0.16, 0.16, 0.1, 0.1],
+            "horizontal_spacing": 0.05,
+            "horizontal_spacing_factor": 0.10,  # fraction of plotly max spacing
+            "vertical_spacing": 0.04,
+            "margins": {"l": 5, "r": 5, "t": 60, "b": 8},
         }
         enum_file = get_resource("config/enum_definitions.yaml")
         self.enum_mapper = EnumMapper(enum_file)
@@ -108,10 +94,128 @@ class AebCycleVisualizer(BaseCycleVisualizer):
     ):
         """
         Extend base plot with AEB-specific rows: ObstConf, PosConf, VelConf, TargetType.
+        Dynamically adds one signals row per target-ID interval to avoid large blank spans.
         """
-        layout_kwargs = self.get_layout_params()
         signals = self.prepare_signals(signals)
-        fig = make_subplots(**layout_kwargs)
+        if not isinstance(signals, dict):
+            # Defensive guard: extractor must yield a dict of arrays
+            return
+        time_arr = signals.get("time")
+        target_id = signals.get("aebTargetId")
+
+        def _compute_intervals(time_arr, target_arr):
+            """Return list of (start,end) intervals for non-zero target ID with gap merge."""
+            if time_arr is None or target_arr is None:
+                return []
+            t = np.asarray(time_arr, dtype=float)
+            tid = np.nan_to_num(np.asarray(target_arr, dtype=float), nan=0.0)
+            if len(t) == 0:
+                return []
+            nonzero = tid != 0
+            merged = nonzero.copy()
+            i = 0
+            while i < len(t):
+                if not merged[i]:
+                    i += 1
+                    continue
+                j = i
+                while j + 1 < len(t) and merged[j + 1]:
+                    j += 1
+                k = j + 1
+                while k < len(t) and not merged[k]:
+                    k += 1
+                if k < len(t):
+                    gap = t[k] - t[j]
+                    if gap < 1.0:
+                        merged[j + 1 : k] = True
+                        i = k
+                        continue
+                i = j + 1
+            starts = np.where(merged & ~np.roll(merged, 1))[0]
+            ends = np.where(merged & ~np.roll(merged, -1))[0]
+            intervals = []
+            for s, e in zip(starts, ends):
+                intervals.append((t[s] - 5.0, t[e] + 3.0))
+            return intervals
+
+        intervals = _compute_intervals(time_arr, target_id)
+        if not intervals:
+            intervals = [(time_arr.min() if time_arr is not None else 0, time_arr.max() if time_arr is not None else 1)]
+
+        num_cols = max(self.layout_params["num_cols"], len(intervals))
+
+        # NEW subplot grid with configurable rows and evenly spaced row 1
+        NUM_ROWS = self.layout_params["num_rows"]  # new row count
+
+        # Build specs
+        row1_specs = [{"type": "xy"}, {"type": "xy"}, {"type": "xy"}]
+        row1_specs += [None] * max(0, num_cols - 3)
+        specs = [row1_specs]
+
+        # Next 5 signal rows
+        for _ in range(NUM_ROWS - 1):
+            specs.append([{"type": "xy"} for _ in range(num_cols)])
+
+        # Column widths
+        if num_cols <= 3:
+            col_widths = list(self.layout_params["column_widths"])
+        else:
+            col_widths = [1.0 / num_cols] * num_cols
+
+        # Titles for ONLY the first row (3 plots)
+        titles = [
+            "Path (colored by speed)",
+            "AEB Availability",
+            "AEB Suppression Breakdown"
+        ]
+
+        # Fill the rest with empty titles so Plotly doesn’t draw text
+        num_other_cells = (NUM_ROWS * num_cols) - 3  
+        titles += ["" for _ in range(num_other_cells)]
+        
+        # Compute horizontal spacing (keep your old logic)
+        max_spacing = 1.0 / (num_cols - 1) if num_cols > 1 else 0
+        desired_spacing = self.layout_params["horizontal_spacing"]
+        horiz_spacing = (
+            min(desired_spacing, max_spacing * self.layout_params["horizontal_spacing_factor"])
+            if max_spacing > 0
+            else 0.0
+        )
+
+        fig = make_subplots(
+            rows=NUM_ROWS,
+            cols=num_cols,
+            specs=specs,
+            subplot_titles=titles,
+            vertical_spacing=self.layout_params["vertical_spacing"],
+            horizontal_spacing=horiz_spacing,
+            column_widths=col_widths,
+            row_heights=self.layout_params["row_heights"],
+        )
+        fig.update_layout(showlegend=False)
+
+        # Force rows 2–6 to have zero horizontal gaps while keeping row 1 spacing
+        col_domains = [(i / num_cols, (i + 1) / num_cols) for i in range(num_cols)]
+        grid = getattr(fig, "_grid_ref", None)
+        if grid:
+            for r_idx, row_cells in enumerate(grid, start=1):
+                for c_idx, cell in enumerate(row_cells, start=1):
+                    xaxis_name = None
+                    if isinstance(cell, dict):
+                        xaxis_name = cell.get("xaxis")
+                    elif isinstance(cell, (tuple, list)):
+                        # Plotly may store (xaxis, yaxis) or (None, (xaxis, yaxis))
+                        if cell and isinstance(cell[0], str) and cell[0].startswith("x"):
+                            xaxis_name = cell[0]
+                        elif len(cell) > 1 and isinstance(cell[1], (tuple, list)) and cell[1]:
+                            maybe = cell[1][0]
+                            if isinstance(maybe, str) and maybe.startswith("x"):
+                                xaxis_name = maybe
+                    if not xaxis_name:
+                        continue
+                    if r_idx >= 2 and c_idx <= len(col_domains):
+                        fig.layout[xaxis_name].domain = col_domains[c_idx - 1]
+
 
         def add_availability():
             overall = kpi_row.get("AvailDistPct")
@@ -200,37 +304,135 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         def add_line(row, series, name):
             if series is None or signals.get("time") is None:
                 return
+            time_series = np.asarray(signals["time"], dtype=float)
+            series = np.asarray(series, dtype=float)
+            mask = np.isfinite(series)
+            if not np.any(mask):
+                return
             fig.add_trace(
-                go.Scatter(x=signals["time"], y=series, mode="lines", name=name),
+                go.Scatter(x=time_series, y=series, mode="lines", name=name),
                 row=row,
                 col=1,
             )
 
         add_availability()
         spd_for_colorbar = add_path()
-        add_line(2, signals.get("obstConf"), "ObstConf")
-        add_line(3, signals.get("posConf"), "PosConf")
-        add_line(4, signals.get("velConf"), "VelConf")
-        obst_type = signals.get("aebTargetType")
-        if obst_type is not None and signals.get("time") is not None:
-            labels = self._map_obstacle_class(obst_type)
-            fig.add_trace(
-                go.Scatter(
-                    x=signals["time"],
-                    y=obst_type,
-                    mode="lines",
-                    name="AEB Target Type",
-                    text=labels,
-                    hovertemplate="t=%{x:.2f}s<br>code=%{y}<br>type=%{text}<extra></extra>",
-                ),
-                row=5,
-                col=1,
-            )
-        add_line(6, signals.get("aebTargetId"), "AEB Target ID")
+
+        def slice_interval(start, end, series):
+            if series is None or time_arr is None:
+                return None, None
+            mask = (time_arr >= start) & (time_arr <= end)
+            return time_arr[mask], np.asarray(series)[mask]
+
+        if not intervals:
+            intervals = [(time_arr.min() if time_arr is not None else 0, time_arr.max() if time_arr is not None else 1)]
+
+        row_styles = {
+            2: {"color": "#a64ac9", "ylabel": "ObstConf"},
+            3: {"color": "#e98b2a", "ylabel": "PosConf"},
+            4: {"color": "#1ca9c9", "ylabel": "VelConf"},
+            5: {"color": "#c05a5a", "ylabel": "AEB Target Type"},
+            6: {"color": "#7bb661", "ylabel": "AEB Target ID"},
+        }
+
+        for seg_idx, (start, end) in enumerate(intervals):
+            col = seg_idx + 1
+            t_seg, obst = slice_interval(start, end, signals.get("obstConf"))
+            if t_seg is not None and obst is not None:
+                fig.add_trace(
+                    go.Scatter(
+                        x=t_seg,
+                        y=obst,
+                        mode="lines",
+                        name=f"ObstConf {col}",
+                        line=dict(color=row_styles[2]["color"]),
+                    ),
+                    row=2,
+                    col=col,
+                )
+                fig.update_xaxes(range=[start, end], row=2, col=col)
+            t_seg, pos = slice_interval(start, end, signals.get("posConf"))
+            if t_seg is not None and pos is not None:
+                fig.add_trace(
+                    go.Scatter(
+                        x=t_seg,
+                        y=pos,
+                        mode="lines",
+                        name=f"PosConf {col}",
+                        line=dict(color=row_styles[3]["color"]),
+                    ),
+                    row=3,
+                    col=col,
+                )
+                fig.update_xaxes(range=[start, end], row=3, col=col)
+            t_seg, vel = slice_interval(start, end, signals.get("velConf"))
+            if t_seg is not None and vel is not None:
+                fig.add_trace(
+                    go.Scatter(
+                        x=t_seg,
+                        y=vel,
+                        mode="lines",
+                        name=f"VelConf {col}",
+                        line=dict(color=row_styles[4]["color"]),
+                    ),
+                    row=4,
+                    col=col,
+                )
+                fig.update_xaxes(range=[start, end], row=4, col=col)
+            # Row 5 → AEB Target Type
+            t_seg, obst_type = slice_interval(start, end, signals.get("aebTargetType"))
+            if t_seg is not None and obst_type is not None:
+                labels = self._map_obstacle_class(obst_type)
+                fig.add_trace(
+                    go.Scatter(
+                        x=t_seg,
+                        y=obst_type,
+                        mode="lines",
+                        name=f"AEB Target Type {col}",
+                        text=labels,
+                        line=dict(color=row_styles[5]["color"]),
+                        hovertemplate="t=%{x:.2f}s<br>code=%{y}<br>type=%{text}<extra></extra>",
+                    ),
+                    row=5,
+                    col=col,
+                )
+                fig.update_xaxes(range=[start, end], row=5, col=col)
+
+            # Row 6 → AEB Target ID
+            t_seg, tid = slice_interval(start, end, signals.get("aebTargetId"))
+            if t_seg is not None and tid is not None:
+                fig.add_trace(
+                    go.Scatter(
+                        x=t_seg,
+                        y=tid,
+                        mode="lines",
+                        name=f"AEB Target ID {col}",
+                        line=dict(color=row_styles[6]["color"]),
+                    ),
+                    row=6,
+                    col=col,
+                )
+                fig.update_xaxes(range=[start, end], row=6, col=col)
 
         if extra_traces:
             for tr in extra_traces:
                 fig.add_trace(tr, row=2, col=1)
+
+        # Axis formatting per requirements
+        for c in range(1, num_cols + 1):
+            fig.update_yaxes(range=[0, 1], row=2, col=c)
+            fig.update_yaxes(range=[0, 1], row=3, col=c)
+            fig.update_yaxes(range=[0, 1], row=4, col=c)
+            fig.update_yaxes(showticklabels=False, title_text=None, row=5, col=c)
+            fig.update_yaxes(showticklabels=False, title_text=None, row=6, col=c)
+            fig.update_xaxes(showticklabels=False, title_text=None, row=2, col=c)
+            fig.update_xaxes(showticklabels=False, title_text=None, row=3, col=c)
+            fig.update_xaxes(showticklabels=False, title_text=None, row=4, col=c)
+            fig.update_xaxes(showticklabels=False, title_text=None, row=5, col=c)
+
+        # Set y-axis titles on first column for each signal row
+        for row_idx, meta in row_styles.items():
+            fig.update_yaxes(title_text=meta["ylabel"], row=row_idx, col=1)
 
         if spd_for_colorbar is not None and signals.get("lon") is not None and signals.get("lat") is not None:
             xaxis = getattr(fig.layout, "xaxis", None)
@@ -261,6 +463,8 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             )
 
         fig.update_layout(title=title, template="plotly_white", height=1000)
+        # Trim outer margins to squeeze horizontal space
+        fig.update_layout(margin=self.layout_params["margins"])
         out_path = os.path.join(self.out_dir, f"{title.replace(' ', '_')}.html")
         fig.write_html(out_path, include_plotlyjs="cdn", full_html=True)
         print(f"💾 Cycle dashboard saved → {out_path}")

@@ -32,8 +32,8 @@ class BaseCycleVisualizer:
         self.top_row_height = 0.6
         self.bottom_row_height = 0.4
         self.layout_params = dict(
-            rows=2,
-            cols=3,
+            num_rows=2,
+            num_cols=3,
             shared_xaxes=False,
             specs=[
                 [{"type": "xy"}, {"type": "xy"}, {"type": "xy"}],
@@ -53,7 +53,7 @@ class BaseCycleVisualizer:
     def get_layout_params(self):
         """
         Return kwargs for plotly.subplots.make_subplots.
-        Subclasses can override to change layout (rows/cols/sizes/titles).
+        Subclasses can override to change layout (num_rows/num_cols/sizes/titles).
         """
         params = dict(self.layout_params)
         params["horizontal_spacing"] = self.top_horizontal_spacing
@@ -245,7 +245,7 @@ class BaseCycleVisualizer:
         kpi_table : pd.DataFrame
             Cycle KPI table containing 'label' and 'feature' columns.
         feature_name : str
-            Feature to filter rows by (e.g., 'AEB').
+            Feature to filter num_rows by (e.g., 'AEB').
         in_path_extracted : str
             Directory where MF4 files are located.
         signal_extractor : callable, optional
