@@ -26,7 +26,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             "posConf": ["posConf"],
             "velConf": ["velConf"],
             "aebTargetType": ["aebTargetType"],
-            "aebTargetId": ["aebTargetId"],
+            "longGap": ["longGap"],
         }
         # Feature-specific layout defaults (override base if needed)
         self.layout_params = {
@@ -40,6 +40,9 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             "vertical_spacing": 0.04,
             "margins": {"l": 5, "r": 5, "t": 60, "b": 8},
         }
+        self.interval_pad_before_sec = 1.0
+        self.interval_pad_after_sec = 0.5
+        self.interval_gap_merge_sec = 2.0
         enum_file = get_resource("config/enum_definitions.yaml")
         self.enum_mapper = EnumMapper(enum_file)
 
@@ -101,7 +104,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             # Defensive guard: extractor must yield a dict of arrays
             return
         time_arr = signals.get("time")
-        target_id = signals.get("aebTargetId")
+        target_id = signals.get("longGap")
 
         def _compute_intervals(time_arr, target_arr):
             """Return list of (start,end) intervals for non-zero target ID with gap merge."""
@@ -126,7 +129,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                     k += 1
                 if k < len(t):
                     gap = t[k] - t[j]
-                    if gap < 1.0:
+                    if gap < self.interval_gap_merge_sec:
                         merged[j + 1 : k] = True
                         i = k
                         continue
@@ -135,7 +138,12 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             ends = np.where(merged & ~np.roll(merged, -1))[0]
             intervals = []
             for s, e in zip(starts, ends):
-                intervals.append((t[s] - 5.0, t[e] + 3.0))
+                intervals.append(
+                    (
+                        t[s] - self.interval_pad_before_sec,
+                        t[e] + self.interval_pad_after_sec,
+                    )
+                )
             return intervals
 
         intervals = _compute_intervals(time_arr, target_id)
@@ -332,7 +340,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             3: {"color": "#e98b2a", "ylabel": "PosConf"},
             4: {"color": "#1ca9c9", "ylabel": "VelConf"},
             5: {"color": "#c05a5a", "ylabel": "AEB Target Type"},
-            6: {"color": "#7bb661", "ylabel": "AEB Target ID"},
+            6: {"color": "#7bb661", "ylabel": "LongGap"},
         }
 
         for seg_idx, (start, end) in enumerate(intervals):
@@ -398,15 +406,15 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 )
                 fig.update_xaxes(range=[start, end], row=5, col=col)
 
-            # Row 6 → AEB Target ID
-            t_seg, tid = slice_interval(start, end, signals.get("aebTargetId"))
+            # Row 6 → LongGap
+            t_seg, tid = slice_interval(start, end, signals.get("longGap"))
             if t_seg is not None and tid is not None:
                 fig.add_trace(
                     go.Scatter(
                         x=t_seg,
                         y=tid,
                         mode="lines",
-                        name=f"AEB Target ID {col}",
+                        name=f"LongGap {col}",
                         line=dict(color=row_styles[6]["color"]),
                     ),
                     row=6,
@@ -420,9 +428,9 @@ class AebCycleVisualizer(BaseCycleVisualizer):
 
         # Axis formatting per requirements
         for c in range(1, num_cols + 1):
-            fig.update_yaxes(range=[0, 1], row=2, col=c)
-            fig.update_yaxes(range=[0, 1], row=3, col=c)
-            fig.update_yaxes(range=[0, 1], row=4, col=c)
+            fig.update_yaxes(range=[0, 1], dtick=0.25, row=2, col=c, showticklabels=(c == 1))
+            fig.update_yaxes(range=[0, 1], dtick=0.25, row=3, col=c, showticklabels=(c == 1))
+            fig.update_yaxes(range=[0, 1], dtick=0.25, row=4, col=c, showticklabels=(c == 1))
             fig.update_yaxes(showticklabels=False, title_text=None, row=5, col=c)
             fig.update_yaxes(showticklabels=False, title_text=None, row=6, col=c)
             fig.update_xaxes(showticklabels=False, title_text=None, row=2, col=c)
