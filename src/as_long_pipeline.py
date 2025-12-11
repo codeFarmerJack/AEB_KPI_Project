@@ -34,13 +34,13 @@ def main(config_file: Path = None):
     aeb = AebPipeline(config_file, input_handler=ih)
     aeb.run(skip_mf4_processing=True)
 
-    print("\n🚀 Running FCW pipeline...")
-    fcw = FcwPipeline(config_file, input_handler=ih)
-    fcw.run(skip_mf4_processing=True)
+    #print("\n🚀 Running FCW pipeline...")
+    #fcw = FcwPipeline(config_file, input_handler=ih)
+    #fcw.run(skip_mf4_processing=True)
 
-    print("\n🚀 Running LSAEB pipeline...")
-    lsaeb = LsaebPipeline(config_file, input_handler=ih)
-    lsaeb.run(skip_mf4_processing=True)
+    #print("\n🚀 Running LSAEB pipeline...")
+    #lsaeb = LsaebPipeline(config_file, input_handler=ih)
+    #lsaeb.run(skip_mf4_processing=True)
 
     print("\n🎯 All AS_LONG pipelines completed successfully.\n")
 
