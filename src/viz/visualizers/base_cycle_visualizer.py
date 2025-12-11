@@ -56,6 +56,9 @@ class BaseCycleVisualizer:
         Subclasses can override to change layout (num_rows/num_cols/sizes/titles).
         """
         params = dict(self.layout_params)
+        # Translate custom keys to plotly kwargs
+        params["rows"] = params.pop("num_rows", params.get("rows", 2))
+        params["cols"] = params.pop("num_cols", params.get("cols", 3))
         params["horizontal_spacing"] = self.top_horizontal_spacing
         params["column_widths"] = self.top_column_widths
         params["row_heights"] = [

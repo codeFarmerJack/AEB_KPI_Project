@@ -5,7 +5,6 @@ from plotly.subplots import make_subplots
 
 from src.viz.visualizers.base_event_visualizer import BaseEventVisualizer
 from src.viz.visualizers.base_cycle_visualizer import BaseCycleVisualizer
-from src.utils.signal_mdf import get_signal
 from src.utils.enum_loader import EnumMapper
 from src.utils.path_manager import get_resource
 
@@ -35,8 +34,11 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             "shared_xaxes": False,
             "column_widths": [0.45, 0.15, 0.40],
             "row_heights": [0.32, 0.16, 0.16, 0.16, 0.1, 0.1],
-            "horizontal_spacing": 0.05,
-            "horizontal_spacing_factor": 0.10,  # fraction of plotly max spacing
+            # Row-1 gap control: increase to widen spacing between top plots.
+            # Suggested range: 0.0–0.2 (will be clamped to Plotly's max spacing)
+            "horizontal_spacing": 0.3,
+            # Rows 2–6 gap control: 0 = no gap, higher values widen body columns.
+            "body_horizontal_spacing": 0.2,
             "vertical_spacing": 0.04,
             "margins": {"l": 5, "r": 5, "t": 60, "b": 8},
         }
@@ -99,6 +101,10 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         Extend base plot with AEB-specific rows: ObstConf, PosConf, VelConf, TargetType.
         Dynamically adds one signals row per target-ID interval to avoid large blank spans.
         """
+        layout_kwargs = dict(self.get_layout_params())
+        num_rows_cfg = layout_kwargs.pop("rows", 6)
+        min_cols_cfg = layout_kwargs.pop("cols", 3)
+
         signals = self.prepare_signals(signals)
         if not isinstance(signals, dict):
             # Defensive guard: extractor must yield a dict of arrays
@@ -150,10 +156,10 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         if not intervals:
             intervals = [(time_arr.min() if time_arr is not None else 0, time_arr.max() if time_arr is not None else 1)]
 
-        num_cols = max(self.layout_params["num_cols"], len(intervals))
+        num_cols = max(min_cols_cfg, len(intervals))
 
         # NEW subplot grid with configurable rows and evenly spaced row 1
-        NUM_ROWS = self.layout_params["num_rows"]  # new row count
+        NUM_ROWS = num_rows_cfg  # new row count
 
         # Build specs
         row1_specs = [{"type": "xy"}, {"type": "xy"}, {"type": "xy"}]
@@ -184,11 +190,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         # Compute horizontal spacing (keep your old logic)
         max_spacing = 1.0 / (num_cols - 1) if num_cols > 1 else 0
         desired_spacing = self.layout_params["horizontal_spacing"]
-        horiz_spacing = (
-            min(desired_spacing, max_spacing * self.layout_params["horizontal_spacing_factor"])
-            if max_spacing > 0
-            else 0.0
-        )
+        horiz_spacing = min(desired_spacing, max_spacing) if max_spacing > 0 else 0.0
 
         fig = make_subplots(
             rows=NUM_ROWS,
@@ -196,14 +198,47 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             specs=specs,
             subplot_titles=titles,
             vertical_spacing=self.layout_params["vertical_spacing"],
-            horizontal_spacing=horiz_spacing,
+            horizontal_spacing=0.0,  # we control row-1 gap manually below
             column_widths=col_widths,
             row_heights=self.layout_params["row_heights"],
         )
         fig.update_layout(showlegend=False)
 
-        # Force rows 2–6 to have zero horizontal gaps while keeping row 1 spacing
-        col_domains = [(i / num_cols, (i + 1) / num_cols) for i in range(num_cols)]
+        # Manually spread the first row (3 plots) using the configured top widths
+        top_widths = list(self.layout_params["column_widths"])
+        h_gap = horiz_spacing  # row-1 gap only
+        n_top = len(top_widths)
+        total = sum(top_widths) + h_gap * (n_top - 1)
+        scale = 1.0 / total if total > 1e-9 else 1.0
+        scaled_w = [w * scale for w in top_widths]
+        scaled_gap = h_gap * scale
+        domains = []
+        start = 0.0
+        for w in scaled_w:
+            end = min(1.0, start + w)
+            domains.append((start, end))
+            start = end + scaled_gap
+        # Apply domains to the first three x-axes (row 1)
+        for idx, dom in enumerate(domains, start=1):
+            xname = "xaxis" if idx == 1 else f"xaxis{idx}"
+            if xname in fig.layout:
+                fig.layout[xname].domain = list(dom)
+            # Center the corresponding title over its domain
+            if idx <= len(fig.layout.annotations):
+                mid_x = (dom[0] + dom[1]) / 2
+                fig.layout.annotations[idx - 1].x = mid_x
+
+        # Force rows 2–6 to use configurable (often zero) horizontal gaps
+        body_gap = self.layout_params.get("body_horizontal_spacing", 0.0)
+        body_gap = max(0.0, min(body_gap, 0.2))  # clamp to sane range
+        usable = max(1.0 - body_gap * (num_cols - 1), 0.01)
+        body_width = usable / num_cols
+        col_domains = []
+        start_body = 0.0
+        for _ in range(num_cols):
+            end_body = min(1.0, start_body + body_width)
+            col_domains.append((start_body, end_body))
+            start_body = end_body + body_gap
         grid = getattr(fig, "_grid_ref", None)
         if grid:
             for r_idx, row_cells in enumerate(grid, start=1):
@@ -308,20 +343,6 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 col=1,
             )
             return spd
-
-        def add_line(row, series, name):
-            if series is None or signals.get("time") is None:
-                return
-            time_series = np.asarray(signals["time"], dtype=float)
-            series = np.asarray(series, dtype=float)
-            mask = np.isfinite(series)
-            if not np.any(mask):
-                return
-            fig.add_trace(
-                go.Scatter(x=time_series, y=series, mode="lines", name=name),
-                row=row,
-                col=1,
-            )
 
         add_availability()
         spd_for_colorbar = add_path()
