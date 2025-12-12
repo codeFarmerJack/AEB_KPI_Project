@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import plotly.graph_objects as go
+import plotly.io as pio
 from plotly.subplots import make_subplots
 
 from src.viz.visualizers.base_event_visualizer import BaseEventVisualizer
@@ -77,349 +78,203 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             mapped.append(self.enum_mapper.to_name(enum_name, code) or code)
         return mapped
 
-    def plot_cycle(
-        self,
-        kpi_row,
-        signals: dict,
-        title: str = "Cycle KPI",
-        extra_traces: list | None = None,
-    ):
-        """
-        Extend base plot with AEB-specific rows: ObstConf, PosConf, VelConf, TargetType.
-        Dynamically adds one signals row per target-ID interval to avoid large blank spans.
-        """
-        num_rows_cfg = self.layout_params.get("rows", 6)
-        min_cols_cfg = self.layout_params.get("cols", 3)
+    def plot_cycle(self, kpi_row, signals: dict, title: str = "Cycle KPI", extra_traces=None):
+        if extra_traces is None:
+            extra_traces = []
 
-        if not isinstance(signals, dict):
-            # Defensive guard: extractor must yield a dict of arrays
-            return
         time_arr = signals.get("time")
         long_gap = signals.get("longGap")
-
         intervals = self._compute_intervals(time_arr, long_gap)
-        if not intervals:
-            intervals = [(time_arr.min() if time_arr is not None else 0, time_arr.max() if time_arr is not None else 1)]
+        if not intervals and time_arr is not None:
+            intervals = [(time_arr.min(), time_arr.max())]
 
-        num_cols = max(min_cols_cfg, len(intervals))
+        num_intervals = len(intervals)
 
-        # NEW subplot grid with configurable rows and evenly spaced row 1
-        NUM_ROWS = num_rows_cfg  # new row count
-
-        # Build specs
-        row1_specs = [{"type": "xy"}, {"type": "xy"}, {"type": "xy"}]
-        row1_specs += [None] * max(0, num_cols - 3)
-        specs = [row1_specs]
-
-        # Next 5 signal rows
-        for _ in range(NUM_ROWS - 1):
-            specs.append([{"type": "xy"} for _ in range(num_cols)])
-
-        # Column widths
-        if num_cols <= 3:
-            col_widths = list(self.layout_params["column_widths"])
-        else:
-            col_widths = [1.0 / num_cols] * num_cols
-
-        # Titles for ONLY the first row (3 plots)
-        titles = [
-            "Path (colored by speed)",
-            "AEB Availability",
-            "AEB Suppression Breakdown"
-        ]
-
-        # Fill the rest with empty titles so Plotly doesn’t draw text
-        num_other_cells = (NUM_ROWS * num_cols) - 3  
-        titles += ["" for _ in range(num_other_cells)]
-        
-        # Compute horizontal spacing (keep your old logic)
-        max_spacing = 1.0 / (num_cols - 1) if num_cols > 1 else 0
-        desired_spacing = self.layout_params["horizontal_spacing"]
-        # Clamp to Plotly's limit to avoid domain overflow when many columns
-        horiz_spacing = min(desired_spacing, max_spacing * 0.8) if max_spacing > 0 else 0.0
-
-        fig = make_subplots(
-            rows=NUM_ROWS,
-            cols=num_cols,
-            specs=specs,
-            subplot_titles=titles,
-            vertical_spacing=self.layout_params["vertical_spacing"],
-            horizontal_spacing=horiz_spacing,
-            column_widths=col_widths,
-            row_heights=self.layout_params["row_heights"],
+        # ================================
+        # TOP FIGURE: 3 fixed plots
+        # ================================
+        fig_top = make_subplots(
+            rows=1, cols=3,
+            subplot_titles=["Path (colored by speed)", "AEB Availability", "AEB Suppression Breakdown"],
+            horizontal_spacing=0.08,
+            column_widths=[0.45, 0.15, 0.40]
         )
-        fig.update_layout(showlegend=False)
 
-        # Apply body horizontal spacing to rows 2–6
-        body_gap = self.layout_params.get("body_horizontal_spacing", 0.0)
-        body_gap = max(0.0, min(body_gap, 0.2))
-        usable = max(1.0 - body_gap * (num_cols - 1), 0.01)
-        body_width = usable / num_cols
-        col_domains = []
-        start = 0.0
-        for _ in range(num_cols):
-            end = min(1.0, start + body_width)
-            col_domains.append((start, end))
-            start = end + body_gap
+        # Path
+        lon = signals.get("lon")
+        lat = signals.get("lat")
+        spd = signals.get("speed")
+        if lon is not None and lat is not None and spd is not None:
+            fig_top.add_trace(go.Scatter(
+                x=lon, y=lat,
+                mode="lines+markers",
+                marker=dict(size=5, color=spd, colorscale="Turbo", coloraxis="coloraxis"),
+                line=dict(width=0.5, color="rgba(0,0,0,0.1)"),
+                showlegend=False
+            ), row=1, col=1)
 
-        grid = getattr(fig, "_grid_ref", None)
-        if grid:
-            for r_idx, row_cells in enumerate(grid, start=1):
-                for c_idx, cell in enumerate(row_cells, start=1):
-                    if r_idx < 2 or c_idx > len(col_domains):
-                        continue
-                    xaxis_name = None
-                    if isinstance(cell, dict):
-                        xaxis_name = cell.get("xaxis")
-                    elif isinstance(cell, (tuple, list)):
-                        if cell and isinstance(cell[0], str) and cell[0].startswith("x"):
-                            xaxis_name = cell[0]
-                        elif len(cell) > 1 and isinstance(cell[1], (tuple, list)) and cell[1]:
-                            maybe = cell[1][0]
-                            if isinstance(maybe, str) and maybe.startswith("x"):
-                                xaxis_name = maybe
-                    if xaxis_name and xaxis_name in fig.layout:
-                        fig.layout[xaxis_name].domain = list(col_domains[c_idx - 1])
+        # Availability
+        avail = kpi_row.get("AvailDistPct")
+        if avail is not None:
+            fig_top.add_trace(go.Bar(
+                x=[""], y=[avail],
+                marker_color="#4c6ef5",
+                text=f"{avail:.1f}%",
+                textposition="inside"
+            ), row=1, col=2)
+            fig_top.update_yaxes(range=[0, 100], title_text="Percent", row=1, col=2)
 
+        # Suppression reasons
+        reasons = {k: v for k, v in kpi_row.items() if "Suppression" in k or k == "LowSpeed"}
+        if reasons:
+            labels = [k.replace("Suppression", "").replace("PosPro", "Pedal") for k in reasons]
+            values = list(reasons.values())
+            fig_top.add_trace(go.Bar(
+                x=values, y=labels,
+                orientation="h",
+                marker_color="#74c0fc",
+                text=[f"{v:.1f}%" for v in values],
+                textposition="inside"
+            ), row=1, col=3)
+            fig_top.update_yaxes(autorange="reversed", row=1, col=3)
+            fig_top.update_xaxes(range=[0, 100], title_text="Percent", row=1, col=3)
 
-        def add_availability():
-            overall = kpi_row.get("AvailDistPct")
-            reason_keys = [
-                k
-                for k in [
-                    "PedalPosProSuppression",
-                    "SteeringWheelAngle",
-                    "SteeringWheelAngleRate",
-                    "YawRate",
-                    "LatAccel",
-                    "LowSpeed",
-                ]
-                if k in kpi_row
-            ]
-            if overall is not None:
-                fig.add_trace(
-                    go.Bar(
-                        x=["AvailDistPct"],
-                        y=[overall],
-                        name="Availability",
-                        marker=dict(color="#4c6ef5"),
-                        texttemplate="%{y:.1f}%",
-                        textposition="auto",
-                    ),
-                    row=1,
-                    col=2,
-                )
-                fig.update_yaxes(range=[0, 100], row=1, col=2, title="Percent")
+        fig_top.update_layout(
+            height=400,
+            margin=dict(l=40, r=40, t=60, b=20),
+            template="plotly_white",
+            showlegend=False,
+            coloraxis=dict(colorscale="Turbo", cmin=0, cmax=120,
+                        colorbar=dict(title="Speed [kph]", x=0.46, len=0.6))
+        )
 
-            if reason_keys:
-                reason_labels = [k.replace("Suppression", "") for k in reason_keys]
-                reason_vals = [kpi_row.get(k, 0) for k in reason_keys]
-                fig.add_trace(
-                    go.Bar(
-                        x=reason_vals,
-                        y=reason_labels,
-                        orientation="h",
-                        name="Suppression [%]",
-                        marker=dict(color="#74c0fc"),
-                        texttemplate="%{x:.1f}%",
-                        textposition="inside",
-                        insidetextanchor="middle",
-                    ),
-                    row=1,
-                    col=3,
-                )
-                fig.update_yaxes(autorange="reversed", row=1, col=3)
-                fig.update_xaxes(range=[0, 100], row=1, col=3, title="Percent")
-
-        def add_path():
-            lon = signals.get("lon")
-            lat = signals.get("lat")
-            spd = signals.get("speed")
-            if lon is None or lat is None:
-                return spd
-            if spd is None:
-                marker_kwargs = dict(size=5, color="#8b0000")
-                fig.add_trace(
-                    go.Scatter(x=lon, y=lat, mode="lines+markers", name="Path", marker=marker_kwargs),
-                    row=1,
-                    col=1,
-                )
-                return spd
-
-            # Use line gradient via colorscale on marker positions; connect points
-            fig.add_trace(
-                go.Scatter(
-                    x=lon,
-                    y=lat,
-                    mode="lines+markers",
-                    name="Path",
-                    line=dict(color="rgba(0,0,0,0)"),  # hide solid line, rely on marker color grad
-                    marker=dict(
-                        size=5,
-                        color=spd,
-                        colorscale="Turbo",
-                        coloraxis="coloraxis",
-                    ),
-                ),
-                row=1,
-                col=1,
+        # ================================
+        # BOTTOM FIGURE: Dynamic intervals (CORRECT ORDER!)
+        # ================================
+        if num_intervals == 0:
+            fig_bottom = go.Figure()
+            fig_bottom.add_annotation(
+                text="No AEB intervals detected", x=0.5, y=0.5,
+                xref="paper", yref="paper", showarrow=False, font_size=20
             )
-            return spd
-
-        add_availability()
-        spd_for_colorbar = add_path()
-
-        def slice_interval(start, end, series):
-            if series is None or time_arr is None:
-                return None, None
-            mask = (time_arr >= start) & (time_arr <= end)
-            return time_arr[mask], np.asarray(series)[mask]
-
-        if not intervals:
-            intervals = [(time_arr.min() if time_arr is not None else 0, time_arr.max() if time_arr is not None else 1)]
-
-        row_styles = {
-            2: {"color": "#a64ac9", "ylabel": "ObstConf"},
-            3: {"color": "#e98b2a", "ylabel": "PosConf"},
-            4: {"color": "#1ca9c9", "ylabel": "VelConf"},
-            5: {"color": "#c05a5a", "ylabel": "AEB Target Type"},
-            6: {"color": "#7bb661", "ylabel": "LongGap"},
-        }
-
-        for seg_idx, (start, end) in enumerate(intervals):
-            col = seg_idx + 1
-            t_seg, obst = slice_interval(start, end, signals.get("obstConf"))
-            if t_seg is not None and obst is not None:
-                fig.add_trace(
-                    go.Scatter(
-                        x=t_seg,
-                        y=obst,
-                        mode="lines",
-                        name=f"ObstConf {col}",
-                        line=dict(color=row_styles[2]["color"]),
-                    ),
-                    row=2,
-                    col=col,
-                )
-                fig.update_xaxes(range=[start, end], row=2, col=col)
-            t_seg, pos = slice_interval(start, end, signals.get("posConf"))
-            if t_seg is not None and pos is not None:
-                fig.add_trace(
-                    go.Scatter(
-                        x=t_seg,
-                        y=pos,
-                        mode="lines",
-                        name=f"PosConf {col}",
-                        line=dict(color=row_styles[3]["color"]),
-                    ),
-                    row=3,
-                    col=col,
-                )
-                fig.update_xaxes(range=[start, end], row=3, col=col)
-            t_seg, vel = slice_interval(start, end, signals.get("velConf"))
-            if t_seg is not None and vel is not None:
-                fig.add_trace(
-                    go.Scatter(
-                        x=t_seg,
-                        y=vel,
-                        mode="lines",
-                        name=f"VelConf {col}",
-                        line=dict(color=row_styles[4]["color"]),
-                    ),
-                    row=4,
-                    col=col,
-                )
-                fig.update_xaxes(range=[start, end], row=4, col=col)
-            # Row 5 → AEB Target Type
-            t_seg, obst_type = slice_interval(start, end, signals.get("aebTargetType"))
-            if t_seg is not None and obst_type is not None:
-                labels = self._map_obstacle_class(obst_type)
-                fig.add_trace(
-                    go.Scatter(
-                        x=t_seg,
-                        y=obst_type,
-                        mode="lines",
-                        name=f"AEB Target Type {col}",
-                        text=labels,
-                        line=dict(color=row_styles[5]["color"]),
-                        hovertemplate="t=%{x:.2f}s<br>code=%{y}<br>type=%{text}<extra></extra>",
-                    ),
-                    row=5,
-                    col=col,
-                )
-                fig.update_xaxes(range=[start, end], row=5, col=col)
-
-            # Row 6 → LongGap
-            t_seg, tid = slice_interval(start, end, signals.get("longGap"))
-            if t_seg is not None and tid is not None:
-                fig.add_trace(
-                    go.Scatter(
-                        x=t_seg,
-                        y=tid,
-                        mode="lines",
-                        name=f"LongGap {col}",
-                        line=dict(color=row_styles[6]["color"]),
-                    ),
-                    row=6,
-                    col=col,
-                )
-                fig.update_xaxes(range=[start, end], row=6, col=col)
-
-        if extra_traces:
-            for tr in extra_traces:
-                fig.add_trace(tr, row=2, col=1)
-
-        # Axis formatting per requirements
-        for c in range(1, num_cols + 1):
-            fig.update_yaxes(range=[0, 1], dtick=0.25, row=2, col=c, showticklabels=(c == 1))
-            fig.update_yaxes(range=[0, 1], dtick=0.25, row=3, col=c, showticklabels=(c == 1))
-            fig.update_yaxes(range=[0, 1], dtick=0.25, row=4, col=c, showticklabels=(c == 1))
-            fig.update_yaxes(showticklabels=False, title_text=None, row=5, col=c)
-            fig.update_yaxes(showticklabels=False, title_text=None, row=6, col=c)
-            fig.update_xaxes(showticklabels=False, title_text=None, row=2, col=c)
-            fig.update_xaxes(showticklabels=False, title_text=None, row=3, col=c)
-            fig.update_xaxes(showticklabels=False, title_text=None, row=4, col=c)
-            fig.update_xaxes(showticklabels=False, title_text=None, row=5, col=c)
-
-        # Set y-axis titles on first column for each signal row
-        for row_idx, meta in row_styles.items():
-            fig.update_yaxes(title_text=meta["ylabel"], row=row_idx, col=1)
-
-        if spd_for_colorbar is not None and signals.get("lon") is not None and signals.get("lat") is not None:
-            xaxis = getattr(fig.layout, "xaxis", None)
-            yaxis = getattr(fig.layout, "yaxis", None)
-            xdomain = xaxis.domain if xaxis and hasattr(xaxis, "domain") else None
-            ydomain = yaxis.domain if yaxis and hasattr(yaxis, "domain") else None
-            cb_x = (xdomain[1] + 0.015) if xdomain else 0.46
-            if ydomain:
-                cb_len = ydomain[1] - ydomain[0]
-                cb_y = (ydomain[0] + ydomain[1]) / 2
+            fig_bottom.update_layout(height=600, margin=dict(l=40, r=40, t=40, b=40))
+        else:
+            # === 1. Compute column widths FIRST ===
+            if num_intervals > 1:
+                base = [1.4] + [1.0] * (num_intervals - 1)
+                total = sum(base)
+                col_widths = [x / total for x in base]
             else:
-                cb_len = 0.45
-                cb_y = 0.75
-            fig.update_layout(
-                coloraxis=dict(
-                    colorscale="Turbo",
-                    cmin=0,
-                    cmax=120,
-                    colorbar=dict(
-                        title="Speed [kph]",
-                        title_side="right",
-                        x=cb_x,
-                        y=cb_y,
-                        lenmode="fraction",
-                        len=cb_len,
-                    ),
-                )
+                col_widths = [1.0]
+
+            # === 2. Create fig_bottom ONCE with correct column_widths ===
+            fig_bottom = make_subplots(
+                rows=5,
+                cols=num_intervals,
+                shared_xaxes=True,
+                vertical_spacing=0.04,
+                horizontal_spacing=0.02,
+                column_widths=col_widths,  # ← Now it's applied correctly
+                subplot_titles=[f"Int {i+1}<br>{s:.1f}-{e:.1f}s"
+                               for i, (s, e) in enumerate(intervals)]
             )
 
-        fig.update_layout(title=title, template="plotly_white", height=1000, width=self.layout_params.get("width", None))
-        # Trim outer margins to squeeze horizontal space
-        fig.update_layout(margin=self.layout_params["margins"])
-        out_path = os.path.join(self.out_dir, f"{title.replace(' ', '_')}.html")
-        fig.write_html(out_path, include_plotlyjs="cdn", full_html=True)
-        print(f"💾 Cycle dashboard saved → {out_path}")
+            # === 3. NOW add all traces (this was already correct) ===
+            styles = [
+                ("obstConf", "#a64ac9", "ObstConf"),
+                ("posConf", "#e98b2a", "PosConf"),
+                ("velConf", "#1ca9c9", "VelConf"),
+                ("aebTargetType", "#c05a5a", "AEB Target Type"),
+                ("longGap", "#7bb661", "LongGap"),
+            ]
 
+            for col_idx, (start, end) in enumerate(intervals, 1):
+                mask = (time_arr >= start) & (time_arr <= end)
+                t_seg = time_arr[mask]
+
+                # Add all 5 traces for this interval
+                for row_idx, (key, color, label) in enumerate(styles, 1):
+                    data = signals.get(key)
+                    if data is None or len(np.asarray(data)[mask]) == 0:
+                        continue
+                    y_seg = np.asarray(data)[mask]
+
+                    if key == "aebTargetType":
+                        texts = self._map_obstacle_class(y_seg)
+                        fig_bottom.add_trace(go.Scatter(
+                            x=t_seg, y=y_seg, mode="lines", line_color=color,
+                            text=texts,
+                            hovertemplate="t=%{x:.2f}s<br>%{text}<extra></extra>"
+                        ), row=row_idx, col=col_idx)
+                    else:
+                        fig_bottom.add_trace(go.Scatter(
+                            x=t_seg, y=y_seg, mode="lines", line_color=color, showlegend=False
+                        ), row=row_idx, col=col_idx)
+
+                # SET X-RANGE ONCE PER COLUMN — AFTER all rows are added
+                for row_idx in range(1, 6):
+
+                    fig_bottom.update_xaxes(range=[start, end], row=row_idx, col=col_idx)
+                    # === Y-AXIS LABELS: Only on left-most column ===
+                    y_labels = ["ObstConf", "PosConf", "VelConf", "AEB Target Type", "LongGap"]
+                    for row_idx, label in enumerate(y_labels, start=1):
+                        fig_bottom.update_yaxes(
+                            title_text=label,
+                            title_standoff=15,
+                            title_font=dict(size=13),
+                            tickfont=dict(size=11),
+                            showgrid=True,
+                            gridcolor="rgba(200,200,200,0.3)",
+                            zeroline=False,
+                            row=row_idx,
+                            col=1
+                        )
+
+                    # Fixed range for confidence signals
+                    for row_idx in [1, 2, 3]:
+                        fig_bottom.update_yaxes(range=[0, 1], dtick=0.25, row=row_idx, col=1)
+
+                    # Hide y-tick labels on all columns except the first
+                    if num_intervals > 1:
+                        for row_idx in range(1, 6):
+                            for col_idx in range(2, num_intervals + 1):
+                                fig_bottom.update_yaxes(showticklabels=False, row=row_idx, col=col_idx)
+
+                    # Show x-axis labels only on the bottom row (LongGap)
+                    for col_idx in range(1, num_intervals + 1):
+                        fig_bottom.update_xaxes(showticklabels=True, row=5, col=col_idx)
+                    for row_idx in range(1, 5):
+                        for col_idx in range(1, num_intervals + 1):
+                            fig_bottom.update_xaxes(showticklabels=False, row=row_idx, col=col_idx)
+
+                    # Final layout polish
+                    fig_bottom.update_layout(
+                        height=620,
+                        template="plotly_white",
+                        showlegend=False,
+                        margin=dict(l=90, r=30, t=60, b=50),
+                    )
+
+        # ================================
+        # COMBINE & SAVE
+        # ================================
+        html_top = pio.to_html(fig_top, include_plotlyjs="cdn", full_html=False)
+        html_bottom = pio.to_html(fig_bottom, include_plotlyjs=False, full_html=False)
+
+        full_html = f"""
+        <html><head><title>{title}</title></head>
+        <body style="margin:0; padding:20px; background:#f9f9f9;">
+            <h2 style="text-align:center; color:#1e3d73;">{title}</h2>
+            {html_top}
+            <div style="height:30px;"></div>
+            {html_bottom}
+        </body></html>
+        """
+
+        out_path = os.path.join(self.out_dir, f"{title.replace(' ', '_')}.html")
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(full_html)
+        print(f"Cycle dashboard saved → {out_path}")
 
 class AebEventVisualizer(BaseEventVisualizer):
     """AEB KPI visualizer routed through the shared viz module."""
