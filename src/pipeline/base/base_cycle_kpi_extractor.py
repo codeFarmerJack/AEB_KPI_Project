@@ -50,10 +50,7 @@ class BaseCycleKpiExtractor(ABC):
             schema_df = schema_df.copy()
             schema_df.columns = schema_df.columns.str.strip().str.lower()
             self.cycle_kpi_schema = schema_df
-            self.cycle_kpi_table = create_kpi_table_from_df(
-                self.cycle_kpi_schema,
-                feature=self.feature_name
-            )
+            self.cycle_kpi_table = create_kpi_table_from_df(self.cycle_kpi_schema, feature=self.feature_name)
             self.cycle_display_map = self.cycle_kpi_table.attrs.get("display_names", {})
 
         self.config = config
@@ -100,11 +97,7 @@ class BaseCycleKpiExtractor(ABC):
             except Exception as e:
                 warnings.warn(f"⚠️ Could not merge existing cycleKPI sheet; writing new one. Details: {e}")
 
-        export_kpi_to_excel(
-            df_out,
-            output_path,
-            sheet_name="cycleKPI",
-        )
+        export_kpi_to_excel(df_out, output_path, sheet_name="cycleKPI",)
 
         print(f"📄 Exported CYCLE KPIs → sheet 'cycleKPI' in {output_path}")
 

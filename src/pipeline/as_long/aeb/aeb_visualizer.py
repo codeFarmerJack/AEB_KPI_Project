@@ -1,4 +1,5 @@
 import os
+import re
 import numpy as np
 import plotly.graph_objects as go
 import plotly.io as pio
@@ -28,25 +29,27 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             "aebTargetType": ["aebTargetType"],
             "longGap": ["longGap"],
         }
-        # Feature-specific layout defaults (override base if needed)
-        self.layout_params = {
-            "rows": 6,
+        self.layout_top = {
+            "rows": 1,
             "cols": 3,
-            "shared_xaxes": False,
             "column_widths": [0.45, 0.15, 0.40],
-            "row_heights": [0.32, 0.16, 0.16, 0.16, 0.1, 0.1],
-            # Row-1 gap control: increase to widen spacing between top plots.
-            # Suggested range: 0.0–0.2 (will be clamped to Plotly's max spacing)
-            "horizontal_spacing": 0.15,
-            # Rows 2–6 gap control: 0 = no gap, higher values widen body columns.
-            "body_horizontal_spacing": 0.0,
-            "vertical_spacing": 0.04,
-            # Figure margins (adjust these to affect apparent horizontal gaps)
+            "horizontal_spacing": 0.13,
+            "vertical_spacing": 0.00,
             "margins": {"l": 0, "r": 0, "t": 60, "b": 8},
-            "width": 1800,
         }
-        self.interval_pad_before_sec = 1.0
-        self.interval_pad_after_sec = 0.5
+
+        # Bottom interval grid (5 stacked rows × N intervals)
+        self.layout_bottom = {
+            "rows": 5,                    
+            "shared_xaxes": True,
+            "vertical_spacing": 0.04,
+            "horizontal_spacing": 0.02,
+            # column_widths is dynamic (depends on num_intervals)
+            "margins": {"l": 0, "r": 0, "t": 10, "b": 8},
+        }
+
+        self.interval_pad_before_sec = 0.2
+        self.interval_pad_after_sec = 0.2
         self.interval_gap_merge_sec = 2.0
         enum_file = get_resource("config/enum_definitions.yaml")
         self.enum_mapper = EnumMapper(enum_file)
@@ -93,12 +96,23 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         # ================================
         # TOP FIGURE: 3 fixed plots
         # ================================
+        lt = self.layout_top
+
         fig_top = make_subplots(
-            rows=1, cols=3,
-            subplot_titles=["Path (colored by speed)", "AEB Availability", "AEB Suppression Breakdown"],
-            horizontal_spacing=0.08,
-            column_widths=[0.45, 0.15, 0.40]
+            rows=lt["rows"],
+            cols=lt["cols"],
+            subplot_titles=[
+                "Path (colored by speed)",
+                "AEB Availability",
+                "AEB Suppression Breakdown",
+            ],
+            horizontal_spacing=lt["horizontal_spacing"],
+            vertical_spacing=lt["vertical_spacing"],
+            column_widths=lt["column_widths"],
         )
+
+        fig_top.update_layout(margin=lt["margins"])
+
 
         # Path
         lon = signals.get("lon")
@@ -108,10 +122,12 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             fig_top.add_trace(go.Scatter(
                 x=lon, y=lat,
                 mode="lines+markers",
-                marker=dict(size=5, color=spd, colorscale="Turbo", coloraxis="coloraxis"),
+                marker=dict(size=5, color=spd, coloraxis="coloraxis"),
                 line=dict(width=0.5, color="rgba(0,0,0,0.1)"),
                 showlegend=False
             ), row=1, col=1)
+
+        fig_top.update_yaxes(scaleanchor="x", row=1, col=1)
 
         # Availability
         avail = kpi_row.get("AvailDistPct")
@@ -124,29 +140,83 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             ), row=1, col=2)
             fig_top.update_yaxes(range=[0, 100], title_text="Percent", row=1, col=2)
 
-        # Suppression reasons
-        reasons = {k: v for k, v in kpi_row.items() if "Suppression" in k or k == "LowSpeed"}
-        if reasons:
-            labels = [k.replace("Suppression", "").replace("PosPro", "Pedal") for k in reasons]
-            values = list(reasons.values())
-            fig_top.add_trace(go.Bar(
-                x=values, y=labels,
-                orientation="h",
+        # ----------------------------------------------
+        # Wild search for suppression-related KPI values
+        # ----------------------------------------------
+
+        # patterns to search for
+        patterns = [
+            r"SteeringWheelAngleRate",
+            r"SteeringWheelAngle",
+            r"PedalPosProSuppression",         
+            r"LatAccel",
+            r"YawRate",
+            r"LowSpeed",
+        ]
+
+        # find matching keys in kpi_row
+        reason_keys = [
+            k for k in kpi_row.keys()
+            if any(re.search(p, k, re.IGNORECASE) for p in patterns)
+        ]
+
+        # preserve deterministic order
+        reason_keys.sort()
+
+        # retrieve values
+        values = [kpi_row.get(k, 0) for k in reason_keys]
+
+        # auto-generate display names
+        labels = [f"{k} [%]" for k in reason_keys]
+
+        # ---- Plot ----
+        fig_top.add_trace(
+            go.Bar(
+                x=values, y=labels, orientation="h",
                 marker_color="#74c0fc",
                 text=[f"{v:.1f}%" for v in values],
-                textposition="inside"
-            ), row=1, col=3)
-            fig_top.update_yaxes(autorange="reversed", row=1, col=3)
-            fig_top.update_xaxes(range=[0, 100], title_text="Percent", row=1, col=3)
+                textposition="inside",
+            ),
+            row=1, col=3
+        )
+
+        fig_top.update_yaxes(autorange="reversed", row=1, col=3)
+        fig_top.update_xaxes(range=[0, 100], title_text="Percent", row=1, col=3)
+
+        # Get the domain of the Path subplot (row1, col1)
+        path_xaxis = fig_top.layout["xaxis"]       # xaxis = row1,col1
+        path_yaxis = fig_top.layout["yaxis"]       # yaxis = row1,col1
+
+        x0, x1 = path_xaxis.domain                 # e.g., [0.0, 0.45]
+        y0, y1 = path_yaxis.domain                 # e.g., [0.15, 0.85]
+
+        # Compute colorbar placement
+        colorbar_x = x1                  # small gap to the right of path plot
+        colorbar_len = y1 - y0           # exact vertical height of subplot
+        colorbar_y = (y0 + y1) / 2       # center vertically
+
 
         fig_top.update_layout(
             height=400,
             margin=dict(l=40, r=40, t=60, b=20),
             template="plotly_white",
             showlegend=False,
-            coloraxis=dict(colorscale="Turbo", cmin=0, cmax=120,
-                        colorbar=dict(title="Speed [kph]", x=0.46, len=0.6))
+            coloraxis=dict(
+                colorscale="Turbo",
+                cmin=0,
+                cmax=120,
+                colorbar=dict(
+                    title="Speed [kph]",
+                    x=colorbar_x,
+                    y=colorbar_y,
+                    len=colorbar_len,
+                    lenmode="fraction",
+                    thickness=20,
+                    outlinewidth=0
+                )
+            )
         )
+
 
         # ================================
         # BOTTOM FIGURE: Dynamic intervals (CORRECT ORDER!)
@@ -168,24 +238,33 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 col_widths = [1.0]
 
             # === 2. Create fig_bottom ONCE with correct column_widths ===
+            lb = self.layout_bottom
+
+            # col_widths is computed from num_intervals elsewhere, e.g.
+            # col_widths = [1.0 / num_intervals] * num_intervals
             fig_bottom = make_subplots(
-                rows=5,
-                cols=num_intervals,
-                shared_xaxes=True,
-                vertical_spacing=0.04,
-                horizontal_spacing=0.02,
-                column_widths=col_widths,  # ← Now it's applied correctly
-                subplot_titles=[f"Int {i+1}<br>{s:.1f}-{e:.1f}s"
-                               for i, (s, e) in enumerate(intervals)]
+                rows=lb["rows"],          # ← now driven by layout_bottom
+                cols=num_intervals,       # dynamic
+                shared_xaxes=lb["shared_xaxes"],
+                vertical_spacing=lb["vertical_spacing"],
+                horizontal_spacing=lb["horizontal_spacing"],
+                column_widths=col_widths,
+                subplot_titles=[
+                    f"Int {i+1}<br>{s:.1f}-{e:.1f}s"
+                    for i, (s, e) in enumerate(intervals)
+                ],
             )
+
+            fig_bottom.update_layout(margin=lb["margins"])
+
 
             # === 3. NOW add all traces (this was already correct) ===
             styles = [
-                ("obstConf", "#a64ac9", "ObstConf"),
-                ("posConf", "#e98b2a", "PosConf"),
-                ("velConf", "#1ca9c9", "VelConf"),
+                ("obstConf",      "#a64ac9", "ObstConf"),
+                ("posConf",       "#e98b2a", "PosConf"),
+                ("velConf",       "#1ca9c9", "VelConf"),
                 ("aebTargetType", "#c05a5a", "AEB Target Type"),
-                ("longGap", "#7bb661", "LongGap"),
+                ("longGap",       "#7bb661", "LongGap"),
             ]
 
             for col_idx, (start, end) in enumerate(intervals, 1):
@@ -211,7 +290,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                             x=t_seg, y=y_seg, mode="lines", line_color=color, showlegend=False
                         ), row=row_idx, col=col_idx)
 
-                # SET X-RANGE ONCE PER COLUMN — AFTER all rows are added
+                # SET X-RANGE ONCE PER COLUMN — AFTER all rows are added›
                 for row_idx in range(1, 6):
 
                     fig_bottom.update_xaxes(range=[start, end], row=row_idx, col=col_idx)
@@ -243,10 +322,33 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                     # Show x-axis labels only on the bottom row (LongGap)
                     for col_idx in range(1, num_intervals + 1):
                         fig_bottom.update_xaxes(showticklabels=True, row=5, col=col_idx)
+                    
+                    
+                    
                     for row_idx in range(1, 5):
                         for col_idx in range(1, num_intervals + 1):
                             fig_bottom.update_xaxes(showticklabels=False, row=row_idx, col=col_idx)
 
+                    # === UNIFIED Y-RANGES ACROSS ALL INTERVALS (same row = same scale) ===
+                    # Row 1: ObstConf → [0, 1.1]
+                    for col_idx in range(1, num_intervals + 1):
+                        fig_bottom.update_yaxes(range=[0, 1.1], row=1, col=col_idx)
+
+                    # Row 2: PosConf → [0, 1.1]
+                    for col_idx in range(1, num_intervals + 1):
+                        fig_bottom.update_yaxes(range=[0, 1.1], row=2, col=col_idx)
+                    # Row 3: VelConf → [0, 1.1]
+                    for col_idx in range(1, num_intervals + 1):
+                        fig_bottom.update_yaxes(range=[0, 1.1], row=3, col=col_idx)
+
+                    # Row 4: AEB Target Type → [0, 10000]
+                    for col_idx in range(1, num_intervals + 1):
+                        fig_bottom.update_yaxes(range=[0, 10000], row=4, col=col_idx)   
+
+                    # Row 5: LongGap → keep auto (or set fixed if you want)
+                    # Optional: for col_idx in range(1, num_intervals + 1):
+                    #     fig_bottom.update_yaxes(range=[0, 5000], row=5, col=col_idx)
+                        
                     # Final layout polish
                     fig_bottom.update_layout(
                         height=620,
@@ -266,7 +368,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         <body style="margin:0; padding:20px; background:#f9f9f9;">
             <h2 style="text-align:center; color:#1e3d73;">{title}</h2>
             {html_top}
-            <div style="height:30px;"></div>
+            <div style="height:5px;"></div>
             {html_bottom}
         </body></html>
         """
