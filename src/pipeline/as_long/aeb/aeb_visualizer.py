@@ -35,9 +35,8 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             "column_widths": [0.45, 0.15, 0.40],
             "horizontal_spacing": 0.13,
             "vertical_spacing": 0.00,
-            "margins": {"l": 0, "r": 0, "t": 60, "b": 8},
+            "margins": {"l": 0, "r": 0, "t": 10, "b": 8},
         }
-
         # Bottom interval grid (5 stacked rows × N intervals)
         self.layout_bottom = {
             "rows": 5,                    
@@ -45,20 +44,14 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             "vertical_spacing": 0.04,
             "horizontal_spacing": 0.02,
             # column_widths is dynamic (depends on num_intervals)
-            "margins": {"l": 0, "r": 0, "t": 10, "b": 8},
+            "margins": {"l": 0, "r": 0, "t": 50, "b": 8},
         }
-
+        self.html_gap_px = 5   # vertical gap between top and bottom figures
         self.interval_pad_before_sec = 0.2
         self.interval_pad_after_sec = 0.2
         self.interval_gap_merge_sec = 2.0
         enum_file = get_resource("config/enum_definitions.yaml")
         self.enum_mapper = EnumMapper(enum_file)
-
-    def get_layout_params(self):
-        """
-        Customize the layout titles to be AEB specific.
-        """
-        return dict(self.layout_params)
 
     def extract_cycle_signals(self, mdf):
         """
@@ -290,73 +283,6 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                             x=t_seg, y=y_seg, mode="lines", line_color=color, showlegend=False
                         ), row=row_idx, col=col_idx)
 
-                # SET X-RANGE ONCE PER COLUMN — AFTER all rows are added›
-                for row_idx in range(1, 6):
-
-                    fig_bottom.update_xaxes(range=[start, end], row=row_idx, col=col_idx)
-                    # === Y-AXIS LABELS: Only on left-most column ===
-                    y_labels = ["ObstConf", "PosConf", "VelConf", "AEB Target Type", "LongGap"]
-                    for row_idx, label in enumerate(y_labels, start=1):
-                        fig_bottom.update_yaxes(
-                            title_text=label,
-                            title_standoff=15,
-                            title_font=dict(size=13),
-                            tickfont=dict(size=11),
-                            showgrid=True,
-                            gridcolor="rgba(200,200,200,0.3)",
-                            zeroline=False,
-                            row=row_idx,
-                            col=1
-                        )
-
-                    # Fixed range for confidence signals
-                    for row_idx in [1, 2, 3]:
-                        fig_bottom.update_yaxes(range=[0, 1], dtick=0.25, row=row_idx, col=1)
-
-                    # Hide y-tick labels on all columns except the first
-                    if num_intervals > 1:
-                        for row_idx in range(1, 6):
-                            for col_idx in range(2, num_intervals + 1):
-                                fig_bottom.update_yaxes(showticklabels=False, row=row_idx, col=col_idx)
-
-                    # Show x-axis labels only on the bottom row (LongGap)
-                    for col_idx in range(1, num_intervals + 1):
-                        fig_bottom.update_xaxes(showticklabels=True, row=5, col=col_idx)
-                    
-                    
-                    
-                    for row_idx in range(1, 5):
-                        for col_idx in range(1, num_intervals + 1):
-                            fig_bottom.update_xaxes(showticklabels=False, row=row_idx, col=col_idx)
-
-                    # === UNIFIED Y-RANGES ACROSS ALL INTERVALS (same row = same scale) ===
-                    # Row 1: ObstConf → [0, 1.1]
-                    for col_idx in range(1, num_intervals + 1):
-                        fig_bottom.update_yaxes(range=[0, 1.1], row=1, col=col_idx)
-
-                    # Row 2: PosConf → [0, 1.1]
-                    for col_idx in range(1, num_intervals + 1):
-                        fig_bottom.update_yaxes(range=[0, 1.1], row=2, col=col_idx)
-                    # Row 3: VelConf → [0, 1.1]
-                    for col_idx in range(1, num_intervals + 1):
-                        fig_bottom.update_yaxes(range=[0, 1.1], row=3, col=col_idx)
-
-                    # Row 4: AEB Target Type → [0, 10000]
-                    for col_idx in range(1, num_intervals + 1):
-                        fig_bottom.update_yaxes(range=[0, 10000], row=4, col=col_idx)   
-
-                    # Row 5: LongGap → keep auto (or set fixed if you want)
-                    # Optional: for col_idx in range(1, num_intervals + 1):
-                    #     fig_bottom.update_yaxes(range=[0, 5000], row=5, col=col_idx)
-                        
-                    # Final layout polish
-                    fig_bottom.update_layout(
-                        height=620,
-                        template="plotly_white",
-                        showlegend=False,
-                        margin=dict(l=90, r=30, t=60, b=50),
-                    )
-
         # ================================
         # COMBINE & SAVE
         # ================================
@@ -368,7 +294,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         <body style="margin:0; padding:20px; background:#f9f9f9;">
             <h2 style="text-align:center; color:#1e3d73;">{title}</h2>
             {html_top}
-            <div style="height:5px;"></div>
+            <div style="height:{self.html_gap_px}px;"></div>
             {html_bottom}
         </body></html>
         """
