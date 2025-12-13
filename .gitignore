@@ -1,5 +1,7 @@
 # Python cache and build artifacts
 __pycache__/
+**/__pycache__/
+pycache/
 *.pyc
 *.pyo
 *.pyd
