@@ -33,9 +33,9 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             "rows": 1,
             "cols": 3,
             "column_widths": [0.45, 0.15, 0.40],
-            "horizontal_spacing": 0.13,
+            "horizontal_spacing": 0.10,
             "vertical_spacing": 0.00,
-            "margins": {"l": 0, "r": 0, "t": 10, "b": 8},
+            "margins": {"l": 20, "r": 20, "t": 2, "b": 8},
         }
         # Bottom interval grid (5 stacked rows × N intervals)
         self.layout_bottom = {
@@ -131,7 +131,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 text=f"{avail:.1f}%",
                 textposition="inside"
             ), row=1, col=2)
-            fig_top.update_yaxes(range=[0, 100], title_text="Percent", row=1, col=2)
+            fig_top.update_yaxes(range=[0, 100], title_text="Percent [%]", title_standoff=5, row=1, col=2)
 
         # ----------------------------------------------
         # Wild search for suppression-related KPI values
@@ -160,7 +160,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         values = [kpi_row.get(k, 0) for k in reason_keys]
 
         # auto-generate display names
-        labels = [f"{k} [%]" for k in reason_keys]
+        labels = [k for k in reason_keys]
 
         # ---- Plot ----
         fig_top.add_trace(
@@ -174,7 +174,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         )
 
         fig_top.update_yaxes(autorange="reversed", row=1, col=3)
-        fig_top.update_xaxes(range=[0, 100], title_text="Percent", row=1, col=3)
+        fig_top.update_xaxes(range=[0, 100], title_text="Percent [%]", title_standoff=5, row=1, col=3)
 
         # Get the domain of the Path subplot (row1, col1)
         path_xaxis = fig_top.layout["xaxis"]       # xaxis = row1,col1
@@ -185,7 +185,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
 
         # Compute colorbar placement
         colorbar_x = x1                  # small gap to the right of path plot
-        colorbar_len = y1 - y0           # exact vertical height of subplot
+        colorbar_len = 1.1 * (y1 - y0)   # exact vertical height of subplot
         colorbar_y = (y0 + y1) / 2       # center vertically
 
 
@@ -199,7 +199,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 cmin=0,
                 cmax=120,
                 colorbar=dict(
-                    title="Speed [kph]",
+                    title=dict(text="Speed [kph]", side="right"),
                     x=colorbar_x,
                     y=colorbar_y,
                     len=colorbar_len,
@@ -282,6 +282,74 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                         fig_bottom.add_trace(go.Scatter(
                             x=t_seg, y=y_seg, mode="lines", line_color=color, showlegend=False
                         ), row=row_idx, col=col_idx)
+            
+            # ============================================
+            # 4. Axis formatting after all traces are added
+            # ============================================
+            if num_intervals > 0:
+
+                # Set x-ranges for every interval column
+                for i, (start, end) in enumerate(intervals, 1):
+                    for row in range(1, 6):
+                        fig_bottom.update_xaxes(range=[start, end], row=row, col=i)
+
+                # -------------------------------------------
+                # Row 1–3: fixed range + dtick = 0.25
+                # -------------------------------------------
+                for row in [1, 2, 3]:
+                    for col in range(1, num_intervals + 1):
+                        fig_bottom.update_yaxes(
+                            range=[0, 1.1],
+                            dtick=0.25,
+                            row=row,
+                            col=col
+                        )
+
+                # Row 4: fixed [0, 10000]
+                for col in range(1, num_intervals + 1):
+                    fig_bottom.update_yaxes(range=[0, 10000], row=4, col=col)
+
+                # Row 5: adaptive (no range)
+
+                # -------------------------------------------
+                # Add row names on left-most column only
+                # -------------------------------------------
+                row_names = ["ObstConf", "PosConf", "VelConf", "AEB Target Type", "LongGap"]
+                for row_index, name in enumerate(row_names, start=1):
+                    fig_bottom.update_yaxes(
+                        title_text=name,
+                        title_standoff=10,
+                        row=row_index,
+                        col=1
+                    )
+
+                # -------------------------------------------
+                # Tick visibility rules
+                # -------------------------------------------
+                # Hide y-ticks on all columns except the first
+                for row in range(1, 6):
+                    for col in range(2, num_intervals + 1):
+                        fig_bottom.update_yaxes(showticklabels=False, row=row, col=col)
+
+                # Only bottom row shows x-axis ticks
+                for col in range(1, num_intervals + 1):
+                    fig_bottom.update_xaxes(showticklabels=True, row=5, col=col)
+
+                for row in range(1, 5):
+                    for col in range(1, num_intervals + 1):
+                        fig_bottom.update_xaxes(showticklabels=False, row=row, col=col)
+
+                # -------------------------------------------
+                # Final layout
+                # -------------------------------------------
+                fig_bottom.update_layout(
+                    height=620,
+                    template="plotly_white",
+                    showlegend=False,
+                    margin=dict(l=90, r=30, t=60, b=50),
+                )
+
+
 
         # ================================
         # COMBINE & SAVE
