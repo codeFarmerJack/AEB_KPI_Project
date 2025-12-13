@@ -44,7 +44,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             "vertical_spacing": 0.04,
             "horizontal_spacing": 0.02,
             # column_widths is dynamic (depends on num_intervals)
-            "margins": {"l": 0, "r": 0, "t": 50, "b": 8},
+            "margins": {"l": 0, "r": 0, "t": 10, "b": 8},
         }
         self.html_gap_px = 5   # vertical gap between top and bottom figures
         self.interval_pad_before_sec = 0.2
@@ -107,7 +107,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         fig_top.update_layout(margin=lt["margins"])
 
 
-        # Path
+        # Subplot(1, 1) - Path
         lon = signals.get("lon")
         lat = signals.get("lat")
         spd = signals.get("speed")
@@ -122,7 +122,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
 
         fig_top.update_yaxes(scaleanchor="x", row=1, col=1)
 
-        # Availability
+        # Subplot(1, 2) - Availability
         avail = kpi_row.get("AvailDistPct")
         if avail is not None:
             fig_top.add_trace(go.Bar(
@@ -133,28 +133,20 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             ), row=1, col=2)
             fig_top.update_yaxes(range=[0, 100], title_text="Percent [%]", title_standoff=5, row=1, col=2)
 
-        # ----------------------------------------------
-        # Wild search for suppression-related KPI values
-        # ----------------------------------------------
-
-        # patterns to search for
+        # Subplot(1, 3) - Suppression breakdown
+        
         patterns = [
-            r"SteeringWheelAngleRate",
-            r"SteeringWheelAngle",
-            r"PedalPosProSuppression",         
-            r"LatAccel",
-            r"YawRate",
-            r"LowSpeed",
+            "SteeringWheelAngleRate",
+            "SteeringWheelAngle",
+            "PedalPosProSuppression",
+            "LatAccel",
+            "YawRate",
+            "LowSpeed",
         ]
 
-        # find matching keys in kpi_row
-        reason_keys = [
-            k for k in kpi_row.keys()
-            if any(re.search(p, k, re.IGNORECASE) for p in patterns)
-        ]
+        # Exact match only — no regex, no partial match
+        reason_keys = [p for p in patterns if p in kpi_row]
 
-        # preserve deterministic order
-        reason_keys.sort()
 
         # retrieve values
         values = [kpi_row.get(k, 0) for k in reason_keys]
@@ -176,6 +168,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         fig_top.update_yaxes(autorange="reversed", row=1, col=3)
         fig_top.update_xaxes(range=[0, 100], title_text="Percent [%]", title_standoff=5, row=1, col=3)
 
+        # Update the layout with colorbar for speed
         # Get the domain of the Path subplot (row1, col1)
         path_xaxis = fig_top.layout["xaxis"]       # xaxis = row1,col1
         path_yaxis = fig_top.layout["yaxis"]       # yaxis = row1,col1
@@ -185,9 +178,8 @@ class AebCycleVisualizer(BaseCycleVisualizer):
 
         # Compute colorbar placement
         colorbar_x = x1                  # small gap to the right of path plot
-        colorbar_len = 1.1 * (y1 - y0)   # exact vertical height of subplot
+        colorbar_len = 1.1 * (y1 - y0)   # 1.1 times vertical height of subplot
         colorbar_y = (y0 + y1) / 2       # center vertically
-
 
         fig_top.update_layout(
             height=400,
@@ -212,7 +204,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
 
 
         # ================================
-        # BOTTOM FIGURE: Dynamic intervals (CORRECT ORDER!)
+        # BOTTOM FIGURE: Dynamic intervals
         # ================================
         if num_intervals == 0:
             fig_bottom = go.Figure()
@@ -248,10 +240,16 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 ],
             )
 
+            # Style subplot titles: smaller font + light gray
+            for ann in fig_bottom.layout.annotations:
+                if "<br>" in ann.text:  # ensure we only modify interval titles
+                    ann.font.size = 12
+                    ann.font.color = "gray"
+                    ann.yshift = 4   # move titles closer to (-) or farther from (+) plots
+
             fig_bottom.update_layout(margin=lb["margins"])
 
-
-            # === 3. NOW add all traces (this was already correct) ===
+            # === 3. Add all traces ===
             styles = [
                 ("obstConf",      "#a64ac9", "ObstConf"),
                 ("posConf",       "#e98b2a", "PosConf"),
@@ -283,9 +281,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                             x=t_seg, y=y_seg, mode="lines", line_color=color, showlegend=False
                         ), row=row_idx, col=col_idx)
             
-            # ============================================
-            # 4. Axis formatting after all traces are added
-            # ============================================
+            # 4. === Axis formatting after all traces are added ===
             if num_intervals > 0:
 
                 # Set x-ranges for every interval column
@@ -314,11 +310,12 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 # -------------------------------------------
                 # Add row names on left-most column only
                 # -------------------------------------------
-                row_names = ["ObstConf", "PosConf", "VelConf", "AEB Target Type", "LongGap"]
-                for row_index, name in enumerate(row_names, start=1):
+                # Use the styles list to set both title text and color
+                for row_index, (_, color, label) in enumerate(styles, start=1):
                     fig_bottom.update_yaxes(
-                        title_text=name,
+                        title_text=label,
                         title_standoff=10,
+                        title_font=dict(color=color, size=13),
                         row=row_index,
                         col=1
                     )
