@@ -15,13 +15,9 @@ PySide6 is included in `requirements.txt` for the GUI; on some systems you may n
 ---
 
 ## ▶️ Run
-- Interactive chooser (includes GUI option): `python3 -m src.run_kpi_tool`
-- GUI directly (PySide6): `python3 -m src.gui.app`  
-  Select MF4 file(s) from the same folder → pick pipeline (AS Long/Lat) → logs stream into the window while each file runs sequentially.
-- CLI pipelines:  
-  - `python3 -m src.as_long_pipeline`   # AEB + FCW + LSAEB  
-  - `python3 -m src.as_lat_pipeline`    # LKA  
-  Both prompt for an MF4 folder if paths are not provided programmatically.
+- GUI (PySide6): `python3 -m src.gui.app`  
+  Select MF4 folder → pick features → hit RUN; logs stream into the window as each feature runs sequentially.
+- Compatibility entrypoint: `python3 -m src.run_kpi_tool` (launches the same GUI).
 Configs: `src/config/config_as_long.json` and `src/config/config_as_lat.json`.
 
 Outputs (per run) under `rawdata/analysis_results/`:
