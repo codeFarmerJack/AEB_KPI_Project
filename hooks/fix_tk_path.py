@@ -25,5 +25,3 @@ if getattr(sys, 'frozen', False) and sys.platform.startswith('win'):
     # Force prepend to Tcl's search paths (extra safety)
     if 'TCL_LIBRARY' in os.environ:
         os.environ['TCLLIBPATH'] = tcl_dir + os.pathsep + os.environ.get('TCLLIBPATH', '')
-
-# Now safe to import Tkinter anywhere in your app

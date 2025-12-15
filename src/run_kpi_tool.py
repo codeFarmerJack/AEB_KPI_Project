@@ -7,10 +7,11 @@ def main():
         print("==== KPI Extraction Launcher ====")
         print("1. Lateral KPIs  (as_lat_pipeline)")
         print("2. Longitudinal KPIs (as_long_pipeline)")
-        print("3. Exit")
+        print("3. Launch GUI")
+        print("4. Exit")
         print("=================================")
 
-        choice = input("Select which KPI extractor to run (1/2): ").strip()
+        choice = input("Select which KPI extractor to run (1/2/3/4): ").strip()
 
         if choice == "1":
             print("\n▶ Running AS_LAT pipeline...\n")
@@ -20,6 +21,10 @@ def main():
             print("\n▶ Running AS_LONG pipeline...\n")
             from src.as_long_pipeline import main as long_main
             long_main()
+        elif choice == "3":
+            print("\n▶ Launching GUI...\n")
+            from src.gui.app import main as gui_main
+            gui_main()
         else:
             print("Exiting.")
             break

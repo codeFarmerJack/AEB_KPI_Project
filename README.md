@@ -13,17 +13,15 @@ pip install -r requirements.txt
 
 ---
 
-## ▶️ Run (Python)
-Launch the interactive chooser:
-```bash
-python3 -m src.run_kpi_tool
-```
-or run a domain directly:
-```bash
-python3 -m src.as_long_pipeline   # AEB + FCW + LSAEB
-python3 -m src.as_lat_pipeline    # LKA
-```
-Configs used: `src/config/config_as_long.json` and `src/config/config_as_lat.json`.
+## ▶️ Run
+- Interactive chooser (includes GUI option): `python3 -m src.run_kpi_tool`
+- GUI directly (PySide6): `python3 -m src.gui.app`  
+  Select MF4 file(s) from the same folder → pick pipeline (AS Long/Lat) → logs stream into the window while each file runs sequentially.
+- CLI pipelines:  
+  - `python3 -m src.as_long_pipeline`   # AEB + FCW + LSAEB  
+  - `python3 -m src.as_lat_pipeline`    # LKA  
+  Both prompt for an MF4 folder if paths are not provided programmatically.
+Configs: `src/config/config_as_long.json` and `src/config/config_as_lat.json`.
 
 Outputs (per run) under `rawdata/analysis_results/`:
 - `*_kpi_results.xlsx` with event sheets (`aeb`, `fcw`, `lsaeb`, `lka`) plus shared `cycleKPI`.
