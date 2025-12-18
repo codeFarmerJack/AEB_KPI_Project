@@ -13,8 +13,6 @@ from src.viz.core.exporters import Exporter
 
 class ScatterPlotter(BasePlotter):
     """
-    Refactored version of your original ScatterPlotter.
-
     Responsibilities:
     - for each graph_spec row:
         * decide X/Y columns

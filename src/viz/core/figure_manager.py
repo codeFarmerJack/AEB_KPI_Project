@@ -23,7 +23,7 @@ class FigureManager:
         ax.set_title(title)
         ax.grid(True, which="both", linestyle="--", alpha=0.5)
 
-        # Use row 0 as X-axis spec (same as your old logic)
+        # Use row 0 as X-axis spec 
         x_label = str(graph_spec.loc[0, "axis_name"])
         ax.set_xlabel(x_label.replace("_", " "))
 

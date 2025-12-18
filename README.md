@@ -10,20 +10,15 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+PySide6 is included in `requirements.txt` for the GUI; on some systems you may need Qt platform plugins (X11/Wayland on Linux, or ensure Xcode Command Line Tools on macOS).
 
 ---
 
-## ▶️ Run (Python)
-Launch the interactive chooser:
-```bash
-python3 -m src.run_kpi_tool
-```
-or run a domain directly:
-```bash
-python3 -m src.as_long_pipeline   # AEB + FCW + LSAEB
-python3 -m src.as_lat_pipeline    # LKA
-```
-Configs used: `src/config/config_as_long.json` and `src/config/config_as_lat.json`.
+## ▶️ Run
+- GUI (PySide6): `python3 -m src.gui.app`  
+  Select MF4 folder → pick features → hit RUN; logs stream into the window as each feature runs sequentially.
+- Compatibility entrypoint: `python3 -m src.run_kpi_tool` (launches the same GUI).
+Configs: `src/config/config_as_long.json` and `src/config/config_as_lat.json`.
 
 Outputs (per run) under `rawdata/analysis_results/`:
 - `*_kpi_results.xlsx` with event sheets (`aeb`, `fcw`, `lsaeb`, `lka`) plus shared `cycleKPI`.
@@ -51,6 +46,7 @@ Outputs (per run) under `rawdata/analysis_results/`:
 - `src/config/` — configs, enum definitions, KPI schemas.
 - `src/pipeline/` — domain pipelines, event/cycle extractors, visualizers.
 - `src/viz/` — plotter registry, exporters, figure/style/filter managers.
+- `src/gui/` — PySide6 desktop UI (folder selection, feature toggles, runner).
 - `src/utils/` — IO helpers, KPI table builders, path utilities.
 
 ---
@@ -67,6 +63,18 @@ Outputs (per run) under `rawdata/analysis_results/`:
 python3 -m src.run_kpi_tool
 # verify analysis_results contains updated Excel and HTML outputs
 ```
+
+---
+
+## 📦 Build Executable (PyInstaller)
+Ensure dependencies are installed (`pip install -r requirements.txt`), then build from repo root:
+```bash
+pyinstaller run_kpi_tool.spec
+```
+Artifacts:
+- `dist/ADAS_KPI_Tool/` directory bundle (contains CLI + GUI).
+- On macOS, a `.app` bundle is also produced.
+If the GUI fails to start due to Qt plugins, verify `PySide6` is installed and rerun the build; the spec already collects PySide6 data and Qt plugins.
 
 ---
 

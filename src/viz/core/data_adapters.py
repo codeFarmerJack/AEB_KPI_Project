@@ -25,7 +25,7 @@ class DataAdapters:
     @staticmethod
     def resolve_xy_columns(kpi_data: pd.DataFrame, x_var: str, y_var: str):
         """
-        Map graphSpec-ref names to actual KPI columns, using your 'clean' function
+        Map graphSpec-ref names to actual KPI columns, using 'clean' function
         from the old ScatterPlotter.
         """
         def clean(s: str) -> str:

@@ -18,6 +18,7 @@ datas = [
     (str(SRC / "pipeline"), "pipeline"),
     (str(SRC / "utils"), "utils"),
     (str(SRC / "viz"), "viz"),
+    (str(SRC / "gui"), "gui"),
 ]
 
 # Matplotlib assets
@@ -41,6 +42,12 @@ hiddenimports = [
     "plotly.utils._plotly_jsonencoder",
 
     "jsonschema",
+
+    # PySide6 modules for the GUI
+    "PySide6",
+    "PySide6.QtCore",
+    "PySide6.QtGui",
+    "PySide6.QtWidgets",
 ]
 
 # Windows — include Tcl/Tk

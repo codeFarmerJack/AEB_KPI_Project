@@ -41,7 +41,7 @@ class Exporter:
             else:
                 series_labels.append(lbl)
 
-        # Optional: title-specific rules (copied from your old implementation)
+        # Optional: title-specific rules 
         tl = str(title).lower()
 
         if "pedalpospro" in tl:

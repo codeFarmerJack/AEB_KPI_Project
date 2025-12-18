@@ -3,6 +3,7 @@ import sys
 import gc
 import warnings
 from pathlib import Path
+from typing import Optional, Union
 import numpy as np
 from asammdf import MDF, Signal
 from src.utils.path_manager import get_resource, init_tkinter_for_bundle
@@ -28,10 +29,11 @@ class InputHandler:
         "cutoff_freq": {"default": 10.0, "type": float, "desc": "Low-pass filter cutoff frequency in Hz"},
     }
 
-    def __init__(self, config):
+    def __init__(self, config, input_path: Optional[Union[str, Path]] = None, mf4_files=None):
         """
-        Constructor: accepts a Config object, loads key parameters,
-        and prompts the user to select the folder containing MF4 files.
+        Constructor: accepts a Config object, loads key parameters.
+        If mf4_files/input_path are provided, uses them directly; otherwise,
+        prompts the user to select the folder containing MF4 files.
         """
 
         # --- Validate config object ---
@@ -44,29 +46,56 @@ class InputHandler:
         self.signal_map         = config.signal_map
         self.in_path_raw_data   = None
         self.out_path_extracted = None
+        self._provided_files    = None
 
         # --- Load parameters from class and then override with config ---
         load_params_from_class(self)
         if config:
             load_params_from_config(self, config)
 
-        # --- Prompt user for MF4 folder ---
-        print("📂 Please select the MF4 folder...")
+        # --- Resolve input path / file list ---
+        normalized_input = Path(input_path).expanduser().resolve() if input_path else None
 
-        # Ensure Tcl/Tk works inside PyInstaller
-        init_tkinter_for_bundle()
+        if mf4_files:
+            normalized_files = [Path(p).expanduser().resolve() for p in mf4_files]
+            missing = [str(p) for p in normalized_files if not p.exists()]
+            if missing:
+                raise ValueError(f"MF4 file(s) not found: {', '.join(missing)}")
 
-        # Always show folder selection dialog
-        root = tk.Tk()
-        root.withdraw()
-        folder = filedialog.askdirectory(title="Select MF4 Folder")
+            parent_dirs = {p.parent for p in normalized_files}
+            if normalized_input:
+                if any(parent != normalized_input for parent in parent_dirs):
+                    raise ValueError("All MF4 files must reside in the provided input folder.")
+            else:
+                if len(parent_dirs) > 1:
+                    raise ValueError("All provided MF4 files must be in the same folder.")
+                normalized_input = parent_dirs.pop()
 
+            self._provided_files = [str(p) for p in normalized_files]
+            self.in_path_raw_data = str(normalized_input)
 
-        if not folder:
-            raise ValueError("No MF4 folder selected. Aborting.")
+        elif normalized_input:
+            if not normalized_input.exists():
+                raise ValueError(f"Provided MF4 folder does not exist: {normalized_input}")
+            self.in_path_raw_data = str(normalized_input)
 
-        self.in_path_raw_data = os.path.abspath(folder)
-        print(f"✅ Selected MF4 folder: {self.in_path_raw_data}")
+        else:
+            # --- Prompt user for MF4 folder ---
+            print("📂 Please select the MF4 folder...")
+
+            # Ensure Tcl/Tk works inside PyInstaller
+            init_tkinter_for_bundle()
+
+            # Always show folder selection dialog
+            root = tk.Tk()
+            root.withdraw()
+            folder = filedialog.askdirectory(title="Select MF4 Folder")
+
+            if not folder:
+                raise ValueError("No MF4 folder selected. Aborting.")
+
+            self.in_path_raw_data = os.path.abspath(folder)
+            print(f"✅ Selected MF4 folder: {self.in_path_raw_data}")
 
 
         # --- Create subfolder for extracted files ---
@@ -123,15 +152,24 @@ class InputHandler:
         7. Close the new MDF file and force memory cleanup
         """
 
-        mf4_files = [f for f in os.listdir(self.in_path_raw_data) if f.lower().endswith(".mf4")]
-        print(f"🔎 Found {len(mf4_files)} MF4 file(s) to process...")
+        if self._provided_files is not None:
+            mf4_paths = [Path(p) for p in self._provided_files]
+            print(f"🔎 Processing {len(mf4_paths)} selected MF4 file(s)...")
+        else:
+            mf4_paths = [
+                Path(self.in_path_raw_data) / f
+                for f in os.listdir(self.in_path_raw_data)
+                if f.lower().endswith(".mf4")
+            ]
+            print(f"🔎 Found {len(mf4_paths)} MF4 file(s) to process...")
 
-        if not mf4_files:
-            print("⚠️ No MF4 files found in the selected folder.")
+        if not mf4_paths:
+            print("⚠️ No MF4 files found.")
             return
 
-        for file in mf4_files:
-            full_path = os.path.join(self.in_path_raw_data, file)
+        for full_path in mf4_paths:
+            full_path = Path(full_path)
+            file = full_path.name
             print(f"\n📂 Processing file: {file}")
 
             try:
