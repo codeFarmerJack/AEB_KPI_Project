@@ -184,7 +184,13 @@ class Exporter:
         multiple exports accumulate instead of overwriting.
         """
         out_dir = Path(self.out_path_output)
-        cache_file = out_dir / "index_cache.json"
+        feature_base = out_dir.name.lower()
+        if feature_base in {"cycle", "event"} and out_dir.parent:
+            feature_base = out_dir.parent.name.lower()
+        if feature_base == "analysis_results" and out_dir.parent:
+            feature_base = out_dir.parent.name.lower()
+
+        cache_file = out_dir / f"{feature_base}_index_cache.json"
         entries = []
 
         if cache_file.exists():
@@ -231,7 +237,7 @@ class Exporter:
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>KPI Figures</title>
+    <title>{feature_base.upper()} Figures</title>
     <style>
         body {{
             font-family: Arial, sans-serif;
@@ -259,35 +265,49 @@ class Exporter:
             border-radius: 6px;
             background: #fff;
         }}
+        .grid {{
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }}
         section {{
-            margin-top: 18px;
+            background: #fff;
+            padding: 8px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
         }}
         section h2 {{
-            margin: 8px 0;
+            margin: 6px 0 10px 0;
             font-size: 16px;
         }}
         iframe {{
             width: 100%;
-            height: 75vh;
+            height: 55vh;
             border: 1px solid #e2e8f0;
             border-radius: 6px;
             background: #fff;
+        }}
+        @media (max-width: 1100px) {{
+            .grid {{ grid-template-columns: 1fr; }}
         }}
     </style>
 </head>
 <body>
     <header>
-        <h1 style="margin:0 0 8px 0;">KPI Figures</h1>
+        <h1 style="margin:0 0 8px 0;">{feature_base.upper()} Figures</h1>
         <nav>
             {' '.join(nav_links)}
         </nav>
     </header>
-    {''.join(sections)}
+    <div class="grid">
+        {''.join(sections)}
+    </div>
 </body>
 </html>
 """
 
-        index_path = out_dir / "index.html"
+        index_path = out_dir / f"{feature_base}_index.html"
         index_path.write_text(index_html, encoding="utf-8")
 
         # Persist cache
