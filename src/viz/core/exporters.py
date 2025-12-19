@@ -1,6 +1,9 @@
 # src/viz/core/exporters.py
 import os
 import warnings
+from pathlib import Path
+import base64
+import json
 
 import matplotlib.pyplot as plt
 import plotly.io as pio
@@ -169,3 +172,129 @@ class Exporter:
             plt.show(block=True)
         else:
             plt.close(fig)
+
+        # Update combined index page so all figure HTMLs can be browsed in one place
+        self._build_index(out_name_html, out_path_html)
+
+    # ------------ helpers ------------ #
+    def _build_index(self, new_name: str, new_path: str):
+        """
+        Generate a single HTML index that embeds all exported figure HTMLs and
+        removes the individual files afterward. Uses an on-disk cache so
+        multiple exports accumulate instead of overwriting.
+        """
+        out_dir = Path(self.out_path_output)
+        cache_file = out_dir / "index_cache.json"
+        entries = []
+
+        if cache_file.exists():
+            try:
+                entries = json.loads(cache_file.read_text(encoding="utf-8"))
+            except Exception:
+                entries = []
+
+        # Read the newly created figure
+        try:
+            content = Path(new_path).read_text(encoding="utf-8")
+            encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+            # replace or append
+            entries = [e for e in entries if e.get("name") != new_name]
+            entries.append({"name": new_name, "content": encoded})
+        except Exception as exc:  # noqa: BLE001
+            warnings.warn(f"⚠️ Failed to read {new_name} for index embed: {exc}")
+
+        if not entries:
+            return
+
+        # sort for stable order
+        entries.sort(key=lambda e: e.get("name", ""))
+
+        sections = []
+        nav_links = []
+        for entry in entries:
+            name = entry.get("name", "figure")
+            fid = name.replace(" ", "_").replace(".", "_")
+            nav_links.append(f'<a href="#{fid}">{name}</a>')
+            encoded = entry.get("content", "")
+            sections.append(
+                f"""
+                <section id="{fid}">
+                    <h2>{name}</h2>
+                    <iframe src="data:text/html;base64,{encoded}" loading="lazy"></iframe>
+                </section>
+                """
+            )
+
+        index_html = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KPI Figures</title>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0 12px 24px 12px;
+            background: #f8fafc;
+        }}
+        header {{
+            position: sticky;
+            top: 0;
+            background: #f8fafc;
+            padding: 12px 0;
+            z-index: 10;
+        }}
+        nav {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }}
+        nav a {{
+            text-decoration: none;
+            color: #2563eb;
+            padding: 4px 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: #fff;
+        }}
+        section {{
+            margin-top: 18px;
+        }}
+        section h2 {{
+            margin: 8px 0;
+            font-size: 16px;
+        }}
+        iframe {{
+            width: 100%;
+            height: 75vh;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            background: #fff;
+        }}
+    </style>
+</head>
+<body>
+    <header>
+        <h1 style="margin:0 0 8px 0;">KPI Figures</h1>
+        <nav>
+            {' '.join(nav_links)}
+        </nav>
+    </header>
+    {''.join(sections)}
+</body>
+</html>
+"""
+
+        index_path = out_dir / "index.html"
+        index_path.write_text(index_html, encoding="utf-8")
+
+        # Persist cache
+        cache_file.write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        # Remove individual fig file now that it's embedded
+        try:
+            Path(new_path).unlink()
+        except Exception:
+            pass
