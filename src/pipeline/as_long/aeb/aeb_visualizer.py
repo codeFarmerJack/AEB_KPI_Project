@@ -24,6 +24,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             "lat": ["latitude"],
             "speed": ["egoSpeedKph"],
             "aebFullState": ["aebFullState"],
+            "aebPartialState": ["aebPartialState"],
             "obstConf": ["obstConf"],
             "posConf": ["posConf"],
             "velConf": ["velConf"],
@@ -309,6 +310,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         lat = signals.get("lat")
         spd = signals.get("speed")
         aeb_full_state = signals.get("aebFullState")
+        aeb_partial_state = signals.get("aebPartialState")
         if lon is not None and lat is not None and spd is not None:
             # Convert to numpy arrays for easier processing
             lon_arr = np.asarray(lon, dtype=float)
@@ -352,24 +354,39 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_DEGRADED": "#ffa94d",
             }
             default_state_color = "#adb5bd"
-            offset_path = self._compute_offset_path(lon_to_plot, lat_to_plot, offset_scale=0.005)
-            if offset_path:
+            seen_legend = set()
+            offset_path = self._compute_offset_path(lon_to_plot, lat_to_plot, offset_scale=0.008)
+            if offset_path and aeb_full_state is not None:
                 lon_full, lat_full = offset_path
-                seen_legend = set()
-                if aeb_full_state is not None:
-                    full_names = self._decode_state_names("aebFullState", aeb_full_state)
-                    self._add_state_segments(
-                        fig_top,
-                        lon_full,
-                        lat_full,
-                        full_names,
-                        "aeb-fb",
-                        row=1,
-                        col=1,
-                        color_map=state_colors,
-                        default_color=default_state_color,
-                        seen_legend=seen_legend,
-                    )
+                full_names = self._decode_state_names("aebFullState", aeb_full_state)
+                self._add_state_segments(
+                    fig_top,
+                    lon_full,
+                    lat_full,
+                    full_names,
+                    "aeb-fb",
+                    row=1,
+                    col=1,
+                    color_map=state_colors,
+                    default_color=default_state_color,
+                    seen_legend=seen_legend,
+                )
+            offset_path = self._compute_offset_path(lon_to_plot, lat_to_plot, offset_scale=0.014)
+            if offset_path and aeb_partial_state is not None:
+                lon_partial, lat_partial = offset_path
+                partial_names = self._decode_state_names("aebPartialState", aeb_partial_state)
+                self._add_state_segments(
+                    fig_top,
+                    lon_partial,
+                    lat_partial,
+                    partial_names,
+                    "aeb-pb",
+                    row=1,
+                    col=1,
+                    color_map=state_colors,
+                    default_color=default_state_color,
+                    seen_legend=seen_legend,
+                )
 
         fig_top.update_yaxes(scaleanchor="x", row=1, col=1)
 
