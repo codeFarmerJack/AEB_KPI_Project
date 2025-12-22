@@ -23,6 +23,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             "lon": ["longitude"],
             "lat": ["latitude"],
             "speed": ["egoSpeedKph"],
+            "aebFullState": ["aebFullState"],
             "obstConf": ["obstConf"],
             "posConf": ["posConf"],
             "velConf": ["velConf"],
@@ -74,6 +75,202 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             mapped.append(self.enum_mapper.to_name(enum_name, code) or code)
         return mapped
 
+    def _decode_state_names(self, signal_name, values):
+        if values is None:
+            return None
+        enum_name = (
+            self.enum_mapper.get_enum_for_value(signal_name)
+            or self.enum_mapper.get_enum_for_signal(signal_name)
+        )
+        names = []
+        for v in np.asarray(values):
+            if v is None or (isinstance(v, float) and np.isnan(v)):
+                names.append(None)
+                continue
+            if isinstance(v, str):
+                names.append(v)
+                continue
+            try:
+                code = int(v)
+            except Exception:
+                names.append(None)
+                continue
+            if enum_name:
+                names.append(self.enum_mapper.to_name(enum_name, code) or str(code))
+            else:
+                names.append(str(code))
+        return names
+
+    def _compute_offset_path(
+        self,
+        lon,
+        lat,
+        offset_scale=0.02,
+        min_offset=1e-6,
+    ):
+        def _smooth_series(values, window=5):
+            if window < 2 or len(values) < window:
+                return values
+            kernel = np.ones(window, dtype=float) / float(window)
+            return np.convolve(values, kernel, mode="same")
+
+        def _fill_vector_gaps(dx, dy, eps=1e-9):
+            mag = np.hypot(dx, dy)
+            valid = mag > eps
+            if valid.all():
+                return dx, dy
+            idx = np.arange(len(dx))
+            if valid.any():
+                last = idx[valid][0]
+                for i in range(last + 1, len(dx)):
+                    if valid[i]:
+                        last = i
+                    else:
+                        dx[i] = dx[last]
+                        dy[i] = dy[last]
+                first = idx[valid][0]
+                for i in range(first - 1, -1, -1):
+                    dx[i] = dx[first]
+                    dy[i] = dy[first]
+            else:
+                dx[:] = 1.0
+                dy[:] = 0.0
+            return dx, dy
+
+        lon_arr = np.asarray(lon, dtype=float)
+        lat_arr = np.asarray(lat, dtype=float)
+        if lon_arr.size == 0 or lat_arr.size == 0:
+            return None
+        mask = np.isfinite(lon_arr) & np.isfinite(lat_arr)
+        if not mask.any():
+            return None
+        finite_lon = lon_arr[mask]
+        finite_lat = lat_arr[mask]
+        idx = np.arange(lon_arr.size)
+        lon_filled = lon_arr.copy()
+        lat_filled = lat_arr.copy()
+        if not np.isfinite(lon_filled).all():
+            lon_filled[~np.isfinite(lon_filled)] = np.interp(
+                idx[~np.isfinite(lon_filled)],
+                idx[np.isfinite(lon_filled)],
+                lon_filled[np.isfinite(lon_filled)],
+            )
+        if not np.isfinite(lat_filled).all():
+            lat_filled[~np.isfinite(lat_filled)] = np.interp(
+                idx[~np.isfinite(lat_filled)],
+                idx[np.isfinite(lat_filled)],
+                lat_filled[np.isfinite(lat_filled)],
+            )
+        span = max(finite_lon.max() - finite_lon.min(), finite_lat.max() - finite_lat.min())
+        if not np.isfinite(span) or span == 0:
+            span = 1.0
+        offset = max(span * offset_scale, min_offset)
+
+        cx = finite_lon.mean()
+        cy = finite_lat.mean()
+        lon_smooth = _smooth_series(lon_filled, window=7)
+        lat_smooth = _smooth_series(lat_filled, window=7)
+        dx = np.gradient(lon_smooth)
+        dy = np.gradient(lat_smooth)
+        dx, dy = _fill_vector_gaps(dx, dy)
+        mag = np.hypot(dx, dy)
+        mag[mag == 0] = 1.0
+        nx = -dy / mag
+        ny = dx / mag
+        for i in range(1, len(nx)):
+            if nx[i] * nx[i - 1] + ny[i] * ny[i - 1] < 0:
+                nx[i] = -nx[i]
+                ny[i] = -ny[i]
+        vx = lon_filled - cx
+        vy = lat_filled - cy
+        if np.nanmean(nx * vx + ny * vy) < 0:
+            nx = -nx
+            ny = -ny
+        return lon_filled + nx * offset, lat_filled + ny * offset
+
+    def _format_state_label(self, state_name):
+        if not state_name:
+            return "Unknown"
+        prefixes = (
+            "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_",
+            "FORWARD_COLLISION_WARNING_PLANNER_STATE_",
+        )
+        label = state_name
+        for prefix in prefixes:
+            if label.startswith(prefix):
+                label = label[len(prefix):]
+                break
+        return label.replace("_", " ").title()
+
+    def _add_state_segments(
+        self,
+        fig,
+        x,
+        y,
+        state_names,
+        label_prefix,
+        row,
+        col,
+        color_map,
+        default_color,
+        seen_legend=None,
+    ):
+        if x is None or y is None or state_names is None:
+            return
+        x_arr = np.asarray(x)
+        y_arr = np.asarray(y)
+        n = min(len(x_arr), len(y_arr))
+        if n == 0:
+            return
+        x_arr = x_arr[:n]
+        y_arr = y_arr[:n]
+        names = list(state_names)
+        if not names:
+            names = ["Unknown"] * n
+        elif len(names) < n:
+            last = next((name for name in reversed(names) if name), None)
+            fill = last if last else "Unknown"
+            names.extend([fill] * (n - len(names)))
+        else:
+            names = names[:n]
+
+        last_name = None
+        for idx, name in enumerate(names):
+            if name is None:
+                names[idx] = last_name if last_name else "Unknown"
+            else:
+                last_name = name
+        i = 0
+        while i < n - 1:
+            name = names[i]
+            j = i + 1
+            while j < n and names[j] == name:
+                j += 1
+            end = min(j + 1, n)
+            color = color_map.get(name, default_color)
+            legend_name = f"{label_prefix}: {self._format_state_label(name)}"
+            showlegend = True
+            if seen_legend is not None:
+                showlegend = legend_name not in seen_legend
+                if showlegend:
+                    seen_legend.add(legend_name)
+            fig.add_trace(
+                go.Scatter(
+                    x=x_arr[i:end],
+                    y=y_arr[i:end],
+                    mode="lines",
+                    line=dict(width=2, color=color),
+                    name=legend_name,
+                    showlegend=showlegend,
+                    connectgaps=True,
+                    text=[name] * (end - i),
+                    hovertemplate=f"{label_prefix}<br>%{{text}}<extra></extra>",
+                ),
+                row=row,
+                col=col,
+            )
+            i = j
+
     def plot_cycle(self, kpi_row, signals: dict, title: str = "Cycle KPI", extra_traces=None):
         if extra_traces is None:
             extra_traces = []
@@ -111,14 +308,68 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         lon = signals.get("lon")
         lat = signals.get("lat")
         spd = signals.get("speed")
+        aeb_full_state = signals.get("aebFullState")
         if lon is not None and lat is not None and spd is not None:
+            # Convert to numpy arrays for easier processing
+            lon_arr = np.asarray(lon, dtype=float)
+            lat_arr = np.asarray(lat, dtype=float)
+            spd_arr = np.asarray(spd, dtype=float)
+
+            # === OPTIONAL: Apply Gaussian smoothing to reduce GPS noise and make path smoother ===
+            # Only apply if we have enough points and valid data
+            if len(lon_arr) > 10 and np.isfinite(lon_arr).any() and np.isfinite(lat_arr).any():
+                from scipy.ndimage import gaussian_filter1d
+                
+                # Sigma controls smoothness: 1.0 = light, 2.0 = moderate, 3.0+ = heavy
+                sigma = 1.5  # Good balance for typical driving paths
+                
+                lon_smooth = gaussian_filter1d(lon_arr, sigma=sigma)
+                lat_smooth = gaussian_filter1d(lat_arr, sigma=sigma)
+                
+                # Use smoothed coordinates for the main path
+                lon_to_plot = lon_smooth
+                lat_to_plot = lat_smooth
+            else:
+                lon_to_plot = lon_arr
+                lat_to_plot = lat_arr
+                spd_arr = spd_arr  # fallback
+                
             fig_top.add_trace(go.Scatter(
-                x=lon, y=lat,
+                x=lon_to_plot, y=lat_to_plot,
                 mode="lines+markers",
-                marker=dict(size=5, color=spd, coloraxis="coloraxis"),
-                line=dict(width=0.5, color="rgba(0,0,0,0.1)"),
+                marker=dict(size=3, color=spd_arr, coloraxis="coloraxis"),
+                line=dict(width=3, color="rgba(0,0,0,0.1)"),
+                connectgaps=True,
                 showlegend=False
             ), row=1, col=1)
+
+            state_colors = {
+                "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_UNSPECIFIED": "#adb5bd",
+                "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_READY": "#51cf66",
+                "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_ACTIVE": "#ff6b6b",
+                "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_HOLD": "#ffd43b",
+                "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_UNAVAILABLE": "#868e96",
+                "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_DEGRADED": "#ffa94d",
+            }
+            default_state_color = "#adb5bd"
+            offset_path = self._compute_offset_path(lon_to_plot, lat_to_plot, offset_scale=0.005)
+            if offset_path:
+                lon_full, lat_full = offset_path
+                seen_legend = set()
+                if aeb_full_state is not None:
+                    full_names = self._decode_state_names("aebFullState", aeb_full_state)
+                    self._add_state_segments(
+                        fig_top,
+                        lon_full,
+                        lat_full,
+                        full_names,
+                        "aeb-fb",
+                        row=1,
+                        col=1,
+                        color_map=state_colors,
+                        default_color=default_state_color,
+                        seen_legend=seen_legend,
+                    )
 
         fig_top.update_yaxes(scaleanchor="x", row=1, col=1)
 
@@ -129,7 +380,8 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 x=[""], y=[avail],
                 marker_color="#4c6ef5",
                 text=f"{avail:.1f}%",
-                textposition="inside"
+                textposition="inside",
+                showlegend=False,
             ), row=1, col=2)
             fig_top.update_yaxes(range=[0, 100], title_text="Percent [%]", title_standoff=5, row=1, col=2)
 
@@ -161,6 +413,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 marker_color="#74c0fc",
                 text=[f"{v:.1f}%" for v in values],
                 textposition="inside",
+                showlegend=False,
             ),
             row=1, col=3
         )
@@ -185,7 +438,15 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             height=400,
             margin=dict(l=40, r=40, t=60, b=20),
             template="plotly_white",
-            showlegend=False,
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="left",
+                x=0.0,
+                font=dict(size=10),
+            ),
             coloraxis=dict(
                 colorscale="Turbo",
                 cmin=0,

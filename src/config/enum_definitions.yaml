@@ -7,6 +7,7 @@ EnumToValueMap:
   isVehicleStoppedNV: VioVehicleStopped
   aebFullState: AutoEmergencyBrakingPlannerState
   aebPartialState: AutoEmergencyBrakingPlannerState
+  fcwState: ForwardCollisionWarningPlannerState
   cpmEventType: DIActiveSafetyCPMEvent
   lkaInterventionStatus: DIActiveSafetyEvent
   useCase: LssUseCase
@@ -47,6 +48,13 @@ AutoEmergencyBrakingPlannerState:
   AUTO_EMERGENCY_BRAKING_PLANNER_STATE_HOLD: 3
   AUTO_EMERGENCY_BRAKING_PLANNER_STATE_UNAVAILABLE: 4
   AUTO_EMERGENCY_BRAKING_PLANNER_STATE_DEGRADED: 5
+
+ForwardCollisionWarningPlannerState:
+  FORWARD_COLLISION_WARNING_PLANNER_STATE_UNSPECIFIED: 0
+  FORWARD_COLLISION_WARNING_PLANNER_STATE_READY: 1
+  FORWARD_COLLISION_WARNING_PLANNER_STATE_ACTIVE: 2
+  FORWARD_COLLISION_WARNING_PLANNER_STATE_UNAVAILABLE: 3
+  FORWARD_COLLISION_WARNING_PLANNER_STATE_DEGRADED: 4
 
 DIActiveSafetyCPMEvent:
   DI_ACTIVE_SAFETY_EVENT_CPM_NONE: 0       # No event is active
