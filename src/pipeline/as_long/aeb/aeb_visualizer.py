@@ -102,13 +102,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 names.append(str(code))
         return names
 
-    def _compute_offset_path(
-        self,
-        lon,
-        lat,
-        offset_scale=0.02,
-        min_offset=1e-6,
-    ):
+    def _compute_offset_path(self, lon, lat, offset_scale=0.02, min_offset=1e-6, ):
         def _smooth_series(values, window=5):
             if window < 2 or len(values) < window:
                 return values
@@ -203,19 +197,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 break
         return label.replace("_", " ").title()
 
-    def _add_state_segments(
-        self,
-        fig,
-        x,
-        y,
-        state_names,
-        label_prefix,
-        row,
-        col,
-        color_map,
-        default_color,
-        seen_legend=None,
-    ):
+    def _add_state_segments(self, fig, x, y, state_names, label_prefix, row, col, color_map, default_color, seen_legend=None,):
         if x is None or y is None or state_names is None:
             return
         x_arr = np.asarray(x)
@@ -457,9 +439,9 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             template="plotly_white",
             showlegend=True,
             legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
+                orientation="v",
+                yanchor="top",
+                y=0.99,
                 xanchor="left",
                 x=0.0,
                 font=dict(size=10),
