@@ -1,9 +1,10 @@
 import os
 
 import numpy as np
-import plotly.graph_objects as go
 import plotly.io as pio
-from plotly.subplots import make_subplots
+from pyecharts import options as opts
+from pyecharts.charts import Line, Grid
+from pyecharts.commons.utils import JsCode
 
 from src.viz.visualizers.base_cycle_visualizer import BaseCycleVisualizer
 from src.utils.enum_loader import EnumMapper
@@ -94,13 +95,8 @@ class AebCycleVisualizer(BaseCycleVisualizer):
 
     def _build_fig_bottom(self, signals):
         time_arr = signals.get("time")
-
-        fig_bottom = make_subplots(
-            rows=5,
-            cols=1,
-            shared_xaxes=True,
-            vertical_spacing=0.04,
-        )
+        if time_arr is None:
+            raise ValueError("Missing 'time' signal")
 
         styles = [
             ("obstConf", "#a64ac9", "ObstConf"),
@@ -110,67 +106,107 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             ("longGap", "#7bb661", "LongGap"),
         ]
 
-        for row_idx, (key, color, label) in enumerate(styles, start=1):
+        grid = Grid(
+            init_opts=opts.InitOpts(
+                width="100%",
+                height="650px",
+                bg_color="#ffffff",
+            )
+        )
+
+        row_gap = 2
+        slider_space = 11
+        available = 100 - slider_space - (len(styles) - 1) * row_gap
+        row_height = max(available / len(styles), 5)
+
+        x = np.asarray(time_arr, dtype=float).tolist()
+        xaxis_indices = list(range(len(styles)))
+
+        for idx, (key, color, label) in enumerate(styles):
             data = signals.get(key)
             if data is None:
                 continue
+            y_raw = np.asarray(data, dtype=float)
+            y = [float(v) if np.isfinite(v) else None for v in y_raw.tolist()]
 
-            y = np.asarray(data)
-
+            # Special handling for enum hover
             if key == "aebTargetType":
                 texts = self._map_obstacle_class(y)
-                fig_bottom.add_trace(
-                    go.Scatter(
-                        x=time_arr,
-                        y=y,
-                        mode="lines",
-                        line_color=color,
-                        text=texts,
-                        hovertemplate="t=%{x:.2f}s<br>%{text}<extra></extra>",
+                y_items = [
+                    {"value": y[i], "name": texts[i] if texts else None}
+                    for i in range(len(y))
+                ]
+
+                tooltip = opts.TooltipOpts(
+                    trigger="axis",
+                    formatter=JsCode(
+                        """
+                        function (params) {
+                            var d = params[0].data || {};
+                            return 't=' + params[0].axisValue.toFixed(2) + 's<br>' +
+                                (d.name || '');
+                        }
+                        """
                     ),
-                    row=row_idx,
-                    col=1,
                 )
             else:
-                fig_bottom.add_trace(
-                    go.Scatter(
-                        x=time_arr,
-                        y=y,
-                        mode="lines",
-                        line_color=color,
-                    ),
-                    row=row_idx,
-                    col=1,
+                tooltip = opts.TooltipOpts(trigger="axis")
+
+            line = (
+                Line()
+                .add_xaxis(xaxis_data=x)
+                .add_yaxis(
+                    series_name=label,
+                    y_axis=y_items if key == "aebTargetType" else y,
+                    is_symbol_show=False,
+                    linestyle_opts=opts.LineStyleOpts(color=color),
                 )
-
-            # Y-axis formatting per row
-            if row_idx in (1, 2, 3):
-                fig_bottom.update_yaxes(range=[0, 1.1], dtick=0.25, row=row_idx, col=1)
-            elif row_idx == 4:
-                fig_bottom.update_yaxes(range=[0, 10000], row=row_idx, col=1)
-
-            fig_bottom.update_yaxes(
-                title_text=label,
-                title_font=dict(color=color, size=13),
-                title_standoff=10,
-                row=row_idx,
-                col=1,
+                .set_global_opts(
+                    tooltip_opts=tooltip,
+                    xaxis_opts=opts.AxisOpts(
+                        type_="value",
+                        axislabel_opts=opts.LabelOpts(is_show=(idx == 4)),
+                    ),
+                    yaxis_opts=opts.AxisOpts(
+                        min_=0 if idx < 3 else None,
+                        max_=1.1 if idx < 3 else None,
+                        name=label,
+                        name_location="middle",
+                        name_gap=45,
+                    ),
+                    legend_opts=opts.LegendOpts(is_show=False),
+                    datazoom_opts=(
+                        [
+                            opts.DataZoomOpts(
+                                type_="slider",
+                                xaxis_index=xaxis_indices,
+                                is_show_data_shadow=False,
+                                is_show_detail=False,
+                                pos_bottom="2%",
+                                range_start=0,
+                                range_end=100,
+                            )
+                        ]
+                        if idx == len(styles) - 1
+                        else None
+                    ),
+                )
             )
 
-        # X-axis only visible on bottom row
-        for r in range(1, 5):
-            fig_bottom.update_xaxes(showticklabels=False, row=r, col=1)
+            top_pct = idx * (row_height + row_gap)
 
-        fig_bottom.update_xaxes(title_text="Time [s]", row=5, col=1)
+            grid.add(
+                line,
+                grid_opts=opts.GridOpts(
+                    pos_left="80px",
+                    pos_right="30px",
+                    pos_top=f"{top_pct}%",
+                    height=f"{row_height}%",
+                ),
+            )
 
-        fig_bottom.update_layout(
-            height=620,
-            template="plotly_white",
-            showlegend=False,
-            margin=dict(l=90, r=30, t=40, b=50),
-        )
+        return grid
 
-        return fig_bottom
 
 
     def plot_cycle(self, kpi_row, signals: dict, title: str = "Cycle KPI", extra_traces=None):
@@ -178,13 +214,13 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             extra_traces = []
 
         fig_top = self._build_fig_top(kpi_row, signals)
-        fig_bottom = self._build_fig_bottom(signals)
+        grid_bottom = self._build_fig_bottom(signals)
 
         # ================================
         # COMBINE & SAVE
         # ================================
         html_top = pio.to_html(fig_top, include_plotlyjs="cdn", full_html=False)
-        html_bottom = pio.to_html(fig_bottom, include_plotlyjs=False, full_html=False)
+        html_bottom = grid_bottom.render_embed()
 
         full_html = f"""
         <html><head><title>{title}</title></head>
@@ -200,4 +236,3 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(full_html)
         print(f"Cycle dashboard saved → {out_path}")
-
