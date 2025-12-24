@@ -4,7 +4,7 @@ import warnings
 from pathlib import Path
 
 from src.pipeline.base.base_cycle_kpi_extractor import BaseCycleKpiExtractor
-from src.pipeline.as_long.aeb.aeb_visualizer import AebCycleVisualizer
+from src.pipeline.as_long.aeb.aeb_cycle_visualizer import AebCycleVisualizer
 from src.utils.signal_mdf import get_signal
 from src.utils.process_calibratables import interpolate_threshold_clamped
 

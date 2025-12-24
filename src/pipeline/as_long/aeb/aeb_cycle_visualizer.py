@@ -5,7 +5,6 @@ import plotly.graph_objects as go
 import plotly.io as pio
 from plotly.subplots import make_subplots
 
-from src.viz.visualizers.base_event_visualizer import BaseEventVisualizer
 from src.viz.visualizers.base_cycle_visualizer import BaseCycleVisualizer
 from src.utils.enum_loader import EnumMapper
 from src.utils.path_manager import get_resource
@@ -285,9 +284,3 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             f.write(full_html)
         print(f"Cycle dashboard saved → {out_path}")
 
-
-class AebEventVisualizer(BaseEventVisualizer):
-    """AEB KPI visualizer routed through the shared viz module."""
-
-    def __init__(self, config, kpi_extractor):
-        super().__init__(config, kpi_extractor, feature="aeb")
