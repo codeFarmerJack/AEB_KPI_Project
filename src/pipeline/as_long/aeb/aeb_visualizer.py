@@ -34,7 +34,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         self.layout_top = {
             "rows": 1,
             "cols": 3,
-            "column_widths": [0.45, 0.15, 0.40],
+            "column_widths": [0.45, 0.25, 0.30],
             "horizontal_spacing": 0.10,
             "vertical_spacing": 0.00,
             "margins": {"l": 20, "r": 20, "t": 2, "b": 8},
@@ -372,16 +372,43 @@ class AebCycleVisualizer(BaseCycleVisualizer):
 
         fig_top.update_yaxes(scaleanchor="x", row=1, col=1)
 
-        # Subplot(1, 2) - Availability
-        avail = kpi_row.get("AvailDistPct")
-        if avail is not None:
-            fig_top.add_trace(go.Bar(
-                x=[""], y=[avail],
-                marker_color="#4c6ef5",
-                text=f"{avail:.1f}%",
-                textposition="inside",
-                showlegend=False,
-            ), row=1, col=2)
+        # Subplot(1, 2) - Availability (Feature / ROV / VAL)
+        avail_feat = kpi_row.get("AvailDistPct")
+        avail_rov  = kpi_row.get("aebROVAvail")
+        avail_val  = kpi_row.get("aebVALAvail")
+
+        labels = []
+        values = []
+        colors = []
+
+        if avail_feat is not None:
+            labels.append("Precond")
+            values.append(avail_feat)
+            colors.append("#4c6ef5")   # blue
+
+        if avail_rov is not None:
+            labels.append("ROV")
+            values.append(avail_rov)
+            colors.append("#40c057")   # green
+
+        if avail_val is not None:
+            labels.append("VAL")
+            values.append(avail_val)
+            colors.append("#fab005")   # yellow/orange
+
+        if labels:
+            fig_top.add_trace(
+                go.Bar(
+                    x=labels,
+                    y=values,
+                    marker_color=colors,
+                    text=[f"{v:.1f}%" for v in values],
+                    textposition="inside",
+                    showlegend=False,
+                ),
+                row=1,
+                col=2
+            )
             fig_top.update_yaxes(range=[0, 100], title_text="Percent [%]", title_standoff=5, row=1, col=2)
 
         # Subplot(1, 3) - Suppression breakdown
@@ -438,6 +465,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             margin=dict(l=40, r=40, t=60, b=20),
             template="plotly_white",
             showlegend=True,
+            barmode="group",
             legend=dict(
                 orientation="v",
                 yanchor="top",
