@@ -34,14 +34,17 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
             - aebPrecondBlk != 0 (if provided)
         """
         try:
-            time            = get_signal(mdf, "time", required=True)
-            speed_mps       = get_signal(mdf, "egoSpeed", required=True)
-            precond_blocked = get_signal(mdf, "aebPrecondBlk", required=True)
-            throttle        = get_signal(mdf, "throttleValue", required=True)
-            steer_angle     = get_signal(mdf, "steerWheelAngleDeg", required=True)
-            steer_rate      = get_signal(mdf, "steerWheelAngleSpeedDeg", required=True)
-            yaw_rate        = get_signal(mdf, "yawRateDeg", required=True)
-            lat_accel       = get_signal(mdf, "latActAccel", required=True)
+            time              = get_signal(mdf, "time", required=True)
+            speed_mps         = get_signal(mdf, "egoSpeed", required=True)
+            precond_blocked   = get_signal(mdf, "aebPrecondBlk", required=True)
+            throttle          = get_signal(mdf, "throttleValue", required=True)
+            steer_angle       = get_signal(mdf, "steerWheelAngleDeg", required=True)
+            steer_rate        = get_signal(mdf, "steerWheelAngleSpeedDeg", required=True)
+            yaw_rate          = get_signal(mdf, "yawRateDeg", required=True)
+            lat_accel         = get_signal(mdf, "latActAccel", required=True)
+            aeb_input_healthy = get_signal(mdf, "aebInputHealthy", required=False)
+            aeb_run_setting   = get_signal(mdf, "aebRunSetting", required=False)
+            
         except AttributeError as e:
             warnings.warn(f"Missing required AEB signal: {e}")
             return {}
@@ -53,9 +56,18 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
         dist       = speed_mps * dt
         total_dist = dist.sum()
 
+        def _dist_pct_mask(mask):
+            if mask is None:
+                return np.nan
+            mask = np.asarray(mask, bool)
+            return float(np.sum(dist[mask]) / total_dist * 100)
+
+
         # KPI keys (include suppression breakdowns)
         kpi_keys = [
             "AvailDistPct",
+            "aebROVAvail",
+            "aebVALAvail",
             "PedalPosProSuppression",
             "SteeringWheelAngle",
             "SteeringWheelAngleRate",
@@ -93,14 +105,6 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
 
         suppress_pct = {}
 
-        # Precondition block flag as a suppression
-        if precond_blocked is None:
-            warnings.warn("⚠️ Missing aebPrecondBlk signal — availability cannot be computed.")
-            avail_mask = np.zeros_like(speed_mps, dtype=bool)
-        else:
-            avail_mask = (precond_blocked == 0)
-
-
         # Threshold-based suppressions (vectorized per-sample interpolation)
         def _safe_interp(name):
             cal = (self.config.calibratables or {}).get(name)
@@ -125,12 +129,31 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
         suppress_pct["LatAccel"]               = round(_dist_pct(lat_accel, lat_accel_thd), 2) if lat_accel is not None and lat_accel_thd is not None else np.nan
         suppress_pct["LowSpeed"]               = round(_dist_pct_lt(speed_mps, 2/3.6), 2)
 
-        
-        enabled_dist = np.sum(dist[avail_mask])
-        pct_avail    = enabled_dist / total_dist * 100
+        # --- Feature availability (precondition-based) ---
+        if precond_blocked is not None:
+            precond_mask = (precond_blocked == 0)
+            aeb_precond_avail = round(_dist_pct_mask(precond_mask), 2)
+        else:
+            aeb_precond_avail = np.nan
+
+        # --- ROV availability ---
+        if aeb_input_healthy is not None:
+            rov_mask = (aeb_input_healthy == 1)
+            aeb_rov_avail = round(_dist_pct_mask(rov_mask), 2)
+        else:
+            aeb_rov_avail = np.nan
+
+        # --- VAL availability ---
+        if aeb_run_setting is not None:
+            val_mask = (aeb_run_setting == 2)
+            aeb_val_avail = round(_dist_pct_mask(val_mask), 2)
+        else:
+            aeb_val_avail = np.nan
 
         metrics = {
-            "AvailDistPct": round(pct_avail, 2),
+            "AvailDistPct": aeb_precond_avail,
+            "aebROVAvail": aeb_rov_avail,
+            "aebVALAvail": aeb_val_avail,
             **suppress_pct,
         }
 

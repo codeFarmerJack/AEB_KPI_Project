@@ -15,6 +15,7 @@ EnumToValueMap:
   aebRunSetting: DIActiveSafetyRunSettings
   fcwRunSetting: DIActiveSafetyRunSettings
   dbsRunSetting: DIActiveSafetyRunSettings
+  aebDegradation: DegradationActiveSafety
 
 # Map numeric MDF signals → enum groups (decoding)
 ValueToEnumMap:
@@ -132,3 +133,11 @@ LssUseCase:
   LSS_USE_CASE_OVERTAKING: 4       # Use case for overtaking support
   LSS_USE_CASE_ONCOMING: 5         # Use case for oncoming traffic support
   LSS_USE_CASE_STATIONARY: 6       # Stationary object support (deprecated; included in OVERTAKING)
+
+DegradationActiveSafety:
+  DEGRADATION_ACTIVE_SAFETY_INVALID: 0                # Invalid or uninitialized state
+  DEGRADATION_ACTIVE_SAFETY_NO_DEGRADATION: 1         # No degradation, system operating normally
+  DEGRADATION_ACTIVE_SAFETY_LIMITED: 2                # System functionality is limited
+  DEGRADATION_ACTIVE_SAFETY_FINALIZE_NO_ACTUATION: 3  # Completing current intervention, no new ones
+  DEGRADATION_ACTIVE_SAFETY_NO_ACTUATION: 4           # System operational, no actuation available
+  DEGRADATION_ACTIVE_SAFETY_DISABLE: 5                # System disabled
