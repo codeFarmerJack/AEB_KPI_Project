@@ -210,6 +210,337 @@ class BaseCycleVisualizer:
             ny = -ny
         return lon_filled + nx * offset, lat_filled + ny * offset
 
+    def _decode_state_names(self, signal_name, values):
+        if values is None:
+            return None
+        names = []
+        for v in np.asarray(values):
+            if v is None or (isinstance(v, float) and np.isnan(v)):
+                names.append(None)
+                continue
+            if isinstance(v, str):
+                names.append(v)
+                continue
+            try:
+                names.append(str(int(v)))
+            except Exception:
+                names.append(None)
+        return names
+
+    def _format_state_label(self, state_name):
+        if not state_name:
+            return "Unknown"
+        prefixes = (
+            "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_",
+            "FORWARD_COLLISION_WARNING_PLANNER_STATE_",
+        )
+        label = state_name
+        for prefix in prefixes:
+            if label.startswith(prefix):
+                label = label[len(prefix):]
+                break
+        return label.replace("_", " ").title()
+
+    def _add_state_segments(self, fig, x, y, state_names, label_prefix, row, col,
+                            color_map, default_color, seen_legend=None):
+        if x is None or y is None or state_names is None:
+            return
+        x_arr = np.asarray(x)
+        y_arr = np.asarray(y)
+        n = min(len(x_arr), len(y_arr))
+        if n == 0:
+            return
+        x_arr = x_arr[:n]
+        y_arr = y_arr[:n]
+        names = list(state_names)
+        if not names:
+            names = ["Unknown"] * n
+        elif len(names) < n:
+            last = next((name for name in reversed(names) if name), None)
+            fill = last if last else "Unknown"
+            names.extend([fill] * (n - len(names)))
+        else:
+            names = names[:n]
+
+        last_name = None
+        for idx, name in enumerate(names):
+            if name is None:
+                names[idx] = last_name if last_name else "Unknown"
+            else:
+                last_name = name
+        i = 0
+        while i < n - 1:
+            name = names[i]
+            j = i + 1
+            while j < n and names[j] == name:
+                j += 1
+            end = min(j + 1, n)
+            color = color_map.get(name, default_color)
+            legend_name = f"{label_prefix}: {self._format_state_label(name)}"
+            showlegend = True
+            if seen_legend is not None:
+                showlegend = legend_name not in seen_legend
+                if showlegend:
+                    seen_legend.add(legend_name)
+            fig.add_trace(
+                go.Scatter(
+                    x=x_arr[i:end],
+                    y=y_arr[i:end],
+                    mode="lines",
+                    line=dict(width=2, color=color),
+                    name=legend_name,
+                    showlegend=showlegend,
+                    connectgaps=True,
+                    text=[name] * (end - i),
+                    hovertemplate=f"{label_prefix}<br>%{{text}}<extra></extra>",
+                ),
+                row=row,
+                col=col,
+            )
+            i = j
+
+    def _add_offset_path(self, fig, lon_to_plot, lat_to_plot, signal_name, state_values,
+                         label_prefix, offset_scale, state_colors, default_state_color,
+                         seen_legend):
+        if state_values is None:
+            return
+
+        offset_path = self._compute_offset_path(
+            lon_to_plot,
+            lat_to_plot,
+            offset_scale=offset_scale,
+        )
+        if not offset_path:
+            return
+        lon_state, lat_state = offset_path
+        state_names = self._decode_state_names(signal_name, state_values)
+        self._add_state_segments(
+            fig,
+            lon_state,
+            lat_state,
+            state_names,
+            label_prefix,
+            row=1,
+            col=1,
+            color_map=state_colors,
+            default_color=default_state_color,
+            seen_legend=seen_legend,
+        )
+
+    def _build_fig_top(self, kpi_row, signals):
+        lt = getattr(
+            self,
+            "layout_top",
+            {
+                "rows": 1,
+                "cols": 3,
+                "column_widths": [0.45, 0.25, 0.30],
+                "horizontal_spacing": 0.10,
+                "vertical_spacing": 0.00,
+                "margins": {"l": 20, "r": 20, "t": 2, "b": 8},
+            },
+        )
+        subplot_titles = getattr(
+            self,
+            "fig_top_titles",
+            [
+                "Path (colored by speed)",
+                "Availability",
+                "Suppression Breakdown",
+            ],
+        )
+
+        fig_top = make_subplots(
+            rows=lt["rows"],
+            cols=lt["cols"],
+            subplot_titles=subplot_titles,
+            horizontal_spacing=lt["horizontal_spacing"],
+            vertical_spacing=lt["vertical_spacing"],
+            column_widths=lt["column_widths"],
+        )
+
+        fig_top.update_layout(margin=lt["margins"])
+
+        # Subplot(1, 1) - Path
+        lon = signals.get("lon")
+        lat = signals.get("lat")
+        spd = signals.get("speed")
+        if lon is not None and lat is not None and spd is not None:
+            # Convert to numpy arrays for easier processing
+            lon_arr = np.asarray(lon, dtype=float)
+            lat_arr = np.asarray(lat, dtype=float)
+            spd_arr = np.asarray(spd, dtype=float)
+
+            # === OPTIONAL: Apply Gaussian smoothing to reduce GPS noise and make path smoother ===
+            # Only apply if we have enough points and valid data
+            if len(lon_arr) > 10 and np.isfinite(lon_arr).any() and np.isfinite(lat_arr).any():
+                from scipy.ndimage import gaussian_filter1d
+
+                # Sigma controls smoothness: 1.0 = light, 2.0 = moderate, 3.0+ = heavy
+                sigma = 1.5  # Good balance for typical driving paths
+
+                lon_smooth = gaussian_filter1d(lon_arr, sigma=sigma)
+                lat_smooth = gaussian_filter1d(lat_arr, sigma=sigma)
+
+                # Use smoothed coordinates for the main path
+                lon_to_plot = lon_smooth
+                lat_to_plot = lat_smooth
+            else:
+                lon_to_plot = lon_arr
+                lat_to_plot = lat_arr
+                spd_arr = spd_arr  # fallback
+
+            fig_top.add_trace(
+                go.Scatter(
+                    x=lon_to_plot,
+                    y=lat_to_plot,
+                    mode="lines+markers",
+                    marker=dict(size=3, color=spd_arr, coloraxis="coloraxis"),
+                    line=dict(width=3, color="rgba(0,0,0,0.1)"),
+                    connectgaps=True,
+                    showlegend=False,
+                ),
+                row=1,
+                col=1,
+            )
+
+            state_colors = getattr(self, "state_colors", {})
+            default_state_color = getattr(self, "default_state_color", "#adb5bd")
+            seen_legend = set()
+            state_defs = getattr(self, "state_defs", [])
+            for state_def in state_defs:
+                signal_name = state_def.get("signal_name")
+                if not signal_name:
+                    continue
+                state_values = signals.get(signal_name)
+                if state_values is None:
+                    continue
+                label_prefix = state_def.get("label_prefix", signal_name)
+                offset_scale = state_def.get("offset_scale", 0.01)
+                self._add_offset_path(
+                    fig_top,
+                    lon_to_plot,
+                    lat_to_plot,
+                    signal_name,
+                    state_values,
+                    label_prefix,
+                    offset_scale,
+                    state_colors,
+                    default_state_color,
+                    seen_legend,
+                )
+
+        fig_top.update_yaxes(scaleanchor="x", row=1, col=1)
+
+        # Subplot(1, 2) - Availability (Feature / ROV / VAL)
+        availability_defs = getattr(
+            self,
+            "availability_defs",
+            [
+                ("Availability", "AvailDistPct", "#4c6ef5"),
+            ],
+        )
+        labels = []
+        values = []
+        colors = []
+        for label, key, color in availability_defs:
+            val = kpi_row.get(key)
+            if val is None:
+                continue
+            labels.append(label)
+            values.append(val)
+            colors.append(color)
+
+        if labels:
+            fig_top.add_trace(
+                go.Bar(
+                    x=labels,
+                    y=values,
+                    marker_color=colors,
+                    text=[f"{v:.1f}%" for v in values],
+                    textposition="inside",
+                    showlegend=False,
+                ),
+                row=1,
+                col=2,
+            )
+            fig_top.update_yaxes(range=[0, 100], title_text="Percent [%]", title_standoff=5, row=1, col=2)
+
+        # Subplot(1, 3) - Suppression breakdown
+        patterns = getattr(self, "suppression_patterns", [])
+
+        # Exact match only — no regex, no partial match
+        reason_keys = [p for p in patterns if p in kpi_row]
+
+        # retrieve values
+        values = [kpi_row.get(k, 0) for k in reason_keys]
+
+        # auto-generate display names
+        labels = [k for k in reason_keys]
+
+        # ---- Plot ----
+        fig_top.add_trace(
+            go.Bar(
+                x=values,
+                y=labels,
+                orientation="h",
+                marker_color="#74c0fc",
+                text=[f"{v:.1f}%" for v in values],
+                textposition="inside",
+                showlegend=False,
+            ),
+            row=1,
+            col=3,
+        )
+
+        fig_top.update_yaxes(autorange="reversed", row=1, col=3)
+        fig_top.update_xaxes(range=[0, 100], title_text="Percent [%]", title_standoff=5, row=1, col=3)
+
+        # Update the layout with colorbar for speed
+        # Get the domain of the Path subplot (row1, col1)
+        path_xaxis = fig_top.layout["xaxis"]  # xaxis = row1,col1
+        path_yaxis = fig_top.layout["yaxis"]  # yaxis = row1,col1
+
+        x0, x1 = path_xaxis.domain  # e.g., [0.0, 0.45]
+        y0, y1 = path_yaxis.domain  # e.g., [0.15, 0.85]
+
+        # Compute colorbar placement
+        colorbar_x = x1  # small gap to the right of path plot
+        colorbar_len = 1.1 * (y1 - y0)  # 1.1 times vertical height of subplot
+        colorbar_y = (y0 + y1) / 2  # center vertically
+
+        fig_top.update_layout(
+            height=400,
+            margin=dict(l=40, r=40, t=60, b=20),
+            template="plotly_white",
+            showlegend=True,
+            barmode="group",
+            legend=dict(
+                orientation="v",
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=0.0,
+                font=dict(size=10),
+            ),
+            coloraxis=dict(
+                colorscale="Turbo",
+                cmin=0,
+                cmax=120,
+                colorbar=dict(
+                    title=dict(text="Speed [kph]", side="right"),
+                    x=colorbar_x,
+                    y=colorbar_y,
+                    len=colorbar_len,
+                    lenmode="fraction",
+                    thickness=20,
+                    outlinewidth=0,
+                ),
+            ),
+        )
+
+        return fig_top
+
     def plot_cycle(
         self,
         kpi_row,
