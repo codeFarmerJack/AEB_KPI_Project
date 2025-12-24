@@ -121,6 +121,48 @@ class AebCycleVisualizer(BaseCycleVisualizer):
 
         x = np.asarray(time_arr, dtype=float).tolist()
         xaxis_indices = list(range(len(styles)))
+        axis_pointer = opts.AxisPointerOpts(
+            is_show=True,
+            link=[{"xAxisIndex": "all"}],
+            is_snap=True,
+            is_trigger_tooltip=True,
+            label=opts.LabelOpts(is_show=False),
+        )
+        tooltip = opts.TooltipOpts(
+            trigger="axis",
+            axis_pointer_type="line",
+            is_show_content=False,
+            formatter=JsCode("function () { return ''; }"),
+            background_color="rgba(0,0,0,0)",
+            border_width=0,
+            padding=0,
+            extra_css_text="box-shadow:none;",
+        )
+        value_label = opts.LabelOpts(
+            is_show=True,
+            formatter=JsCode(
+                """
+                function (params) {
+                    var d = params.data;
+                    var v = d;
+                    if (d && typeof d === 'object') {
+                        if (d.name !== undefined && d.name !== null && d.name !== '') {
+                            v = d.name;
+                        } else if (d.value !== undefined) {
+                            v = d.value;
+                        }
+                    }
+                    if (Array.isArray(v)) {
+                        v = v[v.length - 1];
+                    }
+                    if (typeof v === 'number') {
+                        v = v.toFixed(3);
+                    }
+                    return v;
+                }
+                """
+            ),
+        )
 
         for idx, (key, color, label) in enumerate(styles):
             data = signals.get(key)
@@ -129,28 +171,12 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             y_raw = np.asarray(data, dtype=float)
             y = [float(v) if np.isfinite(v) else None for v in y_raw.tolist()]
 
-            # Special handling for enum hover
             if key == "aebTargetType":
                 texts = self._map_obstacle_class(y)
                 y_items = [
                     {"value": y[i], "name": texts[i] if texts else None}
                     for i in range(len(y))
                 ]
-
-                tooltip = opts.TooltipOpts(
-                    trigger="axis",
-                    formatter=JsCode(
-                        """
-                        function (params) {
-                            var d = params[0].data || {};
-                            return 't=' + params[0].axisValue.toFixed(2) + 's<br>' +
-                                (d.name || '');
-                        }
-                        """
-                    ),
-                )
-            else:
-                tooltip = opts.TooltipOpts(trigger="axis")
 
             line = (
                 Line()
@@ -159,6 +185,8 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                     series_name=label,
                     y_axis=y_items if key == "aebTargetType" else y,
                     is_symbol_show=False,
+                    label_opts=opts.LabelOpts(is_show=False),
+                    emphasis_opts=opts.EmphasisOpts(label_opts=value_label),
                     linestyle_opts=opts.LineStyleOpts(color=color),
                 )
                 .set_global_opts(
@@ -166,6 +194,10 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                     xaxis_opts=opts.AxisOpts(
                         type_="value",
                         axislabel_opts=opts.LabelOpts(is_show=(idx == 4)),
+                        axispointer_opts=opts.AxisPointerOpts(
+                            is_show=True,
+                            label=opts.LabelOpts(is_show=False),
+                        ),
                     ),
                     yaxis_opts=opts.AxisOpts(
                         min_=0 if idx < 3 else None,
@@ -173,8 +205,13 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                         name=label,
                         name_location="middle",
                         name_gap=45,
+                        axispointer_opts=opts.AxisPointerOpts(
+                            is_show=True,
+                            label=opts.LabelOpts(is_show=False),
+                        ),
                     ),
                     legend_opts=opts.LegendOpts(is_show=False),
+                    axispointer_opts=axis_pointer,
                     datazoom_opts=(
                         [
                             opts.DataZoomOpts(
