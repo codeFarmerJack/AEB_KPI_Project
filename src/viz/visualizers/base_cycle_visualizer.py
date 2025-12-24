@@ -129,6 +129,87 @@ class BaseCycleVisualizer:
             )
         return intervals
 
+    def _compute_offset_path(self, lon, lat, offset_scale=0.02, min_offset=1e-6):
+        def _smooth_series(values, window=5):
+            if window < 2 or len(values) < window:
+                return values
+            kernel = np.ones(window, dtype=float) / float(window)
+            return np.convolve(values, kernel, mode="same")
+
+        def _fill_vector_gaps(dx, dy, eps=1e-9):
+            mag = np.hypot(dx, dy)
+            valid = mag > eps
+            if valid.all():
+                return dx, dy
+            idx = np.arange(len(dx))
+            if valid.any():
+                last = idx[valid][0]
+                for i in range(last + 1, len(dx)):
+                    if valid[i]:
+                        last = i
+                    else:
+                        dx[i] = dx[last]
+                        dy[i] = dy[last]
+                first = idx[valid][0]
+                for i in range(first - 1, -1, -1):
+                    dx[i] = dx[first]
+                    dy[i] = dy[first]
+            else:
+                dx[:] = 1.0
+                dy[:] = 0.0
+            return dx, dy
+
+        lon_arr = np.asarray(lon, dtype=float)
+        lat_arr = np.asarray(lat, dtype=float)
+        if lon_arr.size == 0 or lat_arr.size == 0:
+            return None
+        mask = np.isfinite(lon_arr) & np.isfinite(lat_arr)
+        if not mask.any():
+            return None
+        finite_lon = lon_arr[mask]
+        finite_lat = lat_arr[mask]
+        idx = np.arange(lon_arr.size)
+        lon_filled = lon_arr.copy()
+        lat_filled = lat_arr.copy()
+        if not np.isfinite(lon_filled).all():
+            lon_filled[~np.isfinite(lon_filled)] = np.interp(
+                idx[~np.isfinite(lon_filled)],
+                idx[np.isfinite(lon_filled)],
+                lon_filled[np.isfinite(lon_filled)],
+            )
+        if not np.isfinite(lat_filled).all():
+            lat_filled[~np.isfinite(lat_filled)] = np.interp(
+                idx[~np.isfinite(lat_filled)],
+                idx[np.isfinite(lat_filled)],
+                lat_filled[np.isfinite(lat_filled)],
+            )
+        span = max(finite_lon.max() - finite_lon.min(), finite_lat.max() - finite_lat.min())
+        if not np.isfinite(span) or span == 0:
+            span = 1.0
+        offset = max(span * offset_scale, min_offset)
+
+        cx = finite_lon.mean()
+        cy = finite_lat.mean()
+        lon_smooth = _smooth_series(lon_filled, window=7)
+        lat_smooth = _smooth_series(lat_filled, window=7)
+        dx = np.gradient(lon_smooth)
+        dy = np.gradient(lat_smooth)
+        dx, dy = _fill_vector_gaps(dx, dy)
+        mag = np.hypot(dx, dy)
+        mag[mag == 0] = 1.0
+        nx = -dy / mag
+        ny = dx / mag
+        for i in range(1, len(nx)):
+            if nx[i] * nx[i - 1] + ny[i] * ny[i - 1] < 0:
+                nx[i] = -nx[i]
+                ny[i] = -ny[i]
+        vx = lon_filled - cx
+        vy = lat_filled - cy
+        if np.nanmean(nx * vx + ny * vy) < 0:
+            nx = -nx
+            ny = -ny
+        return lon_filled + nx * offset, lat_filled + ny * offset
+
     def plot_cycle(
         self,
         kpi_row,

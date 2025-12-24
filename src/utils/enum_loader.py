@@ -1,4 +1,5 @@
 import yaml
+import numpy as np
 
 class EnumMapper:
     """Load enum definitions and provide conversion utilities."""
@@ -32,3 +33,38 @@ class EnumMapper:
         table = self.enums.get(enum_name, {})
         inv = {v: k for k, v in table.items()}
         return inv.get(number, None)
+
+    def decode_values(self, signal_name, values, fallback_enum=None):
+        """
+        Decode signal values into enum names when possible.
+        - Preserves strings.
+        - Returns None for None/NaN.
+        - Falls back to numeric string if no enum match exists.
+        """
+        if values is None:
+            return None
+
+        enum_name = (
+            self.get_enum_for_value(signal_name)
+            or self.get_enum_for_signal(signal_name)
+            or fallback_enum
+        )
+
+        names = []
+        for v in np.asarray(values):
+            if v is None or (isinstance(v, float) and np.isnan(v)):
+                names.append(None)
+                continue
+            if isinstance(v, str):
+                names.append(v)
+                continue
+            try:
+                code = int(v)
+            except Exception:
+                names.append(None)
+                continue
+            if enum_name:
+                names.append(self.to_name(enum_name, code) or str(code))
+            else:
+                names.append(str(code))
+        return names
