@@ -28,7 +28,17 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             "obstConf": ["obstConf"],
             "posConf": ["posConf"],
             "velConf": ["velConf"],
-            "aebTargetType": ["aebTargetType"],
+            "aebPrecondBlk": ["aebPrecondBlk"],
+            "aebAbort": ["aebAbort"],
+            "egoSpeedKph": ["egoSpeedKph"],
+            "throttleValue": ["throttleValue"],
+            "longActAccel": ["longActAccel"],
+            "aebTargetDecel": ["aebTargetDecel"],
+            "brakePedalPressed": ["brakePedalPressed"],
+            "steerWheelAngle": ["steerWheelAngleDeg"],
+            "steerWheelAngleSpeed": ["steerWheelAngleSpeedDeg"],
+            "yawRate": ["yawRateDeg"],
+            "latActAccel": ["latActAccel"],
             "longGap": ["longGap"],
         }
         self.layout_top = {
@@ -79,6 +89,25 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             },
         ]
         self.html_gap_px = 5   # vertical gap between top and bottom figures
+        self.bottom_row_height_px = 70
+        self.bottom_row_heights_px = {
+            "Confidence": 70,
+            "Precond/Abort": 20,
+            "AEB State": 40,
+            "EgoSpeedKph": 70,
+            "Throttle": 70,
+            "Accel/TargetDecel": 70,
+            "BrakePedal": 20,
+            "SteerAngle": 70,
+            "SteerAngleRate": 70,
+            "YawRate": 70,
+            "LatAccel": 70,
+            "LongGap": 70,
+        }
+        self.bottom_row_gap_px = 24
+        self.bottom_slider_space_px = 134
+        self.bottom_min_height_px = 650
+        self.bottom_legend_pad_px = 12
         enum_file = get_resource("config/enum_definitions.yaml")
         self.enum_mapper = EnumMapper(enum_file)
 
@@ -98,29 +127,171 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         if time_arr is None:
             raise ValueError("Missing 'time' signal")
 
-        styles = [
-            ("obstConf", "#a64ac9", "ObstConf"),
-            ("posConf", "#e98b2a", "PosConf"),
-            ("velConf", "#1ca9c9", "VelConf"),
-            ("aebTargetType", "#c05a5a", "AEB Target Type"),
-            ("longGap", "#7bb661", "LongGap"),
+        row_defs = [
+            {
+                "label": "Confidence",
+                "series": [
+                    ("obstConf", "#a64ac9", "ObstConf"),
+                    ("posConf", "#e98b2a", "PosConf"),
+                    ("velConf", "#1ca9c9", "VelConf"),
+                ],
+                "y_range": (0, 1.1),
+            },
+            {
+                "label": "Precond/Abort",
+                "series": [
+                    ("aebPrecondBlk", "#5c7cfa", "AebPrecondBlk"),
+                    ("aebAbort", "#f03e3e", "AebAbort"),
+                ],
+                "y_range": (0, 1.1),
+            },
+            {
+                "label": "AEB State",
+                "series": [
+                    ("aebFullState", "#40c057", "AebFullState"),
+                    ("aebPartialState", "#15aabf", "AebPartialState"),
+                ],
+                "y_range": (0, 6),
+            },
+            {
+                "label": "EgoSpeedKph",
+                "series": [
+                    ("egoSpeedKph", "#4c6ef5", "EgoSpeedKph"),
+                ],
+            },
+            {
+                "label": "Throttle",
+                "series": [
+                    ("throttleValue", "#ffa94d", "ThrottleValue"),
+                ],
+                "y_range": (0, 100),
+            },
+            {
+                "label": "Accel/TargetDecel",
+                "series": [
+                    ("longActAccel", "#2f9e44", "LongActAccel"),
+                    ("aebTargetDecel", "#d9480f", "AebTargetDecel"),
+                ],
+                "y_range": (-12, 1),
+            },
+            {
+                "label": "BrakePedal",
+                "series": [
+                    ("brakePedalPressed", "#845ef7", "BrakePedalPressed"),
+                ],
+                "y_range": (0, 1.1),
+            },
+            {
+                "label": "SteerAngle",
+                "series": [
+                    ("steerWheelAngle", "#12b886", "SteerWheelAngle"),
+                ],
+                "y_range": (-500, 500),
+            },
+            {
+                "label": "SteerAngleRate",
+                "series": [
+                    ("steerWheelAngleSpeed", "#20c997", "SteerWheelAngleSpeed"),
+                ],
+                "y_range": (-500, 500),
+            },
+            {
+                "label": "YawRate",
+                "series": [
+                    ("yawRate", "#fa5252", "YawRate"),
+                ],
+                "y_range": (-50, 50),
+            },
+            {
+                "label": "LatAccel",
+                "series": [
+                    ("latActAccel", "#339af0", "LatActAccel"),
+                ],
+            },
+            {
+                "label": "LongGap",
+                "series": [
+                    ("longGap", "#7bb661", "LongGap"),
+                ],
+                "y_range": (0, 20),
+            },
         ]
 
+        def _to_float_list(values):
+            out = []
+            for v in np.asarray(values):
+                try:
+                    f = float(v)
+                except Exception:
+                    out.append(None)
+                    continue
+                out.append(f if np.isfinite(f) else None)
+            return out
+
+        active_rows = []
+        for row in row_defs:
+            series_data = []
+            for key, color, label in row["series"]:
+                data = signals.get(key)
+                if data is None:
+                    continue
+                series_data.append(
+                    {
+                        "label": label,
+                        "color": color,
+                        "y": _to_float_list(data),
+                    }
+                )
+            if series_data:
+                active_rows.append(
+                    {
+                        "label": row["label"],
+                        "series": series_data,
+                        "y_range": row.get("y_range"),
+                        "height_px": row.get("height_px"),
+                    }
+                )
+
+        row_gap_px = self.bottom_row_gap_px
+        slider_space_px = self.bottom_slider_space_px
+        legend_pad_px = self.bottom_legend_pad_px
+
+        for row in active_rows:
+            if row["height_px"] is None:
+                row["height_px"] = self.bottom_row_heights_px.get(
+                    row["label"],
+                    self.bottom_row_height_px,
+                )
+
+        rows_total_px = sum(row["height_px"] for row in active_rows)
+        grid_height = max(
+            self.bottom_min_height_px,
+            int(
+                rows_total_px + (len(active_rows) - 1) * row_gap_px
+                + slider_space_px
+            ),
+        )
         grid = Grid(
             init_opts=opts.InitOpts(
                 width="100%",
-                height="650px",
+                height=f"{grid_height}px",
                 bg_color="#ffffff",
             )
         )
 
-        row_gap = 2
-        slider_space = 11
-        available = 100 - slider_space - (len(styles) - 1) * row_gap
-        row_height = max(available / len(styles), 5)
+        if not active_rows:
+            return grid
+
+        row_gap = row_gap_px / grid_height * 100
+        slider_space = slider_space_px / grid_height * 100
+        legend_pad = legend_pad_px / grid_height * 100
+        scale = (100 - slider_space - (len(active_rows) - 1) * row_gap) / max(
+            rows_total_px,
+            1,
+        )
 
         x = np.asarray(time_arr, dtype=float).tolist()
-        xaxis_indices = list(range(len(styles)))
+        xaxis_indices = list(range(len(active_rows)))
         axis_pointer = opts.AxisPointerOpts(
             is_show=True,
             link=[{"xAxisIndex": "all"}],
@@ -164,83 +335,99 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             ),
         )
 
-        for idx, (key, color, label) in enumerate(styles):
-            data = signals.get(key)
-            if data is None:
-                continue
-            y_raw = np.asarray(data, dtype=float)
-            y = [float(v) if np.isfinite(v) else None for v in y_raw.tolist()]
-
-            if key == "aebTargetType":
-                texts = self._map_obstacle_class(y)
-                y_items = [
-                    {"value": y[i], "name": texts[i] if texts else None}
-                    for i in range(len(y))
-                ]
-
-            line = (
-                Line()
-                .add_xaxis(xaxis_data=x)
-                .add_yaxis(
-                    series_name=label,
-                    y_axis=y_items if key == "aebTargetType" else y,
+        top_pct = 0.0
+        for idx, row in enumerate(active_rows):
+            line = Line().add_xaxis(xaxis_data=x)
+            for series in row["series"]:
+                line = line.add_yaxis(
+                    series_name=series["label"],
+                    y_axis=series["y"],
                     is_symbol_show=False,
+                    symbol="none",
+                    symbol_size=0,
                     label_opts=opts.LabelOpts(is_show=False),
                     emphasis_opts=opts.EmphasisOpts(label_opts=value_label),
-                    linestyle_opts=opts.LineStyleOpts(color=color),
+                    linestyle_opts=opts.LineStyleOpts(color=series["color"]),
                 )
-                .set_global_opts(
-                    tooltip_opts=tooltip,
-                    xaxis_opts=opts.AxisOpts(
-                        type_="value",
-                        axislabel_opts=opts.LabelOpts(is_show=(idx == 4)),
-                        axispointer_opts=opts.AxisPointerOpts(
-                            is_show=True,
-                            label=opts.LabelOpts(is_show=False),
-                        ),
-                    ),
-                    yaxis_opts=opts.AxisOpts(
-                        min_=0 if idx < 3 else None,
-                        max_=1.1 if idx < 3 else None,
-                        name=label,
-                        name_location="middle",
-                        name_gap=45,
-                        axispointer_opts=opts.AxisPointerOpts(
-                            is_show=True,
-                            label=opts.LabelOpts(is_show=False),
-                        ),
-                    ),
-                    legend_opts=opts.LegendOpts(is_show=False),
-                    axispointer_opts=axis_pointer,
-                    datazoom_opts=(
-                        [
-                            opts.DataZoomOpts(
-                                type_="slider",
-                                xaxis_index=xaxis_indices,
-                                is_show_data_shadow=False,
-                                is_show_detail=False,
-                                pos_bottom="2%",
-                                range_start=0,
-                                range_end=100,
-                            )
-                        ]
-                        if idx == len(styles) - 1
-                        else None
-                    ),
-                )
+
+            y_min = None
+            y_max = None
+            if row.get("y_range"):
+                y_min, y_max = row["y_range"]
+
+            row_height = row["height_px"] * scale
+            plot_height = max(row_height - legend_pad, 1)
+            legend_orient = "vertical" if len(row["series"]) > 1 else "horizontal"
+            legend_opts = opts.LegendOpts(
+                is_show=True,
+                orient=legend_orient,
+                pos_right="3%",
+                pos_top=f"{top_pct + 0.1}%",
+                item_gap=0,
+                item_width=28,
+                item_height=2,
+                legend_icon="rect",
+                textstyle_opts=opts.TextStyleOpts(font_size=10),
             )
 
-            top_pct = idx * (row_height + row_gap)
+            yaxis_kwargs = {
+                "name": "",
+                "axispointer_opts": opts.AxisPointerOpts(
+                    is_show=False,
+                    label=opts.LabelOpts(is_show=False),
+                ),
+            }
+            if y_min is not None and y_max is not None:
+                yaxis_kwargs["min_"] = y_min
+                yaxis_kwargs["max_"] = y_max
+                if (y_max - y_min) < 2:
+                    yaxis_kwargs["interval"] = 1
+                    yaxis_kwargs["split_number"] = 2
+                else:
+                    yaxis_kwargs["split_number"] = 4
+            else:
+                yaxis_kwargs["split_number"] = 4
+
+            line = line.set_global_opts(
+                tooltip_opts=tooltip,
+                xaxis_opts=opts.AxisOpts(
+                    type_="value",
+                    axislabel_opts=opts.LabelOpts(is_show=(idx == len(active_rows) - 1)),
+                    axispointer_opts=opts.AxisPointerOpts(
+                        is_show=True,
+                        label=opts.LabelOpts(is_show=False),
+                    ),
+                ),
+                yaxis_opts=opts.AxisOpts(**yaxis_kwargs),
+                legend_opts=legend_opts,
+                axispointer_opts=axis_pointer,
+                datazoom_opts=(
+                    [
+                        opts.DataZoomOpts(
+                            type_="slider",
+                            xaxis_index=xaxis_indices,
+                            is_show_data_shadow=False,
+                            is_show_detail=False,
+                            pos_bottom="2%",
+                            range_start=0,
+                            range_end=100,
+                        )
+                    ]
+                    if idx == len(active_rows) - 1
+                    else None
+                ),
+            )
 
             grid.add(
                 line,
                 grid_opts=opts.GridOpts(
                     pos_left="80px",
                     pos_right="30px",
-                    pos_top=f"{top_pct}%",
-                    height=f"{row_height}%",
+                    pos_top=f"{top_pct + legend_pad}%",
+                    height=f"{plot_height}%",
                 ),
             )
+            top_pct += row_height + row_gap
 
         return grid
 
