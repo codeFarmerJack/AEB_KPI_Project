@@ -69,6 +69,7 @@ class BaseCycleVisualizer:
         self.bottom_slider_label_gap_px = 10
         self.bottom_slider_margin_px = 6
         self.bottom_round_decimals = 3
+        self.bottom_max_points = 5000
 
     # ------------------------------------------------------------------ #
     # Overridable hooks
@@ -586,7 +587,10 @@ class BaseCycleVisualizer:
         time_arr = signals.get("time")
         if time_arr is None:
             raise ValueError("Missing 'time' signal")
-        x_len = len(time_arr)
+        x_full = np.asarray(time_arr, dtype=float).tolist()
+        x_indices = self._downsample_indices(len(x_full), self.bottom_max_points)
+        x = self._apply_indices(x_full, x_indices)
+        x_len = len(x_full)
 
         # === build active_rows from self.row_defs ===
         active_rows = []
@@ -604,6 +608,7 @@ class BaseCycleVisualizer:
                     series_opts.get("cast"),
                 )
                 y_vals = self._align_series_length(y_vals, x_len)
+                y_vals = self._apply_indices(y_vals, x_indices)
                 series_data.append(
                     {
                         "label": label,
@@ -659,7 +664,6 @@ class BaseCycleVisualizer:
             1,
         )
 
-        x = np.asarray(time_arr, dtype=float).tolist()
         xaxis_indices = list(range(len(active_rows)))
         axis_pointer = opts.AxisPointerOpts(
             is_show=True,
@@ -1032,6 +1036,24 @@ class BaseCycleVisualizer:
             except Exception:
                 out.append(v)
         return out
+
+    @staticmethod
+    def _downsample_indices(length, max_points):
+        if max_points is None or max_points <= 0 or length <= max_points:
+            return None
+        step = int(np.ceil(length / float(max_points)))
+        indices = list(range(0, length, step))
+        if indices and indices[-1] != (length - 1):
+            indices.append(length - 1)
+        return indices
+
+    @staticmethod
+    def _apply_indices(values, indices):
+        if values is None:
+            return None
+        if not indices:
+            return list(values)
+        return [values[i] for i in indices if i < len(values)]
 
     @staticmethod
     def _align_series_length(values, target_len):
