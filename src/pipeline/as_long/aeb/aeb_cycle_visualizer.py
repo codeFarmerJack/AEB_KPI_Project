@@ -92,12 +92,12 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         self.bottom_row_height_px = 70
         self.bottom_row_heights_px = {
             "Confidence": 70,
-            "Precond/Abort": 20,
+            "Precond/Abort": 40,
             "AEB State": 40,
             "EgoSpeedKph": 70,
             "Throttle": 70,
             "Accel/TargetDecel": 70,
-            "BrakePedal": 20,
+            "BrakePedal": 30,
             "SteerAngle": 70,
             "SteerAngleRate": 70,
             "YawRate": 70,
@@ -134,42 +134,11 @@ class AebCycleVisualizer(BaseCycleVisualizer):
 
         row_defs = [
             {
-                "label": "Confidence",
-                "series": [
-                    ("obstConf", "#a64ac9", "ObstConf"),
-                    ("posConf", "#e98b2a", "PosConf"),
-                    ("velConf", "#1ca9c9", "VelConf"),
-                ],
-                "y_range": (0, 1.1),
-            },
-            {
-                "label": "Precond/Abort",
-                "series": [
-                    ("aebPrecondBlk", "#5c7cfa", "AebPrecondBlk"),
-                    ("aebAbort", "#f03e3e", "AebAbort"),
-                ],
-                "y_range": (0, 1.1),
-            },
-            {
-                "label": "AEB State",
-                "series": [
-                    ("aebFullState", "#40c057", "AebFullState"),
-                    ("aebPartialState", "#15aabf", "AebPartialState"),
-                ],
-                "y_range": (0, 6),
-            },
-            {
                 "label": "EgoSpeedKph",
                 "series": [
                     ("egoSpeedKph", "#4c6ef5", "EgoSpeedKph"),
                 ],
-            },
-            {
-                "label": "Throttle",
-                "series": [
-                    ("throttleValue", "#ffa94d", "ThrottleValue"),
-                ],
-                "y_range": (0, 100),
+                "unit": "kph",
             },
             {
                 "label": "Accel/TargetDecel",
@@ -178,47 +147,81 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                     ("aebTargetDecel", "#d9480f", "AebTargetDecel"),
                 ],
                 "y_range": (-12, 1),
+                "unit": "m/s2",
             },
             {
-                "label": "BrakePedal",
+                "label": "AEB State",
                 "series": [
-                    ("brakePedalPressed", "#845ef7", "BrakePedalPressed"),
+                    ("aebFullState", "#3007fe", "AebFullState"),
+                    ("aebPartialState", "#ed0808", "AebPartialState"),
                 ],
-                "y_range": (0, 1.1),
-            },
-            {
-                "label": "SteerAngle",
-                "series": [
-                    ("steerWheelAngle", "#12b886", "SteerWheelAngle"),
-                ],
-                "y_range": (-500, 500),
-            },
-            {
-                "label": "SteerAngleRate",
-                "series": [
-                    ("steerWheelAngleSpeed", "#20c997", "SteerWheelAngleSpeed"),
-                ],
-                "y_range": (-500, 500),
-            },
-            {
-                "label": "YawRate",
-                "series": [
-                    ("yawRate", "#fa5252", "YawRate"),
-                ],
-                "y_range": (-50, 50),
-            },
-            {
-                "label": "LatAccel",
-                "series": [
-                    ("latActAccel", "#339af0", "LatActAccel"),
-                ],
+                "unit": None,
             },
             {
                 "label": "LongGap",
                 "series": [
                     ("longGap", "#7bb661", "LongGap"),
                 ],
-                "y_range": (0, 20),
+                "unit": "m",
+            },
+            {
+                "label": "Throttle",
+                "series": [
+                    ("throttleValue", "#ffa94d", "ThrottleValue"),
+                ],
+                "unit": "%",
+            },
+            {
+                "label": "Precond/Abort",
+                "series": [
+                    ("aebPrecondBlk", "#5c7cfa", "AebPrecondBlk"),
+                    ("aebAbort", "#f03e3e", "AebAbort"),
+                ],
+                "unit": None,
+            },
+            {
+                "label": "SteerAngle",
+                "series": [
+                    ("steerWheelAngle", "#12b886", "SteerWheelAngle"),
+                ],
+                "unit": "deg",
+            },
+            {
+                "label": "SteerAngleRate",
+                "series": [
+                    ("steerWheelAngleSpeed", "#20c997", "SteerWheelAngleSpeed"),
+                ],
+                "unit": "deg/s",
+            },
+            {
+                "label": "YawRate",
+                "series": [
+                    ("yawRate", "#fa5252", "YawRate"),
+                ],
+                "unit": "deg/s",
+            },
+            {
+                "label": "LatAccel",
+                "series": [
+                    ("latActAccel", "#339af0", "LatActAccel"),
+                ],
+                "unit": "m/s2",
+            },
+            {
+                "label": "BrakePedal",
+                "series": [
+                    ("brakePedalPressed", "#845ef7", "BrakePedalPressed"),
+                ],
+                "unit": None,
+            },
+            {
+                "label": "Confidence",
+                "series": [
+                    ("obstConf", "#a64ac9", "ObstConf"),
+                    ("posConf", "#e98b2a", "PosConf"),
+                    ("velConf", "#1ca9c9", "VelConf"),
+                ],
+                "unit": None,
             },
         ]
 
@@ -254,6 +257,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                         "series": series_data,
                         "y_range": row.get("y_range"),
                         "height_px": row.get("height_px"),
+                        "unit": row.get("unit"),
                     }
                 )
 
@@ -360,6 +364,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                     label_opts=opts.LabelOpts(is_show=False),
                     emphasis_opts=opts.EmphasisOpts(label_opts=value_label),
                     linestyle_opts=opts.LineStyleOpts(color=series["color"]),
+                    itemstyle_opts=opts.ItemStyleOpts(color=series["color"]),
                 )
 
             y_min, y_max = None, None
@@ -383,8 +388,13 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 textstyle_opts=opts.TextStyleOpts(font_size=10),
             )
 
+            unit = row.get("unit")
+            yaxis_name = f"[{unit}]" if unit else ""
             yaxis_kwargs = {
-                "name": "",
+                "name": yaxis_name,
+                "name_location": "middle",
+                "name_rotate": 90,
+                "name_gap": 20,
                 "axispointer_opts": opts.AxisPointerOpts(
                     is_show=False,
                     label=opts.LabelOpts(is_show=False),
@@ -394,6 +404,8 @@ class AebCycleVisualizer(BaseCycleVisualizer):
 
             if y_min is not None and y_max is not None:
                 yaxis_kwargs.update(min_=y_min, max_=y_max)
+                if (y_max - y_min) < 2:
+                    yaxis_kwargs["split_number"] = 1
 
             datazoom = opts.DataZoomOpts(
                 type_="slider",
