@@ -104,10 +104,12 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             "LatAccel": 70,
             "LongGap": 70,
         }
-        self.bottom_row_gap_px = 24
-        self.bottom_slider_space_px = 134
+        self.bottom_row_gap_px = 16
         self.bottom_min_height_px = 650
         self.bottom_legend_pad_px = 12
+        self.bottom_slider_height_px = 16
+        self.bottom_slider_label_gap_px = 30
+        self.bottom_slider_margin_px = 20
         enum_file = get_resource("config/enum_definitions.yaml")
         self.enum_mapper = EnumMapper(enum_file)
 
@@ -253,8 +255,12 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 )
 
         row_gap_px = self.bottom_row_gap_px
-        slider_space_px = self.bottom_slider_space_px
         legend_pad_px = self.bottom_legend_pad_px
+        slider_space_px = (
+            self.bottom_slider_height_px
+            + self.bottom_slider_label_gap_px
+            + self.bottom_slider_margin_px
+        )
 
         for row in active_rows:
             if row["height_px"] is None:
@@ -285,6 +291,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         row_gap = row_gap_px / grid_height * 100
         slider_space = slider_space_px / grid_height * 100
         legend_pad = legend_pad_px / grid_height * 100
+        slider_bottom_pct = (self.bottom_slider_margin_px / grid_height) * 100
         scale = (100 - slider_space - (len(active_rows) - 1) * row_gap) / max(
             rows_total_px,
             1,
@@ -336,8 +343,10 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         )
 
         top_pct = 0.0
+
         for idx, row in enumerate(active_rows):
             line = Line().add_xaxis(xaxis_data=x)
+
             for series in row["series"]:
                 line = line.add_yaxis(
                     series_name=series["label"],
@@ -350,13 +359,13 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                     linestyle_opts=opts.LineStyleOpts(color=series["color"]),
                 )
 
-            y_min = None
-            y_max = None
+            y_min, y_max = None, None
             if row.get("y_range"):
                 y_min, y_max = row["y_range"]
 
             row_height = row["height_px"] * scale
             plot_height = max(row_height - legend_pad, 1)
+
             legend_orient = "vertical" if len(row["series"]) > 1 else "horizontal"
             legend_opts = opts.LegendOpts(
                 is_show=True,
@@ -376,23 +385,30 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                     is_show=False,
                     label=opts.LabelOpts(is_show=False),
                 ),
+                "split_number": 4,
             }
+
             if y_min is not None and y_max is not None:
-                yaxis_kwargs["min_"] = y_min
-                yaxis_kwargs["max_"] = y_max
-                if (y_max - y_min) < 2:
-                    yaxis_kwargs["interval"] = 1
-                    yaxis_kwargs["split_number"] = 2
-                else:
-                    yaxis_kwargs["split_number"] = 4
-            else:
-                yaxis_kwargs["split_number"] = 4
+                yaxis_kwargs.update(min_=y_min, max_=y_max)
+
+            datazoom = opts.DataZoomOpts(
+                type_="slider",
+                xaxis_index=xaxis_indices,
+                pos_bottom=f"{slider_bottom_pct:.2f}%",
+                is_show_data_shadow=False,
+                is_show_detail=False,
+                range_start=0,
+                range_end=100,
+            )
+            datazoom.opts["height"] = self.bottom_slider_height_px
 
             line = line.set_global_opts(
                 tooltip_opts=tooltip,
                 xaxis_opts=opts.AxisOpts(
                     type_="value",
-                    axislabel_opts=opts.LabelOpts(is_show=(idx == len(active_rows) - 1)),
+                    axislabel_opts=opts.LabelOpts(
+                        is_show=(idx == len(active_rows) - 1)
+                    ),
                     axispointer_opts=opts.AxisPointerOpts(
                         is_show=True,
                         label=opts.LabelOpts(is_show=False),
@@ -402,17 +418,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 legend_opts=legend_opts,
                 axispointer_opts=axis_pointer,
                 datazoom_opts=(
-                    [
-                        opts.DataZoomOpts(
-                            type_="slider",
-                            xaxis_index=xaxis_indices,
-                            is_show_data_shadow=False,
-                            is_show_detail=False,
-                            pos_bottom="2%",
-                            range_start=0,
-                            range_end=100,
-                        )
-                    ]
+                    [datazoom]
                     if idx == len(active_rows) - 1
                     else None
                 ),
@@ -427,6 +433,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                     height=f"{plot_height}%",
                 ),
             )
+
             top_pct += row_height + row_gap
 
         return grid
