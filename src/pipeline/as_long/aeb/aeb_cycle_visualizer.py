@@ -70,7 +70,12 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 "height_px": 70,
                 "unit": "deg",
                 "series": [
-                    ("steerWheelAngle", "#12b886", "SteerWheelAngle"),
+                    (
+                        "steerWheelAngle",
+                        "#12b886",
+                        "SteerWheelAngle",
+                        ["steerWheelAngleDeg", "steerWheelAngle"],
+                    ),
                 ],
             },
             {
@@ -78,7 +83,12 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 "height_px": 70,
                 "unit": "deg/s",
                 "series": [
-                    ("steerWheelAngleSpeed", "#20c997", "SteerWheelAngleSpeed"),
+                    (
+                        "steerWheelAngleSpeed",
+                        "#20c997",
+                        "SteerWheelAngleSpeed",
+                        ["steerWheelAngleSpeedDeg", "steerWheelAngleSpeed"],
+                    ),
                 ],
             },
             {
@@ -86,7 +96,12 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 "height_px": 70,
                 "unit": "deg/s",
                 "series": [
-                    ("yawRate", "#fa5252", "YawRate"),
+                    (
+                        "yawRate",
+                        "#fa5252",
+                        "YawRate",
+                        ["yawRateDeg", "yawRate"],
+                    ),
                 ],
             },
             {
@@ -120,29 +135,6 @@ class AebCycleVisualizer(BaseCycleVisualizer):
     def __init__(self, out_dir: str):
         # Initialize with feature-specific signal candidates
         super().__init__(out_dir)
-        self.signal_candidates = {
-            "time": ["time"],
-            "lon": ["longitude"],
-            "lat": ["latitude"],
-            "speed": ["egoSpeedKph"],
-            "aebFullState": ["aebFullState"],
-            "aebPartialState": ["aebPartialState"],
-            "obstConf": ["obstConf"],
-            "posConf": ["posConf"],
-            "velConf": ["velConf"],
-            "aebPrecondBlk": ["aebPrecondBlk"],
-            "aebAbort": ["aebAbort"],
-            "egoSpeedKph": ["egoSpeedKph"],
-            "throttleValue": ["throttleValue"],
-            "longActAccel": ["longActAccel"],
-            "aebTargetDecel": ["aebTargetDecel"],
-            "brakePedalPressed": ["brakePedalPressed"],
-            "steerWheelAngle": ["steerWheelAngleDeg"],
-            "steerWheelAngleSpeed": ["steerWheelAngleSpeedDeg"],
-            "yawRate": ["yawRateDeg"],
-            "latActAccel": ["latActAccel"],
-            "longGap": ["longGap"],
-        }
         self.layout_top = {
             "rows": 1,
             "cols": 3,

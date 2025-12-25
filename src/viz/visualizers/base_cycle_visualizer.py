@@ -21,16 +21,18 @@ class BaseCycleVisualizer:
     """
     row_defs: list[dict] = []
 
+    BASE_SIGNAL_CANDIDATES = {
+        "time": ["time"],
+        "lon": ["longitude"],
+        "lat": ["latitude"],
+        "speed": ["egoSpeedKph"],
+    }
+
     def __init__(self, out_dir: str):
         self.out_dir = out_dir
         os.makedirs(self.out_dir, exist_ok=True)
         # default mapping of logical signal names to candidate mdf channels
-        self.signal_candidates = {
-            "time": ["time"],
-            "lon": ["longitude"],
-            "lat": ["latitude"],
-            "speed": ["egoSpeedKph"],
-        }
+        self.signal_candidates = self._build_signal_candidates_from_rows()
         # interval handling defaults (can be overridden in subclasses)
         self.interval_pad_before_sec = 1.0
         self.interval_pad_after_sec = 0.5
@@ -312,6 +314,26 @@ class BaseCycleVisualizer:
                 col=col,
             )
             i = j
+    def _build_signal_candidates_from_rows(self) -> dict:
+        """
+        Build signal_candidates automatically from row_defs.
+        """
+        candidates = dict(self.BASE_SIGNAL_CANDIDATES)
+
+        for row in self.row_defs:
+            for series in row["series"]:
+                signal_key = series[0]
+                candidates_override = series[3] if len(series) > 3 else None
+                # default: 1-to-1 mapping
+                if candidates_override:
+                    if isinstance(candidates_override, (list, tuple)):
+                        candidates.setdefault(signal_key, list(candidates_override))
+                    else:
+                        candidates.setdefault(signal_key, [candidates_override])
+                else:
+                    candidates.setdefault(signal_key, [signal_key])
+
+        return candidates
 
     def _add_offset_path(self, fig, lon_to_plot, lat_to_plot, signal_name, state_values,
                          label_prefix, offset_scale, state_colors, default_state_color,
@@ -569,7 +591,8 @@ class BaseCycleVisualizer:
         active_rows = []
         for row in self.row_defs:
             series_data = []
-            for key, color, label in row["series"]:
+            for series in row["series"]:
+                key, color, label = series[:3]
                 data = signals.get(key)
                 if data is None:
                     continue
