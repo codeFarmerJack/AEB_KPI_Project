@@ -182,17 +182,20 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 "offset_scale": 0.014,
             },
         ]
-        self.html_gap_px = 5   # vertical gap between top and bottom figures
-        self.bottom_row_height_px = 70
-        self.bottom_row_gap_px = 2     # control per-row gaps
-        self.bottom_min_height_px = 650
-        self.bottom_legend_pad_px = 12
-        self.bottom_legend_item_gap = -6 # configurable legend gap
-        self.bottom_legend_gutter_px = 160
-        self.bottom_legend_left_pct = 91 # increase to move legends rightward
-        self.bottom_slider_height_px = 16
-        self.bottom_slider_label_gap_px = 30
-        self.bottom_slider_margin_px = 20
+        self.html_gap_px = 5                 # Vertical gap between top and bottom figures (px)
+        self.bottom_row_height_px = 70       # Base height per signal row before scaling (px)
+        self.bottom_row_gap_px = 0           # Gap between adjacent signal rows (px)
+        self.bottom_min_height_px = 650      # Minimum total height of bottom figure (px)
+
+        self.bottom_legend_pad_px = 12       # Padding above each row reserved for legend (px)
+        self.bottom_legend_item_gap = -6     # Spacing between legend items (px, negative = compact)
+        self.bottom_legend_gutter_px = 160   # Right-side gutter reserved for legends (px)
+        self.bottom_legend_left_pct = 91     # Legend anchor position from left (%)
+
+        self.bottom_slider_height_px = 16    # Height of time-range slider bar (px)
+        self.bottom_slider_label_gap_px = 30 # Gap between x-axis labels and slider (px)
+        self.bottom_slider_margin_px = 20    # Bottom margin below slider (px)
+
         enum_file = get_resource("config/enum_definitions.yaml")
         self.enum_mapper = EnumMapper(enum_file)
 

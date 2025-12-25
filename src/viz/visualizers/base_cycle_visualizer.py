@@ -741,7 +741,7 @@ class BaseCycleVisualizer:
                 "name": yaxis_name,
                 "name_location": "middle",
                 "name_rotate": 90,
-                "name_gap": 20,
+                "name_gap": 30,
                 "axispointer_opts": opts.AxisPointerOpts(
                     is_show=False,
                     label=opts.LabelOpts(is_show=False),
