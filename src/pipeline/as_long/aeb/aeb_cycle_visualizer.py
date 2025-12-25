@@ -108,6 +108,8 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         self.bottom_min_height_px = 650
         self.bottom_legend_pad_px = 12
         self.bottom_legend_item_gap = -6 # configurable legend gap
+        self.bottom_legend_gutter_px = 160
+        self.bottom_legend_left_pct = 91 # increase to move legends rightward
         self.bottom_slider_height_px = 16
         self.bottom_slider_label_gap_px = 30
         self.bottom_slider_margin_px = 20
@@ -371,8 +373,9 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             legend_opts = opts.LegendOpts(
                 is_show=True,
                 orient=legend_orient,
-                pos_right="3%",
+                pos_left=f"{self.bottom_legend_left_pct}%",
                 pos_top=f"{top_pct + 0.1}%",
+                align="left",
                 item_gap=self.bottom_legend_item_gap,
                 item_width=28,
                 item_height=2,
@@ -429,7 +432,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 line,
                 grid_opts=opts.GridOpts(
                     pos_left="80px",
-                    pos_right="30px",
+                    pos_right=f"{self.bottom_legend_gutter_px}px",
                     pos_top=f"{top_pct + legend_pad}%",
                     height=f"{plot_height}%",
                 ),
