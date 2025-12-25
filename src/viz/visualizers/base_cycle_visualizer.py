@@ -33,10 +33,6 @@ class BaseCycleVisualizer:
         os.makedirs(self.out_dir, exist_ok=True)
         # default mapping of logical signal names to candidate mdf channels
         self.signal_candidates = self._build_signal_candidates_from_rows()
-        # interval handling defaults (can be overridden in subclasses)
-        self.interval_pad_before_sec = 1.0
-        self.interval_pad_after_sec = 0.5
-        self.interval_gap_merge_sec = 2.0
         # default layout params 
         self.layout_params = {
             "rows": 2,
@@ -106,46 +102,6 @@ class BaseCycleVisualizer:
         candidates = self.signal_candidates
 
         return {key: pick(vals) for key, vals in candidates.items()}
-
-    def _compute_intervals(self, time_arr, target_arr):
-        """Return list of (start,end) intervals where target_arr is non-zero, merging short gaps."""
-        if time_arr is None or target_arr is None:
-            return []
-        t = np.asarray(time_arr, dtype=float)
-        tid = np.nan_to_num(np.asarray(target_arr, dtype=float), nan=0.0)
-        if len(t) == 0:
-            return []
-        nonzero = tid != 0
-        merged = nonzero.copy()
-        i = 0
-        while i < len(t):
-            if not merged[i]:
-                i += 1
-                continue
-            j = i
-            while j + 1 < len(t) and merged[j + 1]:
-                j += 1
-            k = j + 1
-            while k < len(t) and not merged[k]:
-                k += 1
-            if k < len(t):
-                gap = t[k] - t[j]
-                if gap < self.interval_gap_merge_sec:
-                    merged[j + 1 : k] = True
-                    i = k
-                    continue
-            i = j + 1
-        starts = np.where(merged & ~np.roll(merged, 1))[0]
-        ends = np.where(merged & ~np.roll(merged, -1))[0]
-        intervals = []
-        for s, e in zip(starts, ends):
-            intervals.append(
-                (
-                    t[s] - self.interval_pad_before_sec,
-                    t[e] + self.interval_pad_after_sec,
-                )
-            )
-        return intervals
 
     def _compute_offset_path(self, lon, lat, offset_scale=0.02, min_offset=1e-6):
         def _smooth_series(values, window=5):
@@ -316,6 +272,7 @@ class BaseCycleVisualizer:
                 col=col,
             )
             i = j
+
     def _build_signal_candidates_from_rows(self) -> dict:
         """
         Build signal_candidates automatically from row_defs.
@@ -425,7 +382,6 @@ class BaseCycleVisualizer:
             else:
                 lon_to_plot = lon_arr
                 lat_to_plot = lat_arr
-                spd_arr = spd_arr  # fallback
 
             fig_top.add_trace(
                 go.Scatter(
