@@ -36,8 +36,8 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 "height_px": 40,
                 "unit": None,
                 "series": [
-                    ("aebFullState", "#3007fe", "AebFullState"),
-                    ("aebPartialState", "#ed0808", "AebPartialState"),
+                    ("aebFullState", "#3007fe", "AebFullState", {"cast": "int"}),
+                    ("aebPartialState", "#ed0808", "AebPartialState", {"cast": "int"}),
                 ],
             },
             {
@@ -61,8 +61,8 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 "height_px": 40,
                 "unit": None,
                 "series": [
-                    ("aebPrecondBlk", "#5c7cfa", "AebPrecondBlk"),
-                    ("aebAbort", "#f03e3e", "AebAbort"),
+                    ("aebPrecondBlk", "#5c7cfa", "AebPrecondBlk", {"cast": "int"}),
+                    ("aebAbort", "#f03e3e", "AebAbort", {"cast": "int"}),
                 ],
             },
             {
@@ -117,7 +117,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 "height_px": 30,
                 "unit": None,
                 "series": [
-                    ("brakePedalPressed", "#845ef7", "BrakePedalPressed"),
+                    ("brakePedalPressed", "#845ef7", "BrakePedalPressed", {"cast": "int"}),
                 ],
             },
             {

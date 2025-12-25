@@ -68,6 +68,7 @@ class BaseCycleVisualizer:
         self.bottom_slider_height_px = 16
         self.bottom_slider_label_gap_px = 10
         self.bottom_slider_margin_px = 6
+        self.bottom_round_decimals = 3
 
     # ------------------------------------------------------------------ #
     # Overridable hooks
@@ -322,9 +323,8 @@ class BaseCycleVisualizer:
 
         for row in self.row_defs:
             for series in row["series"]:
-                signal_key = series[0]
-                candidates_override = series[3] if len(series) > 3 else None
-                # default: 1-to-1 mapping
+                signal_key, _, _, series_opts = self._parse_series_def(series)
+                candidates_override = series_opts.get("candidates")
                 if candidates_override:
                     if isinstance(candidates_override, (list, tuple)):
                         candidates.setdefault(signal_key, list(candidates_override))
@@ -586,21 +586,29 @@ class BaseCycleVisualizer:
         time_arr = signals.get("time")
         if time_arr is None:
             raise ValueError("Missing 'time' signal")
+        x_len = len(time_arr)
 
         # === build active_rows from self.row_defs ===
         active_rows = []
         for row in self.row_defs:
             series_data = []
             for series in row["series"]:
-                key, color, label = series[:3]
+                key, color, label, series_opts = self._parse_series_def(series)
                 data = signals.get(key)
                 if data is None:
                     continue
+                y_vals = self._to_float_list(data)
+                y_vals = self._format_series(
+                    y_vals,
+                    series_opts.get("round", self.bottom_round_decimals),
+                    series_opts.get("cast"),
+                )
+                y_vals = self._align_series_length(y_vals, x_len)
                 series_data.append(
                     {
                         "label": label,
                         "color": color,
-                        "y": self._to_float_list(data),
+                        "y": y_vals,
                     }
                 )
 
@@ -686,9 +694,6 @@ class BaseCycleVisualizer:
                     }
                     if (Array.isArray(v)) {
                         v = v[v.length - 1];
-                    }
-                    if (typeof v === 'number') {
-                        v = v.toFixed(3);
                     }
                     return v;
                 }
@@ -1003,3 +1008,59 @@ class BaseCycleVisualizer:
                 continue
             out.append(f if np.isfinite(f) else None)
         return out
+
+    @staticmethod
+    def _format_series(values, round_decimals, cast):
+        if values is None:
+            return None
+        out = []
+        for v in values:
+            if v is None:
+                out.append(None)
+                continue
+            if cast == "int":
+                try:
+                    out.append(int(round(v)))
+                except Exception:
+                    out.append(None)
+                continue
+            if round_decimals is None:
+                out.append(v)
+                continue
+            try:
+                out.append(round(float(v), int(round_decimals)))
+            except Exception:
+                out.append(v)
+        return out
+
+    @staticmethod
+    def _align_series_length(values, target_len):
+        if target_len <= 0:
+            return []
+        if values is None:
+            return [None] * target_len
+        vals = list(values)
+        if len(vals) >= target_len:
+            return vals[:target_len]
+        pad_value = None
+        for v in reversed(vals):
+            if v is not None:
+                pad_value = v
+                break
+        return vals + [pad_value] * (target_len - len(vals))
+
+    @staticmethod
+    def _parse_series_def(series):
+        key, color, label = series[:3]
+        opts = {}
+        candidates_override = None
+        if len(series) > 3:
+            if isinstance(series[3], dict):
+                opts.update(series[3])
+            else:
+                candidates_override = series[3]
+        if len(series) > 4 and isinstance(series[4], dict):
+            opts.update(series[4])
+        if candidates_override is not None:
+            opts.setdefault("candidates", candidates_override)
+        return key, color, label, opts
