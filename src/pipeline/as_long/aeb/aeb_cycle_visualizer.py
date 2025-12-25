@@ -104,9 +104,10 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             "LatAccel": 70,
             "LongGap": 70,
         }
-        self.bottom_row_gap_px = 16
+        self.bottom_row_gap_px = 2     # control per-row gaps
         self.bottom_min_height_px = 650
         self.bottom_legend_pad_px = 12
+        self.bottom_legend_item_gap = -6 # configurable legend gap
         self.bottom_slider_height_px = 16
         self.bottom_slider_label_gap_px = 30
         self.bottom_slider_margin_px = 20
@@ -372,7 +373,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 orient=legend_orient,
                 pos_right="3%",
                 pos_top=f"{top_pct + 0.1}%",
-                item_gap=0,
+                item_gap=self.bottom_legend_item_gap,
                 item_width=28,
                 item_height=2,
                 legend_icon="rect",
