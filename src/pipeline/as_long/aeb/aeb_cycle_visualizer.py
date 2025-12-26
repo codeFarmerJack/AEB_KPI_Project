@@ -23,7 +23,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
             },
             {
                 "label": "Accel/TargetDecel",
-                "height_px": 70,
+                "height_px": 100,
                 "unit": "m/s2",
                 "y_range": (-12, 1),
                 "series": [
@@ -118,16 +118,6 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 "unit": None,
                 "series": [
                     ("brakePedalPressed", "#845ef7", "BrakePedalPressed", {"cast": "int"}),
-                ],
-            },
-            {
-                "label": "Confidence",
-                "height_px": 70,
-                "unit": None,
-                "series": [
-                    ("obstConf", "#a64ac9", "ObstConf"),
-                    ("posConf", "#e98b2a", "PosConf"),
-                    ("velConf", "#1ca9c9", "VelConf"),
                 ],
             },
         ]
