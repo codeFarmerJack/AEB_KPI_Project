@@ -64,7 +64,7 @@ class BaseCycleVisualizer:
         self.bottom_slider_height_px = 16
         self.bottom_slider_label_gap_px = 10
         self.bottom_slider_margin_px = 6
-        self.bottom_round_decimals = 3
+        self.bottom_round_decimals = 2
         self.bottom_max_points = 5000
 
     # ------------------------------------------------------------------ #
@@ -638,25 +638,36 @@ class BaseCycleVisualizer:
             padding=0,
             extra_css_text="box-shadow:none;",
         )
+        label_decimals = (
+            int(self.bottom_round_decimals)
+            if self.bottom_round_decimals is not None
+            else 3
+        )
         value_label = opts.LabelOpts(
             is_show=True,
+            position="inside",
+            distance=0,
+            color="#000000",
             formatter=JsCode(
-                """
-                function (params) {
+                f"""
+                function (params) {{
                     var d = params.data;
                     var v = d;
-                    if (d && typeof d === 'object') {
-                        if (d.name !== undefined && d.name !== null && d.name !== '') {
+                    if (d && typeof d === 'object') {{
+                        if (d.name !== undefined && d.name !== null && d.name !== '') {{
                             v = d.name;
-                        } else if (d.value !== undefined) {
+                        }} else if (d.value !== undefined) {{
                             v = d.value;
-                        }
-                    }
-                    if (Array.isArray(v)) {
+                        }}
+                    }}
+                    if (Array.isArray(v)) {{
                         v = v[v.length - 1];
-                    }
+                    }}
+                    if (typeof v === 'number' && isFinite(v)) {{
+                        v = v.toFixed({label_decimals});
+                    }}
                     return v;
-                }
+                }}
                 """
             ),
         )
@@ -711,7 +722,7 @@ class BaseCycleVisualizer:
                     is_show=False,
                     label=opts.LabelOpts(is_show=False),
                 ),
-                "split_number": 4,
+                "split_number": 2,
             }
 
             if y_min is not None and y_max is not None:
