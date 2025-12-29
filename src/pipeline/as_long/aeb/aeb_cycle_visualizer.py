@@ -140,8 +140,8 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         ]
         self.availability_defs = [
             ("Precond", "AvailDistPct", "#4c6ef5"),
-            ("ROV", "aebROVAvail", "#40c057"),
-            ("VAL", "aebVALAvail", "#fab005"),
+            ("ROV", "ROVAvail", "#40c057"),
+            ("VAL", "VALAvail", "#fab005"),
         ]
         self.suppression_patterns = [
             "SteeringWheelAngleRate",

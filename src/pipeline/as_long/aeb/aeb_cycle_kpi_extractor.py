@@ -15,8 +15,8 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
     """
     Computes AEB availability KPIs over distance:
       - AvailDistPct: distance % where preconditions allow AEB (aebPrecondBlk == 0)
-      - aebROVAvail: distance % with healthy AEB input (aebInputHealthy == 1)
-      - aebVALAvail: distance % where AEB run setting is active (aebRunSetting == 2)
+      - ROVAvail: distance % with healthy AEB input (aebInputHealthy == 1)
+      - VALAvail: distance % where AEB run setting is active (aebRunSetting == 2)
       - Suppression breakdowns: distance % exceeding calibrated thresholds for
         throttle, steering angle/rate, yaw rate, lateral accel, plus low-speed.
     """
@@ -37,8 +37,8 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
     }
     _AVAIL_SPECS = (
         {"key": "AvailDistPct", "signal": "precond_blocked", "op": "eq", "value": 0},
-        {"key": "aebROVAvail", "signal": "aeb_input_healthy", "op": "eq", "value": 1},
-        {"key": "aebVALAvail", "signal": "aeb_run_setting", "op": "eq", "value": 2},
+        {"key": "ROVAvail", "signal": "aeb_input_healthy", "op": "eq", "value": 1},
+        {"key": "VALAvail", "signal": "aeb_run_setting", "op": "eq", "value": 2},
     )
     _SUPPRESSION_SPECS = (
         {"key": "PedalPosProSuppression", "signal": "throttle", "op": "abs_gt", "calibratable": "PedalPosPro_th"},
@@ -71,8 +71,8 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
 
         Availability metrics are computed as distance percentages:
           - AvailDistPct: preconditions allow AEB (aebPrecondBlk == 0).
-          - aebROVAvail: AEB input health is OK (aebInputHealthy == 1).
-          - aebVALAvail: AEB run setting is active (aebRunSetting == 2).
+          - ROVAvail: AEB input health is OK (aebInputHealthy == 1).
+          - VALAvail: AEB run setting is active (aebRunSetting == 2).
 
         Suppression breakdowns (distance % where |signal| exceeds threshold):
           - PedalPosProSuppression: throttleValue vs PedalPosPro_th(egoSpd)
