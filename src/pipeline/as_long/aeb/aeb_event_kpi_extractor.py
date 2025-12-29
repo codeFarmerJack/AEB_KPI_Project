@@ -1,7 +1,9 @@
-import numpy as np
-import pandas as pd
 import warnings
 from dataclasses import dataclass
+
+import numpy as np
+import pandas as pd
+
 from src.pipeline.base.base_event_kpi_extractor import BaseEventKpiExtractor
 from src.utils.event_detector.as_long.aeb import find_aeb_intv_start, find_aeb_intv_end
 from src.utils.process_calibratables import interpolate_threshold_clamped
@@ -34,9 +36,16 @@ class AebEventKpiExtractor(BaseEventKpiExtractor):
     """Extracts AEB KPI metrics from MF4 chunks."""
 
     FEATURE_NAME = "AEB"
+    _CALIBRATABLE_KEYS = {
+        "SteeringWheelAngle_Th": "SteeringWheelAngle_Th",
+        "AEB_SteeringAngleRate_Override": "AEB_SteeringAngleRate_Override",
+        "PedalPosProIncrease_Th": "PedalPosProIncrease_Th",
+        "YawrateSuspension_Th": "YawrateSuspension_Th",
+        "LateralAcceleration_th": "LateralAcceleration_th",
+    }
     PARAM_SPECS = {
         "pb_tgt_decel":           {"default": -6.0,  "type": float, "desc": "AEB PB target decel"},
-        "fb_tgt_decel":          {"default": -15.0, "type": float, "desc": "AEB FB target decel"},
+        "fb_tgt_decel":           {"default": -15.0, "type": float, "desc": "AEB FB target decel"},
         "tgt_tol":                {"default": 0.2,   "type": float, "desc": "Target tolerance"},
         "aeb_end_thd":            {"default": -4.9,  "type": float, "desc": "AEB end threshold"},
         "time_idx_offset":        {"default": 300,   "type": int,   "desc": "Sample offset (~3s)"},
@@ -46,34 +55,17 @@ class AebEventKpiExtractor(BaseEventKpiExtractor):
         "fb_jerk_neg_thd":        {"default": -20.0, "type": float, "desc": "FB negative jerk threshold (m/s³)"},
     }
 
+    @dataclass(frozen=True)
+    class _AebSignals:
+        time: np.ndarray
+        ego_speed: np.ndarray
+        aeb_tgt_decel: np.ndarray
+
     # ------------------------------------------------------------------ #
     def __init__(self, config, event_segmenter=None):
         super().__init__(config, event_segmenter, "in_path_aeb_chunks", feature_name="AEB")
-
-        # --- Load calibratables ---
-        expected_keys = {
-            "SteeringWheelAngle_Th": "SteeringWheelAngle_Th",
-            "AEB_SteeringAngleRate_Override": "AEB_SteeringAngleRate_Override",
-            "PedalPosProIncrease_Th": "PedalPosProIncrease_Th",
-            "YawrateSuspension_Th": "YawrateSuspension_Th",
-            "LateralAcceleration_th": "LateralAcceleration_th",
-        }
-
-        self.calibratables = {}
-        for internal_name, cfg_key in expected_keys.items():
-            if cfg_key in config.calibratables:
-                self.calibratables[internal_name] = config.calibratables[cfg_key]
-            else:
-                warnings.warn(f"⚠️ Missing calibratable '{cfg_key}' in config.")
-                self.calibratables[internal_name] = pd.DataFrame()
-
-        self.latency_calc       = AebLatencyCalculator(self)
-        self.brake_mode_calc    = AebBrakeModeCalculator(self)
-        self.distance_calc      = AebDistanceCalculator(self)
-        self.throttle_calc      = AebThrottleCalculator(self)
-        self.steering_calc      = AebSteeringCalculator(self)
-        self.yaw_rate_calc      = AebYawRateCalculator(self)
-        self.lat_accel_calc     = AebLatAccelCalculator(self)
+        self.calibratables = self._load_calibratables(config)
+        self._init_calculators()
 
     # ------------------------------------------------------------------ #
     def extract_event_kpis(self, mdf, fname, i):
@@ -81,70 +73,131 @@ class AebEventKpiExtractor(BaseEventKpiExtractor):
         Extract KPI values for a single AEB MF4 chunk.
         Returns a dict of KPI values to write into kpi_table.
         """
+        signals = self._load_signals(mdf)
+        event = self._detect_event(signals, fname)
+        if event is None:
+            return None
 
-        result = {}
+        aeb_start_idx, aeb_start_time, aeb_end_idx, aeb_end_time, is_veh_stopped = event
+        result = self._build_timing_result(aeb_start_time, aeb_end_time, is_veh_stopped)
 
-        # --- Time vector ---
+        veh_spd = self._vehicle_speed_at_start(signals.ego_speed, aeb_start_idx)
+        result["vehSpd"] = veh_spd
+
+        thd = self._interpolate_thresholds(veh_spd)
+        self._write_thresholds(result, thd)
+        self._run_calculators(mdf, i, aeb_start_idx, aeb_end_idx, thd)
+
+        return result
+
+    def _load_calibratables(self, config):
+        calibratables = {}
+        for internal_name, cfg_key in self._CALIBRATABLE_KEYS.items():
+            if cfg_key in config.calibratables:
+                calibratables[internal_name] = config.calibratables[cfg_key]
+            else:
+                warnings.warn(f"⚠️ Missing calibratable '{cfg_key}' in config.")
+                calibratables[internal_name] = pd.DataFrame()
+        return calibratables
+
+    def _init_calculators(self):
+        self.latency_calc = AebLatencyCalculator(self)
+        self.brake_mode_calc = AebBrakeModeCalculator(self)
+        self.distance_calc = AebDistanceCalculator(self)
+        self.throttle_calc = AebThrottleCalculator(self)
+        self.steering_calc = AebSteeringCalculator(self)
+        self.yaw_rate_calc = AebYawRateCalculator(self)
+        self.lat_accel_calc = AebLatAccelCalculator(self)
+
+    def _load_signals(self, mdf):
         time = self._prepare_time(mdf)
-
-        # --- Signals ---
-        ego_speed     = get_signal(mdf, "egoSpeedKph")
+        ego_speed = get_signal(mdf, "egoSpeedKph")
         aeb_tgt_decel = get_signal(mdf, "aebTargetDecel")
+        return self._AebSignals(time=time, ego_speed=ego_speed, aeb_tgt_decel=aeb_tgt_decel)
 
-        # --- AEB event detection ---
+    def _detect_event(self, signals, fname):
         try:
             aeb_start_idx, aeb_start_time = find_aeb_intv_start(
-                {"aebTargetDecel": aeb_tgt_decel, "time": time},
-                self.pb_tgt_decel
+                {"aebTargetDecel": signals.aeb_tgt_decel, "time": signals.time},
+                self.pb_tgt_decel,
             )
             is_veh_stopped, aeb_end_idx, aeb_end_time = find_aeb_intv_end(
-                {"egoSpeed": ego_speed, "aebTargetDecel": aeb_tgt_decel, "time": time},
+                {"egoSpeed": signals.ego_speed, "aebTargetDecel": signals.aeb_tgt_decel, "time": signals.time},
                 aeb_start_idx,
-                self.aeb_end_thd
+                self.aeb_end_thd,
             )
         except Exception as e:
             warnings.warn(f"[{fname}] AEB event detection failed: {e}")
             return None
 
-        # --- Save timing KPIs (returned to base class as dict) ---
-        result["logTime"]          = safe_scalar(aeb_start_time)
-        result["aebIntvStartTime"] = safe_scalar(aeb_start_time)
-        result["aebIntvEndTime"]   = safe_scalar(aeb_end_time)
-        result["isVehStopped"]     = bool(is_veh_stopped)
+        return aeb_start_idx, aeb_start_time, aeb_end_idx, aeb_end_time, is_veh_stopped
 
-        # Duration KPI
-        if np.isfinite(safe_scalar(aeb_start_time)) and np.isfinite(safe_scalar(aeb_end_time)):
-            result["intvDur"] = round(float(aeb_end_time) - float(aeb_start_time), 3)
+    def _build_timing_result(self, start_time, end_time, is_veh_stopped):
+        result = {
+            "logTime": safe_scalar(start_time),
+            "aebIntvStartTime": safe_scalar(start_time),
+            "aebIntvEndTime": safe_scalar(end_time),
+            "isVehStopped": bool(is_veh_stopped),
+        }
+        duration = self._compute_duration(start_time, end_time)
+        if duration is not None:
+            result["intvDur"] = duration
+        return result
 
-        # --- Vehicle speed at start ---
-        veh_spd = np.nan
-        if aeb_start_idx is not None and aeb_start_idx < len(ego_speed):
-            veh_spd = safe_scalar(ego_speed[aeb_start_idx])
-        result["vehSpd"] = veh_spd
+    def _compute_duration(self, start_time, end_time):
+        start = safe_scalar(start_time)
+        end = safe_scalar(end_time)
+        if np.isfinite(start) and np.isfinite(end):
+            return round(float(end) - float(start), 3)
+        return None
 
-        # --- Threshold interpolation ---
-        thd = Thresholds(
-            steer_ang_th      = interpolate_threshold_clamped(self.calibratables["SteeringWheelAngle_Th"], veh_spd),
-            steer_ang_rate_th = interpolate_threshold_clamped(self.calibratables["AEB_SteeringAngleRate_Override"], veh_spd),
-            pedal_pos_inc_th  = interpolate_threshold_clamped(self.calibratables["PedalPosProIncrease_Th"], veh_spd),
-            yaw_rate_susp_th  = interpolate_threshold_clamped(self.calibratables["YawrateSuspension_Th"], veh_spd),
-            lat_accel_th      = interpolate_threshold_clamped(self.calibratables["LateralAcceleration_th"], veh_spd),
+    def _vehicle_speed_at_start(self, ego_speed, start_idx):
+        if ego_speed is None:
+            return np.nan
+        if start_idx is None:
+            return np.nan
+        if start_idx < len(ego_speed):
+            return safe_scalar(ego_speed[start_idx])
+        return np.nan
+
+    def _interpolate_thresholds(self, veh_spd):
+        return Thresholds(
+            steer_ang_th=interpolate_threshold_clamped(
+                self.calibratables["SteeringWheelAngle_Th"], veh_spd
+            ),
+            steer_ang_rate_th=interpolate_threshold_clamped(
+                self.calibratables["AEB_SteeringAngleRate_Override"], veh_spd
+            ),
+            pedal_pos_inc_th=interpolate_threshold_clamped(
+                self.calibratables["PedalPosProIncrease_Th"], veh_spd
+            ),
+            yaw_rate_susp_th=interpolate_threshold_clamped(
+                self.calibratables["YawrateSuspension_Th"], veh_spd
+            ),
+            lat_accel_th=interpolate_threshold_clamped(
+                self.calibratables["LateralAcceleration_th"], veh_spd
+            ),
         )
 
-        # Save thresholds
-        result["steerAngTh"]     = safe_scalar(thd.steer_ang_th)
-        result["steerAngRateTh"] = safe_scalar(thd.steer_ang_rate_th)
-        result["pedalPosIncTh"]  = safe_scalar(thd.pedal_pos_inc_th)
-        result["yawRateSuspTh"]  = safe_scalar(thd.yaw_rate_susp_th)
-        result["latAccelTh"]     = safe_scalar(thd.lat_accel_th)
+    def _write_thresholds(self, result, thresholds):
+        result["steerAngTh"] = safe_scalar(thresholds.steer_ang_th)
+        result["steerAngRateTh"] = safe_scalar(thresholds.steer_ang_rate_th)
+        result["pedalPosIncTh"] = safe_scalar(thresholds.pedal_pos_inc_th)
+        result["yawRateSuspTh"] = safe_scalar(thresholds.yaw_rate_susp_th)
+        result["latAccelTh"] = safe_scalar(thresholds.lat_accel_th)
 
-        # --- KPI calculators (write directly into kpi_table) ---
-        self.distance_calc.compute_distance(mdf, self.kpi_table, i, aeb_start_idx, aeb_end_idx)
-        self.throttle_calc.compute_throttle(mdf, self.kpi_table, i, aeb_start_idx, thd.pedal_pos_inc_th)
-        self.steering_calc.compute_steering(mdf, self.kpi_table, i, aeb_start_idx, thd.steer_ang_th, thd.steer_ang_rate_th)
-        self.lat_accel_calc.compute_lat_accel(mdf, self.kpi_table, i, aeb_start_idx, thd.lat_accel_th)
-        self.yaw_rate_calc.compute_yaw_rate(mdf, self.kpi_table, i, aeb_start_idx, thd.yaw_rate_susp_th)
-        self.brake_mode_calc.compute_brake_mode(mdf, self.kpi_table, i, aeb_start_idx)
-        self.latency_calc.compute_all(mdf, self.kpi_table, i, aeb_start_idx)
-
-        return result
+    def _run_calculators(self, mdf, index, start_idx, end_idx, thresholds):
+        self.distance_calc.compute_distance(mdf, self.kpi_table, index, start_idx, end_idx)
+        self.throttle_calc.compute_throttle(mdf, self.kpi_table, index, start_idx, thresholds.pedal_pos_inc_th)
+        self.steering_calc.compute_steering(
+            mdf,
+            self.kpi_table,
+            index,
+            start_idx,
+            thresholds.steer_ang_th,
+            thresholds.steer_ang_rate_th,
+        )
+        self.lat_accel_calc.compute_lat_accel(mdf, self.kpi_table, index, start_idx, thresholds.lat_accel_th)
+        self.yaw_rate_calc.compute_yaw_rate(mdf, self.kpi_table, index, start_idx, thresholds.yaw_rate_susp_th)
+        self.brake_mode_calc.compute_brake_mode(mdf, self.kpi_table, index, start_idx)
+        self.latency_calc.compute_all(mdf, self.kpi_table, index, start_idx)

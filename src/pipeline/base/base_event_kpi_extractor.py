@@ -1,6 +1,8 @@
 import os
 import warnings
+
 import numpy as np
+
 from src.utils.signal_mdf import SignalMDF, get_signal
 from src.utils.create_kpi_table import create_kpi_table_from_df
 from src.utils.exporter import export_kpi_to_excel
@@ -18,37 +20,17 @@ class BaseEventKpiExtractor:
 
     FEATURE_NAME = "BASE"
     PARAM_SPECS = {}
+    _EVENT_EXT = ".mf4"
 
     # ------------------------------------------------------------------ #
     def __init__(self, config, event_segmenter, chunk_attr_name, feature_name=None):
-        if config is None or event_segmenter is None:
-            raise ValueError("Both Config and EventSegmenter are required.")
-
-        if not hasattr(event_segmenter, chunk_attr_name):
-            raise TypeError(f"event_segmenter missing required attribute '{chunk_attr_name}'")
-
-        # --- Setup paths ---
-        self.in_path_raw_data  = event_segmenter.in_path_raw_data
-        self.out_path_results  = os.path.join(self.in_path_raw_data, "analysis_results")
-        os.makedirs(self.out_path_results, exist_ok=True)
-
-        self.in_path_extracted = event_segmenter.in_path_extracted
-        self.out_path_chunks = getattr(event_segmenter, chunk_attr_name)
-
-        # ---- Chunked MF4 files (for event-based KPI extraction)
-        self.file_list = [f for f in os.listdir(self.out_path_chunks) if f.endswith(".mf4")]
-        if not self.file_list:
-            raise FileNotFoundError(f"No .mf4 files found in {self.out_path_chunks}")
-
-        # --- KPI table ---
+        self._validate_inputs(config, event_segmenter, chunk_attr_name)
         self.feature_name = feature_name or self.FEATURE_NAME
-        self.kpi_table = create_kpi_table_from_df(config.event_kpi_list, feature=self.feature_name)
-
-        # --- Parameter loading ---
-        self._load_params(config)
-
-        # --- Store config for later use ---
         self.config = config
+        self._init_paths(event_segmenter, chunk_attr_name)
+        self.file_list = self._collect_event_files(self.out_path_chunks)
+        self.kpi_table = self._init_kpi_table(config)
+        self._load_params(config)
 
     # ------------------------------------------------------------------ #
     def _load_params(self, config):
@@ -56,14 +38,16 @@ class BaseEventKpiExtractor:
         cls_name = self.__class__.__name__
         print(f"\n⚙️ Loading parameters for {cls_name}...")
 
-        # 1️⃣ Load defaults from PARAM_SPECS
+        self._apply_param_defaults()
+        self._apply_param_overrides(getattr(config, "params", {}))
+
+    def _apply_param_defaults(self):
         for name, spec in self.PARAM_SPECS.items():
             default_val = spec.get("default")
             setattr(self, name, default_val)
             print(f"   • {name:<18} ← {default_val} (default)")
 
-        # 2️⃣ Apply overrides from config.params (if available)
-        params = getattr(config, "params", {})
+    def _apply_param_overrides(self, params):
         for name, spec in self.PARAM_SPECS.items():
             # try both param name and param_name_<feature>
             keys = [name, f"{name}_{self.feature_name.lower()}"]
@@ -119,9 +103,7 @@ class BaseEventKpiExtractor:
         """
         event_sheet = (sheet_name or self.feature_name).lower()
 
-        filename = getattr(self.config, "kpi_result_filename", "kpi_results.xlsx")
-        output_path = os.path.join(self.out_path_results, filename)
-
+        output_path = self._event_output_path()
         df_main = self.kpi_table.copy()
 
         # Sort BEFORE export
@@ -141,25 +123,50 @@ class BaseEventKpiExtractor:
         """
 
         for i, fname in enumerate(self.file_list):
-            fpath = os.path.join(self.out_path_chunks, fname)
+            self._process_event_file(i, fname)
 
-            # Insert filename label into table
-            self._insert_label(i, fname)
+        self._finalize_event_table()
 
-            # Load MDF
-            mdf = self._load_mdf(fpath)
-            if mdf is None:
-                continue
+    def _validate_inputs(self, config, event_segmenter, chunk_attr_name):
+        if config is None or event_segmenter is None:
+            raise ValueError("Both Config and EventSegmenter are required.")
+        if not hasattr(event_segmenter, chunk_attr_name):
+            raise TypeError(f"event_segmenter missing required attribute '{chunk_attr_name}'")
 
-            # Each subclass handles 1 event file → return dict of KPI values
-            result = self.extract_event_kpis(mdf, fname, i)
-            if result is None:
-                continue
+    def _init_paths(self, event_segmenter, chunk_attr_name):
+        self.in_path_raw_data = event_segmenter.in_path_raw_data
+        self.out_path_results = os.path.join(self.in_path_raw_data, "analysis_results")
+        os.makedirs(self.out_path_results, exist_ok=True)
+        self.in_path_extracted = event_segmenter.in_path_extracted
+        self.out_path_chunks = getattr(event_segmenter, chunk_attr_name)
 
-            # Write dict values into the KPI table
-            for key, value in result.items():
-                self.kpi_table.loc[i, key] = value
+    def _collect_event_files(self, path):
+        files = [f for f in os.listdir(path) if f.endswith(self._EVENT_EXT)]
+        if not files:
+            raise FileNotFoundError(f"No {self._EVENT_EXT} files found in {path}")
+        return files
 
-        # Final cleanup
+    def _init_kpi_table(self, config):
+        return create_kpi_table_from_df(config.event_kpi_list, feature=self.feature_name)
+
+    def _event_output_path(self):
+        filename = getattr(self.config, "kpi_result_filename", "kpi_results.xlsx")
+        return os.path.join(self.out_path_results, filename)
+
+    def _process_event_file(self, index, fname):
+        fpath = os.path.join(self.out_path_chunks, fname)
+        self._insert_label(index, fname)
+        mdf = self._load_mdf(fpath)
+        if mdf is None:
+            return
+
+        result = self.extract_event_kpis(mdf, fname, index)
+        if result is None:
+            return
+
+        for key, value in result.items():
+            self.kpi_table.loc[index, key] = value
+
+    def _finalize_event_table(self):
         self.kpi_table = self.kpi_table.round(3)
         print(f"\n✅ {self.feature_name} Event KPI extraction completed successfully.")
