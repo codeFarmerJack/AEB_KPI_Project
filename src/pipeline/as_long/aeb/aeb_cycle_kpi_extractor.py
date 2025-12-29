@@ -1,7 +1,9 @@
 import os
-import numpy as np
 import warnings
-from pathlib import Path
+from dataclasses import dataclass
+from typing import Optional
+
+import numpy as np
 
 from src.pipeline.base.base_cycle_kpi_extractor import BaseCycleKpiExtractor
 from src.pipeline.as_long.aeb.aeb_cycle_visualizer import AebCycleVisualizer
@@ -11,153 +13,182 @@ from src.utils.process_calibratables import interpolate_threshold_clamped
 
 class AebCycleKpiExtractor(BaseCycleKpiExtractor):
     """
-    Computes AEB availability KPI:
-      - AvailDistPct: percentage of traveled distance where AEB is available
+    Computes AEB availability KPIs over distance:
+      - AvailDistPct: distance % where preconditions allow AEB (aebPrecondBlk == 0)
+      - aebROVAvail: distance % with healthy AEB input (aebInputHealthy == 1)
+      - aebVALAvail: distance % where AEB run setting is active (aebRunSetting == 2)
+      - Suppression breakdowns: distance % exceeding calibrated thresholds for
+        throttle, steering angle/rate, yaw rate, lateral accel, plus low-speed.
     """
 
     FEATURE_NAME = "AEB"
+    _LOW_SPEED_MPS = 2 / 3.6
+    _SIGNAL_SPECS = {
+        "time": ("time", True),
+        "speed_mps": ("egoSpeed", True),
+        "precond_blocked": ("aebPrecondBlk", True),
+        "throttle": ("throttleValue", True),
+        "steer_angle": ("steerWheelAngleDeg", True),
+        "steer_rate": ("steerWheelAngleSpeedDeg", True),
+        "yaw_rate": ("yawRateDeg", True),
+        "lat_accel": ("latActAccel", True),
+        "aeb_input_healthy": ("aebInputHealthy", False),
+        "aeb_run_setting": ("aebRunSetting", False),
+    }
+    _AVAIL_SPECS = (
+        {"key": "AvailDistPct", "signal": "precond_blocked", "op": "eq", "value": 0},
+        {"key": "aebROVAvail", "signal": "aeb_input_healthy", "op": "eq", "value": 1},
+        {"key": "aebVALAvail", "signal": "aeb_run_setting", "op": "eq", "value": 2},
+    )
+    _SUPPRESSION_SPECS = (
+        {"key": "PedalPosProSuppression", "signal": "throttle", "op": "abs_gt", "calibratable": "PedalPosPro_th"},
+        {"key": "SteeringWheelAngle", "signal": "steer_angle", "op": "abs_gt", "calibratable": "SteeringWheelAngle_Th"},
+        {"key": "SteeringWheelAngleRate", "signal": "steer_rate", "op": "abs_gt", "calibratable": "AEB_SteeringAngleRate_Override"},
+        {"key": "YawRate", "signal": "yaw_rate", "op": "abs_gt", "calibratable": "YawrateSuspension_Th"},
+        {"key": "LatAccel", "signal": "lat_accel", "op": "abs_gt", "calibratable": "LateralAcceleration_th"},
+        {"key": "LowSpeed", "signal": "speed_mps", "op": "lt", "threshold": _LOW_SPEED_MPS},
+    )
 
     def __init__(self, input_handler, config):
         super().__init__(input_handler, config)
 
+    @dataclass(frozen=True)
+    class _AebSignals:
+        time: np.ndarray
+        speed_mps: np.ndarray
+        precond_blocked: np.ndarray
+        throttle: np.ndarray
+        steer_angle: np.ndarray
+        steer_rate: np.ndarray
+        yaw_rate: np.ndarray
+        lat_accel: np.ndarray
+        aeb_input_healthy: Optional[np.ndarray]
+        aeb_run_setting: Optional[np.ndarray]
+
     def extract_cycle_kpis(self, mdf, fname):
         """
-        Availability condition:
-            Feature is available only when NONE of the suppression masks are true.
+        Compute distance-weighted AEB KPIs from cycle signals.
 
-        Suppression reasons (distance % each):
-            - PedalPosProSuppression: throttleValue > PedalPosPro_th(egoSpd)
-            - SteeringWheelAngle: steerWheelAngle > SteeringWheelAngle_Th(egoSpd)
-            - SteeringWheelAngleRate: steerWheelAngleSpeed > AEB_SteeringAngleRate_Override(egoSpd)
-            - YawRate: yawRate > YawrateSuspension_Th(egoSpd)
-            - LatAccel: latActAccel > LateralAcceleration_th(egoSpd)
-            - aebPrecondBlk != 0 (if provided)
+        Availability metrics are computed as distance percentages:
+          - AvailDistPct: preconditions allow AEB (aebPrecondBlk == 0).
+          - aebROVAvail: AEB input health is OK (aebInputHealthy == 1).
+          - aebVALAvail: AEB run setting is active (aebRunSetting == 2).
+
+        Suppression breakdowns (distance % where |signal| exceeds threshold):
+          - PedalPosProSuppression: throttleValue vs PedalPosPro_th(egoSpd)
+          - SteeringWheelAngle: steerWheelAngleDeg vs SteeringWheelAngle_Th(egoSpd)
+          - SteeringWheelAngleRate: steerWheelAngleSpeedDeg vs AEB_SteeringAngleRate_Override(egoSpd)
+          - YawRate: yawRateDeg vs YawrateSuspension_Th(egoSpd)
+          - LatAccel: latActAccel vs LateralAcceleration_th(egoSpd)
+          - LowSpeed: egoSpeed < 2 km/h (2/3.6 m/s)
+
+        Calibrated thresholds are interpolated per-sample using ego speed.
         """
-        try:
-            time              = get_signal(mdf, "time", required=True)
-            speed_mps         = get_signal(mdf, "egoSpeed", required=True)
-            precond_blocked   = get_signal(mdf, "aebPrecondBlk", required=True)
-            throttle          = get_signal(mdf, "throttleValue", required=True)
-            steer_angle       = get_signal(mdf, "steerWheelAngleDeg", required=True)
-            steer_rate        = get_signal(mdf, "steerWheelAngleSpeedDeg", required=True)
-            yaw_rate          = get_signal(mdf, "yawRateDeg", required=True)
-            lat_accel         = get_signal(mdf, "latActAccel", required=True)
-            aeb_input_healthy = get_signal(mdf, "aebInputHealthy", required=False)
-            aeb_run_setting   = get_signal(mdf, "aebRunSetting", required=False)
-            
-        except AttributeError as e:
-            warnings.warn(f"Missing required AEB signal: {e}")
+        signals = self._load_signals(mdf)
+        if signals is None:
             return {}
 
-        # distance traveled per sample
-        dt = np.diff(time, prepend=time[0])
-        dt = np.maximum(dt, 0.0)
-
-        dist       = speed_mps * dt
-        total_dist = dist.sum()
-
-        def _dist_pct_mask(mask):
-            if mask is None:
-                return np.nan
-            mask = np.asarray(mask, bool)
-            return float(np.sum(dist[mask]) / total_dist * 100)
-
-
-        # KPI keys (include suppression breakdowns)
-        kpi_keys = [
-            "AvailDistPct",
-            "aebROVAvail",
-            "aebVALAvail",
-            "PedalPosProSuppression",
-            "SteeringWheelAngle",
-            "SteeringWheelAngleRate",
-            "YawRate",
-            "LatAccel",
-            "LowSpeed",
-        ]
-
+        dist, total_dist = self._compute_distance(signals.time, signals.speed_mps)
         if total_dist <= 0:
             warnings.warn("⚠️ Total distance is zero; availability cannot be computed.")
-            return {self.FEATURE_NAME: {k: 0.0 for k in kpi_keys}}
+            return {self.FEATURE_NAME: {k: 0.0 for k in self._kpi_keys()}}
 
-        def _dist_pct_lt(signal, thresh):
-            if signal is None or thresh is None:
-                return np.nan
+        metrics = {}
+        metrics.update(self._compute_availability(signals, dist, total_dist))
+        metrics.update(self._compute_suppressions(signals, dist, total_dist))
 
-            s = np.asarray(signal, float)
-            mask = s < thresh
+        metrics = self._round_metrics(metrics, digits=2)
+        return {self.FEATURE_NAME: metrics}
 
-            return float(np.sum(dist[mask]) / total_dist * 100)
-
-        # ----- Suppression metrics ----- #
-        def _dist_pct(signal, thresh):
-            if signal is None or thresh is None:
-                return np.nan
-
-            # Convert to numpy arrays
-            s = np.asarray(signal, dtype=float)
-            t = np.asarray(thresh, dtype=float)
-
-            # Magnitude-based suppression check
-            mask = np.abs(s) > t
-
-            return float(np.sum(dist[mask]) / total_dist * 100)
-
-        suppress_pct = {}
-
-        # Threshold-based suppressions (vectorized per-sample interpolation)
-        def _safe_interp(name):
-            cal = (self.config.calibratables or {}).get(name)
-            if cal is None:
-                return None
+    def _load_signals(self, mdf):
+        missing = []
+        values = {}
+        for field, (mdf_name, required) in self._SIGNAL_SPECS.items():
             try:
-                return interpolate_threshold_clamped(cal, speed_mps)
-            except Exception as e:
-                warnings.warn(f"⚠️ Failed to interpolate calibratable '{name}': {e}")
-                return None
+                values[field] = get_signal(mdf, mdf_name, required=required)
+            except AttributeError:
+                if required:
+                    missing.append(mdf_name)
+                values[field] = None
 
-        pedal_thd      = _safe_interp("PedalPosPro_th")
-        steer_thd      = _safe_interp("SteeringWheelAngle_Th")
-        steer_rate_thd = _safe_interp("AEB_SteeringAngleRate_Override")
-        yaw_rate_thd   = _safe_interp("YawrateSuspension_Th")
-        lat_accel_thd  = _safe_interp("LateralAcceleration_th")
+        if missing:
+            warnings.warn(f"Missing required AEB signals: {', '.join(missing)}")
+            return None
 
-        suppress_pct["PedalPosProSuppression"] = round(_dist_pct(throttle, pedal_thd), 2) if throttle is not None and pedal_thd is not None else np.nan
-        suppress_pct["SteeringWheelAngle"]     = round(_dist_pct(steer_angle, steer_thd), 2) if steer_angle is not None and steer_thd is not None else np.nan
-        suppress_pct["SteeringWheelAngleRate"] = round(_dist_pct(steer_rate, steer_rate_thd), 2) if steer_rate is not None and steer_rate_thd is not None else np.nan
-        suppress_pct["YawRate"]                = round(_dist_pct(yaw_rate, yaw_rate_thd), 2) if yaw_rate is not None and yaw_rate_thd is not None else np.nan
-        suppress_pct["LatAccel"]               = round(_dist_pct(lat_accel, lat_accel_thd), 2) if lat_accel is not None and lat_accel_thd is not None else np.nan
-        suppress_pct["LowSpeed"]               = round(_dist_pct_lt(speed_mps, 2/3.6), 2)
+        return self._AebSignals(**values)
 
-        # --- Feature availability (precondition-based) ---
-        if precond_blocked is not None:
-            precond_mask = (precond_blocked == 0)
-            aeb_precond_avail = round(_dist_pct_mask(precond_mask), 2)
-        else:
-            aeb_precond_avail = np.nan
+    def _compute_distance(self, time, speed_mps):
+        dt = np.diff(time, prepend=time[0])
+        dt = np.maximum(dt, 0.0)
+        dist = speed_mps * dt
+        return dist, float(dist.sum())
 
-        # --- ROV availability ---
-        if aeb_input_healthy is not None:
-            rov_mask = (aeb_input_healthy == 1)
-            aeb_rov_avail = round(_dist_pct_mask(rov_mask), 2)
-        else:
-            aeb_rov_avail = np.nan
+    def _kpi_keys(self):
+        return [spec["key"] for spec in self._AVAIL_SPECS + self._SUPPRESSION_SPECS]
 
-        # --- VAL availability ---
-        if aeb_run_setting is not None:
-            val_mask = (aeb_run_setting == 2)
-            aeb_val_avail = round(_dist_pct_mask(val_mask), 2)
-        else:
-            aeb_val_avail = np.nan
+    def _interp_calibratable(self, name, speed_mps):
+        cal = (self.config.calibratables or {}).get(name)
+        if cal is None:
+            return None
+        try:
+            return interpolate_threshold_clamped(cal, speed_mps)
+        except Exception as e:
+            warnings.warn(f"⚠️ Failed to interpolate calibratable '{name}': {e}")
+            return None
 
-        metrics = {
-            "AvailDistPct": aeb_precond_avail,
-            "aebROVAvail": aeb_rov_avail,
-            "aebVALAvail": aeb_val_avail,
-            **suppress_pct,
-        }
+    def _mask_for_op(self, signal, threshold, op):
+        if signal is None or threshold is None:
+            return None
 
-        return {self.FEATURE_NAME: {k: metrics.get(k, None) for k in kpi_keys}}
+        s = np.asarray(signal, dtype=float)
+        t = np.asarray(threshold, dtype=float)
+
+        if op == "abs_gt":
+            return np.abs(s) > t
+        if op == "lt":
+            return s < t
+        if op == "eq":
+            return s == t
+        raise ValueError(f"Unsupported op '{op}'")
+
+    def _dist_pct_from_mask(self, dist, total_dist, mask):
+        if mask is None or total_dist <= 0:
+            return np.nan
+        mask = np.asarray(mask, bool)
+        return float(np.sum(dist[mask]) / total_dist * 100)
+
+    def _compute_availability(self, signals, dist, total_dist):
+        metrics = {}
+        for spec in self._AVAIL_SPECS:
+            signal = getattr(signals, spec["signal"])
+            mask = self._mask_for_op(signal, spec["value"], spec["op"])
+            metrics[spec["key"]] = self._dist_pct_from_mask(dist, total_dist, mask)
+        return metrics
+
+    def _compute_suppressions(self, signals, dist, total_dist):
+        metrics = {}
+        for spec in self._SUPPRESSION_SPECS:
+            signal = getattr(signals, spec["signal"])
+            if "calibratable" in spec:
+                threshold = self._interp_calibratable(spec["calibratable"], signals.speed_mps)
+            else:
+                threshold = spec.get("threshold")
+            mask = self._mask_for_op(signal, threshold, spec["op"])
+            metrics[spec["key"]] = self._dist_pct_from_mask(dist, total_dist, mask)
+        return metrics
+
+    def _round_metrics(self, metrics, digits=2):
+        return {k: self._round_pct(v, digits) for k, v in metrics.items()}
+
+    def _round_pct(self, value, digits):
+        if value is None:
+            return np.nan
+        try:
+            if np.isnan(value):
+                return np.nan
+        except TypeError:
+            return value
+        return float(np.round(value, digits))
 
     # ------------------------------------------------------------------ #
     def render_cycle_dashboards(self, feature_name: str = "AEB"):

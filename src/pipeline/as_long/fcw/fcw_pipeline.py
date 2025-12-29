@@ -4,7 +4,9 @@ from src.pipeline.as_long.fcw.fcw_event_segmenter import FcwEventSegmenter
 from src.pipeline.as_long.fcw.fcw_event_kpi_extractor import FcwEventKpiExtractor
 from src.pipeline.as_long.fcw.fcw_cycle_kpi_extractor import FcwCycleKpiExtractor
 import os
-from src.pipeline.as_long.fcw.fcw_visualizer import FcwEventVisualizer, FcwCycleVisualizer
+
+from src.pipeline.as_long.fcw.fcw_cycle_visualizer import FcwCycleVisualizer
+from src.pipeline.as_long.fcw.fcw_event_visualizer import FcwEventVisualizer
 
 
 class FcwPipeline(BasePipeline):
