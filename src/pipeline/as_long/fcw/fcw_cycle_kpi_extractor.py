@@ -1,57 +1,193 @@
-import numpy as np
 import warnings
+from dataclasses import dataclass
+from typing import Optional
+
+import numpy as np
 
 from src.pipeline.base.base_cycle_kpi_extractor import BaseCycleKpiExtractor
 from src.utils.signal_mdf import get_signal
+from src.utils.process_calibratables import interpolate_threshold_clamped
 
 
 class FcwCycleKpiExtractor(BaseCycleKpiExtractor):
     """
-    Computes FCW availability KPI:
-      - AvailDistPct: percentage of traveled distance where FCW is enabled
-      - runSetting/inputHealthy/precondBlk/abort: distance-weighted condition percentages
+    Computes FCW availability KPIs over distance:
+      - AvailDistPct: distance % where preconditions allow FCW (fcwPrecondBlk == 0)
+      - ROVAvail: distance % with healthy AEB input (aebInputHealthy == 1)
+      - VALAvail: distance % where FCW run setting is active (fcwRunSetting == 2)
+      - Suppression breakdowns: distance % exceeding calibrated thresholds for
+        throttle, steering angle/rate, yaw rate, lateral accel.
+      - LowSpeed is always available for FCW (0% suppression).
     """
 
     FEATURE_NAME = "FCW"
+    _SIGNAL_SPECS = {
+        "time": ("time", True),
+        "speed_mps": ("egoSpeed", True),
+        "precond_blocked": ("fcwPrecondBlk", True),
+        "throttle": ("throttleValue", True),
+        "steer_angle": ("steerWheelAngleDeg", True),
+        "steer_rate": ("steerWheelAngleSpeedDeg", True),
+        "yaw_rate": ("yawRateDeg", True),
+        "lat_accel": ("latActAccel", True),
+        "aeb_input_healthy": ("aebInputHealthy", False),
+        "fcw_run_setting": ("fcwRunSetting", False),
+    }
+    _AVAIL_SPECS = (
+        {"key": "AvailDistPct", "signal": "precond_blocked", "op": "eq", "value": 0},
+        {"key": "ROVAvail", "signal": "aeb_input_healthy", "op": "eq", "value": 1},
+        {"key": "VALAvail", "signal": "fcw_run_setting", "op": "eq", "value": 2},
+    )
+    _SUPPRESSION_SPECS = (
+        {"key": "PedalPosProSuppression", "signal": "throttle", "op": "abs_gt", "calibratable": "PedalPosPro_th"},
+        {"key": "SteeringWheelAngle", "signal": "steer_angle", "op": "abs_gt", "calibratable": "SteeringWheelAngle_Th"},
+        {"key": "SteeringWheelAngleRate", "signal": "steer_rate", "op": "abs_gt", "calibratable": "AEB_SteeringAngleRate_Override"},
+        {"key": "YawRate", "signal": "yaw_rate", "op": "abs_gt", "calibratable": "YawrateSuspension_Th"},
+        {"key": "LatAccel", "signal": "lat_accel", "op": "abs_gt", "calibratable": "LateralAcceleration_th"},
+        {"key": "LowSpeed", "always": True},
+    )
 
     def __init__(self, input_handler, config):
         super().__init__(input_handler, config)
 
+    @dataclass(frozen=True)
+    class _FcwSignals:
+        time: np.ndarray
+        speed_mps: np.ndarray
+        precond_blocked: np.ndarray
+        throttle: np.ndarray
+        steer_angle: np.ndarray
+        steer_rate: np.ndarray
+        yaw_rate: np.ndarray
+        lat_accel: np.ndarray
+        aeb_input_healthy: Optional[np.ndarray]
+        fcw_run_setting: Optional[np.ndarray]
+
     def extract_cycle_kpis(self, mdf, fname):
         """
-        Availability condition (mirrors AEB pattern):
-            fcwPrecondBlk  == 0  
-        Missing signals will be treated as permissive (healthy/precond/abort) with a warning.
+        Compute distance-weighted FCW KPIs from cycle signals.
+
+        Availability metrics are computed as distance percentages:
+          - AvailDistPct: preconditions allow FCW (fcwPrecondBlk == 0).
+          - ROVAvail: AEB input health is OK (aebInputHealthy == 1).
+          - VALAvail: FCW run setting is active (fcwRunSetting == 2).
+
+        Suppression breakdowns (distance % where |signal| exceeds threshold):
+          - PedalPosProSuppression: throttleValue vs PedalPosPro_th(egoSpd)
+          - SteeringWheelAngle: steerWheelAngleDeg vs SteeringWheelAngle_Th(egoSpd)
+          - SteeringWheelAngleRate: steerWheelAngleSpeedDeg vs AEB_SteeringAngleRate_Override(egoSpd)
+          - YawRate: yawRateDeg vs YawrateSuspension_Th(egoSpd)
+          - LatAccel: latActAccel vs LateralAcceleration_th(egoSpd)
+          - LowSpeed: always available for FCW (0% suppression)
+
+        Calibrated thresholds are interpolated per-sample using ego speed.
         """
-        try:
-            time            = get_signal(mdf, "time", required=True)
-            speed_mps       = get_signal(mdf, "egoSpeed", required=True)
-            precond_blocked = get_signal(mdf, "fcwPrecondBlk", required=True)
-        except AttributeError as e:
-            warnings.warn(f"Missing required FCW signal: {e}")
+        signals = self._load_signals(mdf)
+        if signals is None:
             return {}
 
-        # distance traveled per sample
+        dist, total_dist = self._compute_distance(signals.time, signals.speed_mps)
+        if total_dist <= 0:
+            warnings.warn("⚠️ Total distance is zero; availability cannot be computed.")
+            return {self.FEATURE_NAME: {k: 0.0 for k in self._kpi_keys()}}
+
+        metrics = {}
+        metrics.update(self._compute_availability(signals, dist, total_dist))
+        metrics.update(self._compute_suppressions(signals, dist, total_dist))
+
+        metrics = self._round_metrics(metrics, digits=2)
+        return {self.FEATURE_NAME: metrics}
+
+    def _load_signals(self, mdf):
+        missing = []
+        values = {}
+        for field, (mdf_name, required) in self._SIGNAL_SPECS.items():
+            try:
+                values[field] = get_signal(mdf, mdf_name, required=required)
+            except AttributeError:
+                if required:
+                    missing.append(mdf_name)
+                values[field] = None
+
+        if missing:
+            warnings.warn(f"Missing required FCW signals: {', '.join(missing)}")
+            return None
+
+        return self._FcwSignals(**values)
+
+    def _compute_distance(self, time, speed_mps):
         dt = np.diff(time, prepend=time[0])
         dt = np.maximum(dt, 0.0)
+        dist = speed_mps * dt
+        return dist, float(dist.sum())
 
-        dist       = speed_mps * dt
-        total_dist = dist.sum()
+    def _kpi_keys(self):
+        return [spec["key"] for spec in self._AVAIL_SPECS + self._SUPPRESSION_SPECS]
 
-        # Only keep overall availability
-        kpi_keys = ["AvailDistPct"]
+    def _interp_calibratable(self, name, speed_mps):
+        cal = (self.config.calibratables or {}).get(name)
+        if cal is None:
+            return None
+        try:
+            return interpolate_threshold_clamped(cal, speed_mps)
+        except Exception as e:
+            warnings.warn(f"⚠️ Failed to interpolate calibratable '{name}': {e}")
+            return None
 
-        if total_dist <= 0:
-            warnings.warn("⚠️ Total distance is zero; FCW availability cannot be computed.")
-            return {self.FEATURE_NAME: {k: 0.0 for k in kpi_keys}}
+    def _mask_for_op(self, signal, threshold, op):
+        if signal is None or threshold is None:
+            return None
 
-        cond_precond  = precond_blocked == 0
-        avail_mask = cond_precond
+        s = np.asarray(signal, dtype=float)
+        t = np.asarray(threshold, dtype=float)
 
-        enabled_dist    = np.sum(dist[avail_mask])
-        pct_avail       = enabled_dist / total_dist * 100
-        metrics = {
-            "AvailDistPct": round(pct_avail, 2),
-        }
+        if op == "abs_gt":
+            return np.abs(s) > t
+        if op == "lt":
+            return s < t
+        if op == "eq":
+            return s == t
+        raise ValueError(f"Unsupported op '{op}'")
 
-        return {self.FEATURE_NAME: {k: metrics.get(k, None) for k in kpi_keys}}
+    def _dist_pct_from_mask(self, dist, total_dist, mask):
+        if mask is None or total_dist <= 0:
+            return np.nan
+        mask = np.asarray(mask, bool)
+        return float(np.sum(dist[mask]) / total_dist * 100)
+
+    def _compute_availability(self, signals, dist, total_dist):
+        metrics = {}
+        for spec in self._AVAIL_SPECS:
+            signal = getattr(signals, spec["signal"])
+            mask = self._mask_for_op(signal, spec["value"], spec["op"])
+            metrics[spec["key"]] = self._dist_pct_from_mask(dist, total_dist, mask)
+        return metrics
+
+    def _compute_suppressions(self, signals, dist, total_dist):
+        metrics = {}
+        for spec in self._SUPPRESSION_SPECS:
+            if spec.get("always"):
+                metrics[spec["key"]] = 0.0
+                continue
+
+            signal = getattr(signals, spec["signal"])
+            if "calibratable" in spec:
+                threshold = self._interp_calibratable(spec["calibratable"], signals.speed_mps)
+            else:
+                threshold = spec.get("threshold")
+            mask = self._mask_for_op(signal, threshold, spec["op"])
+            metrics[spec["key"]] = self._dist_pct_from_mask(dist, total_dist, mask)
+        return metrics
+
+    def _round_metrics(self, metrics, digits=2):
+        return {k: self._round_pct(v, digits) for k, v in metrics.items()}
+
+    def _round_pct(self, value, digits):
+        if value is None:
+            return np.nan
+        try:
+            if np.isnan(value):
+                return np.nan
+        except TypeError:
+            return value
+        return float(np.round(value, digits))
