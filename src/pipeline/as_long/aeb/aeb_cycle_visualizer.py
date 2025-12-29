@@ -1,6 +1,5 @@
 import os
 
-import numpy as np
 import plotly.io as pio
 
 from src.viz.visualizers.base_cycle_visualizer import BaseCycleVisualizer
@@ -121,70 +120,67 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 ],
             },
         ]
-    
+    layout_top = {
+        "rows": 1,
+        "cols": 3,
+        "column_widths": [0.45, 0.25, 0.30],
+        "horizontal_spacing": 0.10,
+        "vertical_spacing": 0.00,
+        "margins": {"l": 20, "r": 20, "t": 2, "b": 8},
+    }
+    fig_top_titles = [
+        "Path (colored by speed)",
+        "AEB Availability",
+        "AEB Suppression Breakdown",
+    ]
+    availability_defs = [
+        ("Precond", "AvailDistPct", "#4c6ef5"),
+        ("ROV", "ROVAvail", "#40c057"),
+        ("VAL", "VALAvail", "#fab005"),
+    ]
+    suppression_patterns = [
+        "SteeringWheelAngleRate",
+        "SteeringWheelAngle",
+        "PedalPosProSuppression",
+        "LatAccel",
+        "YawRate",
+        "LowSpeed",
+    ]
+    state_colors = {
+        "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_UNSPECIFIED": "#adb5bd",
+        "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_READY": "#51cf66",
+        "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_ACTIVE": "#ff6b6b",
+        "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_HOLD": "#ffd43b",
+        "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_UNAVAILABLE": "#868e96",
+        "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_DEGRADED": "#ffa94d",
+    }
+    default_state_color = "#adb5bd"
+    state_defs = [
+        {
+            "signal_name": "aebFullState",
+            "label_prefix": "aeb-fb",
+            "offset_scale": 0.008,
+        },
+        {
+            "signal_name": "aebPartialState",
+            "label_prefix": "aeb-pb",
+            "offset_scale": 0.014,
+        },
+    ]
+    bottom_row_height_px = 70
+    bottom_row_gap_px = 0
+    bottom_min_height_px = 650
+    bottom_legend_pad_px = 12
+    bottom_legend_item_gap = -6
+    bottom_legend_gutter_px = 160
+    bottom_legend_left_pct = 91
+    bottom_slider_height_px = 16
+    bottom_slider_label_gap_px = 30
+    bottom_slider_margin_px = 20
+
     def __init__(self, out_dir: str):
-        # Initialize with feature-specific signal candidates
         super().__init__(out_dir)
-        self.layout_top = {
-            "rows": 1,
-            "cols": 3,
-            "column_widths": [0.45, 0.25, 0.30],
-            "horizontal_spacing": 0.10,
-            "vertical_spacing": 0.00,
-            "margins": {"l": 20, "r": 20, "t": 2, "b": 8},
-        }
-        self.fig_top_titles = [
-            "Path (colored by speed)",
-            "AEB Availability",
-            "AEB Suppression Breakdown",
-        ]
-        self.availability_defs = [
-            ("Precond", "AvailDistPct", "#4c6ef5"),
-            ("ROV", "ROVAvail", "#40c057"),
-            ("VAL", "VALAvail", "#fab005"),
-        ]
-        self.suppression_patterns = [
-            "SteeringWheelAngleRate",
-            "SteeringWheelAngle",
-            "PedalPosProSuppression",
-            "LatAccel",
-            "YawRate",
-            "LowSpeed",
-        ]
-        self.state_colors = {
-            "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_UNSPECIFIED": "#adb5bd",
-            "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_READY": "#51cf66",
-            "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_ACTIVE": "#ff6b6b",
-            "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_HOLD": "#ffd43b",
-            "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_UNAVAILABLE": "#868e96",
-            "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_DEGRADED": "#ffa94d",
-        }
-        self.default_state_color = "#adb5bd"
-        self.state_defs = [
-            {
-                "signal_name": "aebFullState",
-                "label_prefix": "aeb-fb",
-                "offset_scale": 0.008,
-            },
-            {
-                "signal_name": "aebPartialState",
-                "label_prefix": "aeb-pb",
-                "offset_scale": 0.014,
-            },
-        ]
-        self.html_gap_px = 5                 # Vertical gap between top and bottom figures (px)
-        self.bottom_row_height_px = 70       # Base height per signal row before scaling (px)
-        self.bottom_row_gap_px = 0           # Gap between adjacent signal rows (px)
-        self.bottom_min_height_px = 650      # Minimum total height of bottom figure (px)
-
-        self.bottom_legend_pad_px = 12       # Padding above each row reserved for legend (px)
-        self.bottom_legend_item_gap = -6     # Spacing between legend items (px, negative = compact)
-        self.bottom_legend_gutter_px = 160   # Right-side gutter reserved for legends (px)
-        self.bottom_legend_left_pct = 91     # Legend anchor position from left (%)
-
-        self.bottom_slider_height_px = 16    # Height of time-range slider bar (px)
-        self.bottom_slider_label_gap_px = 30 # Gap between x-axis labels and slider (px)
-        self.bottom_slider_margin_px = 20    # Bottom margin below slider (px)
+        self.html_gap_px = 5  # Vertical gap between top and bottom figures (px)
 
         enum_file = get_resource("config/enum_definitions.yaml")
         self.enum_mapper = EnumMapper(enum_file)

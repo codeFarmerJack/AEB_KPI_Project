@@ -27,45 +27,100 @@ class BaseCycleVisualizer:
         "lat": ["latitude"],
         "speed": ["egoSpeedKph"],
     }
+    DEFAULT_LAYOUT_PARAMS = {
+        "rows": 2,
+        "cols": 3,
+        "shared_xaxes": False,
+        "column_widths": [0.55, 0.10, 0.35],
+        "row_heights": [0.6, 0.4],
+        "horizontal_spacing": 0.13,
+        "vertical_spacing": 0.05,
+        "margins": {"l": 40, "r": 40, "t": 60, "b": 40},
+        "specs": [
+            [{"type": "xy"}, {"type": "xy"}, {"type": "xy"}],
+            [{"type": "xy", "colspan": 3}, None, None],
+        ],
+        "subplot_titles": (
+            "Path (colored by speed)",
+            "Availability",
+            "Suppression Breakdown",
+            "Signals",
+        ),
+    }
+    DEFAULT_TOP_LAYOUT = {
+        "rows": 1,
+        "cols": 3,
+        "column_widths": [0.45, 0.25, 0.30],
+        "horizontal_spacing": 0.10,
+        "vertical_spacing": 0.00,
+        "margins": {"l": 20, "r": 20, "t": 2, "b": 8},
+    }
+    DEFAULT_TOP_TITLES = [
+        "Path (colored by speed)",
+        "Availability",
+        "Suppression Breakdown",
+    ]
+    DEFAULT_AVAILABILITY_DEFS = [
+        ("Availability", "AvailDistPct", "#4c6ef5"),
+    ]
+    DEFAULT_SUPPRESSION_PATTERNS = [
+        "PedalPosProSuppression",
+        "SteeringWheelAngle",
+        "SteeringWheelAngleRate",
+        "YawRate",
+        "LatAccel",
+        "LowSpeed",
+    ]
+    DEFAULT_SPEED_COLOR_RANGE = (0, 120)
+    DEFAULT_SPEED_COLORBAR_TITLE = "Speed [kph]"
+    DEFAULT_PATH_SMOOTHING = {
+        "enabled": True,
+        "sigma": 1.5,
+        "min_points": 10,
+    }
+    DEFAULT_BOTTOM_CONFIG = {
+        "bottom_row_height_px": 70,
+        "bottom_row_gap_px": 16,
+        "bottom_min_height_px": 650,
+        "bottom_legend_pad_px": 12,
+        "bottom_legend_item_gap": 0,
+        "bottom_legend_gutter_px": 120,
+        "bottom_legend_left_pct": 88,
+        "bottom_slider_height_px": 16,
+        "bottom_slider_label_gap_px": 10,
+        "bottom_slider_margin_px": 6,
+        "bottom_round_decimals": 2,
+        "bottom_max_points": 5000,
+    }
 
     def __init__(self, out_dir: str):
         self.out_dir = out_dir
         os.makedirs(self.out_dir, exist_ok=True)
-        # default mapping of logical signal names to candidate mdf channels
         self.signal_candidates = self._build_signal_candidates_from_rows()
-        # default layout params 
-        self.layout_params = {
-            "rows": 2,
-            "cols": 3,
-            "shared_xaxes": False,
-            "column_widths": [0.55, 0.10, 0.35],
-            "row_heights": [0.6, 0.4],
-            "horizontal_spacing": 0.13,
-            "vertical_spacing": 0.05,
-            "margins": {"l": 40, "r": 40, "t": 60, "b": 40},
-            "specs": [
-                [{"type": "xy"}, {"type": "xy"}, {"type": "xy"}],
-                [{"type": "xy", "colspan": 3}, None, None],
-            ],
-            "subplot_titles": (
-                "Path (colored by speed)",
-                "Availability",
-                "Suppression Breakdown",
-                "Signals",
-            ),
-        }
-        self.bottom_row_height_px = 70
-        self.bottom_row_gap_px = 16
-        self.bottom_min_height_px = 650
-        self.bottom_legend_pad_px = 12
-        self.bottom_legend_item_gap = 0
-        self.bottom_legend_gutter_px = 120
-        self.bottom_legend_left_pct = 88
-        self.bottom_slider_height_px = 16
-        self.bottom_slider_label_gap_px = 10
-        self.bottom_slider_margin_px = 6
-        self.bottom_round_decimals = 2
-        self.bottom_max_points = 5000
+        self.layout_params = dict(
+            getattr(self, "layout_params", None) or self.DEFAULT_LAYOUT_PARAMS
+        )
+        self.layout_top = dict(getattr(self, "layout_top", None) or self.DEFAULT_TOP_LAYOUT)
+        self.fig_top_titles = list(getattr(self, "fig_top_titles", None) or self.DEFAULT_TOP_TITLES)
+        self.availability_defs = list(
+            getattr(self, "availability_defs", None) or self.DEFAULT_AVAILABILITY_DEFS
+        )
+        self.suppression_patterns = list(
+            getattr(self, "suppression_patterns", None) or self.DEFAULT_SUPPRESSION_PATTERNS
+        )
+        self.state_defs = list(getattr(self, "state_defs", None) or [])
+        self.state_colors = dict(getattr(self, "state_colors", None) or {})
+        self.default_state_color = getattr(self, "default_state_color", "#adb5bd")
+        self.path_smoothing = dict(
+            getattr(self, "path_smoothing", None) or self.DEFAULT_PATH_SMOOTHING
+        )
+        self.speed_color_range = getattr(self, "speed_color_range", None) or self.DEFAULT_SPEED_COLOR_RANGE
+        self.speed_colorbar_title = getattr(
+            self,
+            "speed_colorbar_title",
+            self.DEFAULT_SPEED_COLORBAR_TITLE,
+        )
+        self._init_bottom_config()
 
     # ------------------------------------------------------------------ #
     # Overridable hooks
@@ -103,6 +158,128 @@ class BaseCycleVisualizer:
 
         return {key: pick(vals) for key, vals in candidates.items()}
 
+    def _init_bottom_config(self):
+        for key, default in self.DEFAULT_BOTTOM_CONFIG.items():
+            setattr(self, key, getattr(self, key, default))
+
+    def _collect_availability_values(self, kpi_row):
+        labels = []
+        values = []
+        colors = []
+        for label, key, color in self.availability_defs:
+            val = kpi_row.get(key)
+            if val is None:
+                continue
+            labels.append(label)
+            values.append(val)
+            colors.append(color)
+        return labels, values, colors
+
+    def _collect_suppression_values(self, kpi_row):
+        reason_keys = [p for p in self.suppression_patterns if p in kpi_row]
+        values = [kpi_row.get(k, 0) for k in reason_keys]
+        return reason_keys, values
+
+    def _smooth_path(self, lon_arr, lat_arr):
+        smoothing = self.path_smoothing or {}
+        enabled = smoothing.get("enabled", True)
+        min_points = smoothing.get("min_points", 10)
+        sigma = smoothing.get("sigma", 1.5)
+
+        if not enabled:
+            return lon_arr, lat_arr
+        if len(lon_arr) <= min_points:
+            return lon_arr, lat_arr
+        if not (np.isfinite(lon_arr).any() and np.isfinite(lat_arr).any()):
+            return lon_arr, lat_arr
+        try:
+            from scipy.ndimage import gaussian_filter1d
+        except Exception:
+            return lon_arr, lat_arr
+
+        return gaussian_filter1d(lon_arr, sigma=sigma), gaussian_filter1d(lat_arr, sigma=sigma)
+
+    def _add_state_overlays(self, fig, lon_to_plot, lat_to_plot, signals):
+        if not self.state_defs:
+            return
+        seen_legend = set()
+        for state_def in self.state_defs:
+            signal_name = state_def.get("signal_name")
+            if not signal_name:
+                continue
+            state_values = signals.get(signal_name)
+            if state_values is None:
+                continue
+            label_prefix = state_def.get("label_prefix", signal_name)
+            offset_scale = state_def.get("offset_scale", 0.01)
+            self._add_offset_path(
+                fig,
+                lon_to_plot,
+                lat_to_plot,
+                signal_name,
+                state_values,
+                label_prefix,
+                offset_scale,
+                self.state_colors,
+                self.default_state_color,
+                seen_legend,
+            )
+
+    def _add_path_subplot(self, fig, signals, row=1, col=1):
+        lon = signals.get("lon")
+        lat = signals.get("lat")
+        spd = signals.get("speed")
+        if lon is None or lat is None or spd is None:
+            return None
+
+        lon_arr = np.asarray(lon, dtype=float)
+        lat_arr = np.asarray(lat, dtype=float)
+        spd_arr = np.asarray(spd, dtype=float)
+
+        lon_to_plot, lat_to_plot = self._smooth_path(lon_arr, lat_arr)
+        fig.add_trace(
+            go.Scatter(
+                x=lon_to_plot,
+                y=lat_to_plot,
+                mode="lines+markers",
+                marker=dict(size=3, color=spd_arr, coloraxis="coloraxis"),
+                line=dict(width=3, color="rgba(0,0,0,0.1)"),
+                connectgaps=True,
+                showlegend=False,
+            ),
+            row=row,
+            col=col,
+        )
+        self._add_state_overlays(fig, lon_to_plot, lat_to_plot, signals)
+        return True
+
+    def _apply_speed_colorbar(self, fig, xaxis_key="xaxis", yaxis_key="yaxis"):
+        xaxis = getattr(fig.layout, xaxis_key, None)
+        yaxis = getattr(fig.layout, yaxis_key, None)
+        if xaxis is None or yaxis is None:
+            return
+        x0, x1 = xaxis.domain
+        y0, y1 = yaxis.domain
+        colorbar_x = x1
+        colorbar_len = 1.1 * (y1 - y0)
+        colorbar_y = (y0 + y1) / 2
+        cmin, cmax = self.speed_color_range
+        fig.update_layout(
+            coloraxis=dict(
+                colorscale="Turbo",
+                cmin=cmin,
+                cmax=cmax,
+                colorbar=dict(
+                    title=dict(text=self.speed_colorbar_title, side="right"),
+                    x=colorbar_x,
+                    y=colorbar_y,
+                    len=colorbar_len,
+                    lenmode="fraction",
+                    thickness=20,
+                    outlinewidth=0,
+                ),
+            ),
+        )
     def _compute_offset_path(self, lon, lat, offset_scale=0.02, min_offset=1e-6):
         def _smooth_series(values, window=5):
             if window < 2 or len(values) < window:
@@ -322,27 +499,8 @@ class BaseCycleVisualizer:
         )
 
     def _build_fig_top(self, kpi_row, signals):
-        lt = getattr(
-            self,
-            "layout_top",
-            {
-                "rows": 1,
-                "cols": 3,
-                "column_widths": [0.45, 0.25, 0.30],
-                "horizontal_spacing": 0.10,
-                "vertical_spacing": 0.00,
-                "margins": {"l": 20, "r": 20, "t": 2, "b": 8},
-            },
-        )
-        subplot_titles = getattr(
-            self,
-            "fig_top_titles",
-            [
-                "Path (colored by speed)",
-                "Availability",
-                "Suppression Breakdown",
-            ],
-        )
+        lt = self.layout_top or self.DEFAULT_TOP_LAYOUT
+        subplot_titles = self.fig_top_titles or self.DEFAULT_TOP_TITLES
 
         fig_top = make_subplots(
             rows=lt["rows"],
@@ -355,94 +513,12 @@ class BaseCycleVisualizer:
 
         fig_top.update_layout(margin=lt["margins"])
 
-        # Subplot(1, 1) - Path
-        lon = signals.get("lon")
-        lat = signals.get("lat")
-        spd = signals.get("speed")
-        if lon is not None and lat is not None and spd is not None:
-            # Convert to numpy arrays for easier processing
-            lon_arr = np.asarray(lon, dtype=float)
-            lat_arr = np.asarray(lat, dtype=float)
-            spd_arr = np.asarray(spd, dtype=float)
-
-            # === OPTIONAL: Apply Gaussian smoothing to reduce GPS noise and make path smoother ===
-            # Only apply if we have enough points and valid data
-            if len(lon_arr) > 10 and np.isfinite(lon_arr).any() and np.isfinite(lat_arr).any():
-                from scipy.ndimage import gaussian_filter1d
-
-                # Sigma controls smoothness: 1.0 = light, 2.0 = moderate, 3.0+ = heavy
-                sigma = 1.5  # Good balance for typical driving paths
-
-                lon_smooth = gaussian_filter1d(lon_arr, sigma=sigma)
-                lat_smooth = gaussian_filter1d(lat_arr, sigma=sigma)
-
-                # Use smoothed coordinates for the main path
-                lon_to_plot = lon_smooth
-                lat_to_plot = lat_smooth
-            else:
-                lon_to_plot = lon_arr
-                lat_to_plot = lat_arr
-
-            fig_top.add_trace(
-                go.Scatter(
-                    x=lon_to_plot,
-                    y=lat_to_plot,
-                    mode="lines+markers",
-                    marker=dict(size=3, color=spd_arr, coloraxis="coloraxis"),
-                    line=dict(width=3, color="rgba(0,0,0,0.1)"),
-                    connectgaps=True,
-                    showlegend=False,
-                ),
-                row=1,
-                col=1,
-            )
-
-            state_colors = getattr(self, "state_colors", {})
-            default_state_color = getattr(self, "default_state_color", "#adb5bd")
-            seen_legend = set()
-            state_defs = getattr(self, "state_defs", [])
-            for state_def in state_defs:
-                signal_name = state_def.get("signal_name")
-                if not signal_name:
-                    continue
-                state_values = signals.get(signal_name)
-                if state_values is None:
-                    continue
-                label_prefix = state_def.get("label_prefix", signal_name)
-                offset_scale = state_def.get("offset_scale", 0.01)
-                self._add_offset_path(
-                    fig_top,
-                    lon_to_plot,
-                    lat_to_plot,
-                    signal_name,
-                    state_values,
-                    label_prefix,
-                    offset_scale,
-                    state_colors,
-                    default_state_color,
-                    seen_legend,
-                )
+        path_added = self._add_path_subplot(fig_top, signals, row=1, col=1)
 
         fig_top.update_yaxes(scaleanchor="x", row=1, col=1)
 
         # Subplot(1, 2) - Availability (Feature / ROV / VAL)
-        availability_defs = getattr(
-            self,
-            "availability_defs",
-            [
-                ("Availability", "AvailDistPct", "#4c6ef5"),
-            ],
-        )
-        labels = []
-        values = []
-        colors = []
-        for label, key, color in availability_defs:
-            val = kpi_row.get(key)
-            if val is None:
-                continue
-            labels.append(label)
-            values.append(val)
-            colors.append(color)
+        labels, values, colors = self._collect_availability_values(kpi_row)
 
         if labels:
             fig_top.add_trace(
@@ -460,47 +536,24 @@ class BaseCycleVisualizer:
             fig_top.update_yaxes(range=[0, 100], title_text="Percent [%]", title_standoff=5, row=1, col=2)
 
         # Subplot(1, 3) - Suppression breakdown
-        patterns = getattr(self, "suppression_patterns", [])
-
-        # Exact match only — no regex, no partial match
-        reason_keys = [p for p in patterns if p in kpi_row]
-
-        # retrieve values
-        values = [kpi_row.get(k, 0) for k in reason_keys]
-
-        # auto-generate display names
-        labels = [k for k in reason_keys]
-
-        # ---- Plot ----
-        fig_top.add_trace(
-            go.Bar(
-                x=values,
-                y=labels,
-                orientation="h",
-                marker_color="#74c0fc",
-                text=[f"{v:.1f}%" for v in values],
-                textposition="inside",
-                showlegend=False,
-            ),
-            row=1,
-            col=3,
-        )
+        reason_keys, values = self._collect_suppression_values(kpi_row)
+        if reason_keys:
+            fig_top.add_trace(
+                go.Bar(
+                    x=values,
+                    y=reason_keys,
+                    orientation="h",
+                    marker_color="#74c0fc",
+                    text=[f"{v:.1f}%" for v in values],
+                    textposition="inside",
+                    showlegend=False,
+                ),
+                row=1,
+                col=3,
+            )
 
         fig_top.update_yaxes(autorange="reversed", row=1, col=3)
         fig_top.update_xaxes(range=[0, 100], title_text="Percent [%]", title_standoff=5, row=1, col=3)
-
-        # Update the layout with colorbar for speed
-        # Get the domain of the Path subplot (row1, col1)
-        path_xaxis = fig_top.layout["xaxis"]  # xaxis = row1,col1
-        path_yaxis = fig_top.layout["yaxis"]  # yaxis = row1,col1
-
-        x0, x1 = path_xaxis.domain  # e.g., [0.0, 0.45]
-        y0, y1 = path_yaxis.domain  # e.g., [0.15, 0.85]
-
-        # Compute colorbar placement
-        colorbar_x = x1  # small gap to the right of path plot
-        colorbar_len = 1.1 * (y1 - y0)  # 1.1 times vertical height of subplot
-        colorbar_y = (y0 + y1) / 2  # center vertically
 
         fig_top.update_layout(
             height=400,
@@ -516,21 +569,9 @@ class BaseCycleVisualizer:
                 x=0.0,
                 font=dict(size=10),
             ),
-            coloraxis=dict(
-                colorscale="Turbo",
-                cmin=0,
-                cmax=120,
-                colorbar=dict(
-                    title=dict(text="Speed [kph]", side="right"),
-                    x=colorbar_x,
-                    y=colorbar_y,
-                    len=colorbar_len,
-                    lenmode="fraction",
-                    thickness=20,
-                    outlinewidth=0,
-                ),
-            ),
         )
+        if path_added:
+            self._apply_speed_colorbar(fig_top, xaxis_key="xaxis", yaxis_key="yaxis")
 
         return fig_top
 
@@ -785,37 +826,23 @@ class BaseCycleVisualizer:
         title: str = "Cycle KPI",
         extra_traces: list | None = None,
     ):
-        # allow subclasses to control layout and signals
+        # allow subclasses to control layout
         layout_kwargs = dict(self.get_layout_params())
         # Strip non-plotly keys for make_subplots
         margins = layout_kwargs.pop("margins", None)
-        signals = self.prepare_signals(signals)
 
         fig = make_subplots(**layout_kwargs)
 
         # 1) Availability + suppression reasons (mixed orientation)
-        overall = kpi_row.get("AvailDistPct")
-        reason_keys = [
-            k
-            for k in [
-                "PedalPosProSuppression",
-                "SteeringWheelAngle",
-                "SteeringWheelAngleRate",
-                "YawRate",
-                "LatAccel",
-                "LowSpeed",
-            ]
-            if k in kpi_row
-        ]
-
-        if overall is not None:
+        labels, values, colors = self._collect_availability_values(kpi_row)
+        if labels:
             fig.add_trace(
                 go.Bar(
-                    x=["AvailDistPct"],
-                    y=[overall],
+                    x=labels,
+                    y=values,
                     name="Availability",
-                    marker=dict(color="#4c6ef5"),
-                    texttemplate="%{y:.1f}%",
+                    marker=dict(color=colors),
+                    text=[f"{v:.1f}%" for v in values],
                     textposition="auto",
                 ),
                 row=1,
@@ -823,13 +850,12 @@ class BaseCycleVisualizer:
             )
             fig.update_yaxes(range=[0, 100], row=1, col=2, title="Percent")
 
+        reason_keys, reason_vals = self._collect_suppression_values(kpi_row)
         if reason_keys:
-            reason_labels = list(reason_keys)
-            reason_vals = [kpi_row.get(k, 0) for k in reason_keys]
             fig.add_trace(
                 go.Bar(
                     x=reason_vals,
-                    y=reason_labels,
+                    y=reason_keys,
                     orientation="h",
                     name="Suppression [%]",
                     marker=dict(color="#74c0fc"),
@@ -899,13 +925,14 @@ class BaseCycleVisualizer:
             else:
                 cb_len = 0.45
                 cb_y = 0.75
+            cmin, cmax = self.speed_color_range
             fig.update_layout(
                 coloraxis=dict(
                     colorscale="Turbo",
-                    cmin=0,
-                    cmax=120,
+                    cmin=cmin,
+                    cmax=cmax,
                     colorbar=dict(
-                        title="Speed [kph]",
+                        title=self.speed_colorbar_title,
                         title_side="right",
                         x=cb_x,
                         y=cb_y,
@@ -961,7 +988,7 @@ class BaseCycleVisualizer:
             if mdf is None:
                 continue
 
-            signals = self.extract_cycle_signals(mdf)
+            signals = self.prepare_signals(self.extract_cycle_signals(mdf))
             title = f"{str(feature_name).upper()} - {Path(label).stem}"
             try:
                 self.plot_cycle(row, signals, title=title)
