@@ -69,12 +69,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 "height_px": 70,
                 "unit": "deg",
                 "series": [
-                    (
-                        "steerWheelAngle",
-                        "#12b886",
-                        "SteerWheelAngle",
-                        ["steerWheelAngleDeg", "steerWheelAngle"],
-                    ),
+                    ("steerWheelAngleDeg", "#12b886", "SteerWheelAngle"),
                 ],
             },
             {
@@ -82,12 +77,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 "height_px": 70,
                 "unit": "deg/s",
                 "series": [
-                    (
-                        "steerWheelAngleSpeed",
-                        "#20c997",
-                        "SteerWheelAngleSpeed",
-                        ["steerWheelAngleSpeedDeg", "steerWheelAngleSpeed"],
-                    ),
+                    ("steerWheelAngleSpeedDeg", "#20c997", "SteerWheelAngleSpeed"),
                 ],
             },
             {
@@ -95,12 +85,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 "height_px": 70,
                 "unit": "deg/s",
                 "series": [
-                    (
-                        "yawRate",
-                        "#fa5252",
-                        "YawRate",
-                        ["yawRateDeg", "yawRate"],
-                    ),
+                    ("yawRateDeg", "#fa5252", "YawRate"),
                 ],
             },
             {

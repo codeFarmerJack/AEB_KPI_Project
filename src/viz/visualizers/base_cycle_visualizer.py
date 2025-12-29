@@ -458,15 +458,8 @@ class BaseCycleVisualizer:
 
         for row in self.row_defs:
             for series in row["series"]:
-                signal_key, _, _, series_opts = self._parse_series_def(series)
-                candidates_override = series_opts.get("candidates")
-                if candidates_override:
-                    if isinstance(candidates_override, (list, tuple)):
-                        candidates.setdefault(signal_key, list(candidates_override))
-                    else:
-                        candidates.setdefault(signal_key, [candidates_override])
-                else:
-                    candidates.setdefault(signal_key, [signal_key])
+                signal_key, _, _, _series_opts = self._parse_series_def(series)
+                candidates.setdefault(signal_key, [signal_key])
 
         return candidates
 
@@ -1069,14 +1062,10 @@ class BaseCycleVisualizer:
     def _parse_series_def(series):
         key, color, label = series[:3]
         opts = {}
-        candidates_override = None
         if len(series) > 3:
             if isinstance(series[3], dict):
                 opts.update(series[3])
-            else:
-                candidates_override = series[3]
         if len(series) > 4 and isinstance(series[4], dict):
             opts.update(series[4])
-        if candidates_override is not None:
-            opts.setdefault("candidates", candidates_override)
+        opts.pop("candidates", None)
         return key, color, label, opts
