@@ -24,6 +24,7 @@ class BaseCycleKpiExtractor(ABC):
     FEATURE_NAME = "BASE_CYCLE"
     _CYCLE_SHEET_NAME = "cycleKPI"
     _SCHEMA_REQUIRED_COLS = ("feature", "name")
+    CYCLE_VISUALIZER_CLS = BaseCycleVisualizer
 
     def __init__(self, input_handler, config):
         self._validate_inputs(input_handler, config)
@@ -95,21 +96,19 @@ class BaseCycleKpiExtractor(ABC):
         return [str(n) for n in names.dropna().tolist()]
 
     # ------------------------------------------------------------------ #
-    def render_cycle_dashboards(self, feature_name: str):
+    def render_cycle_dashboards(self, feature_name: str = None):
         """
-        Generate per-file cycle dashboards using CycleVisualizer.
+        Generate per-file cycle dashboards using the configured visualizer.
         """
         if self._cycle_table_empty():
             return
 
-        out_dir = self._cycle_out_dir(feature_name)
-        viz = BaseCycleVisualizer(out_dir)
+        feature = feature_name or self.feature_name
+        out_dir = self._cycle_out_dir(feature)
+        viz_cls = getattr(self, "CYCLE_VISUALIZER_CLS", BaseCycleVisualizer)
+        viz = viz_cls(out_dir)
 
-        viz.render_dashboards(
-            self.cycle_kpi_table,
-            feature_name,
-            self.in_path_extracted,
-        )
+        viz.render_dashboards(self.cycle_kpi_table, feature, self.in_path_extracted)
 
     def _get_schema_display_map(self):
         if self.cycle_kpi_schema is None:

@@ -5,6 +5,7 @@ from typing import Optional
 import numpy as np
 
 from src.pipeline.base.base_cycle_kpi_extractor import BaseCycleKpiExtractor
+from src.pipeline.as_long.fcw.fcw_cycle_visualizer import FcwCycleVisualizer
 from src.utils.signal_mdf import get_signal
 from src.utils.process_calibratables import interpolate_threshold_clamped
 
@@ -32,6 +33,7 @@ class FcwCycleKpiExtractor(BaseCycleKpiExtractor):
     """
 
     FEATURE_NAME = "FCW"
+    CYCLE_VISUALIZER_CLS = FcwCycleVisualizer
     _SIGNAL_SPECS = {
         "time": ("time", True),
         "speed_mps": ("egoSpeed", True),

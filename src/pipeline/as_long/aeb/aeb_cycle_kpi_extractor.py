@@ -1,4 +1,3 @@
-import os
 import warnings
 from dataclasses import dataclass
 from typing import Optional
@@ -34,6 +33,7 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
     """
 
     FEATURE_NAME = "AEB"
+    CYCLE_VISUALIZER_CLS = AebCycleVisualizer
     _LOW_SPEED_MPS = 2 / 3.6
     _SIGNAL_SPECS = {
         "time": ("time", True),
@@ -191,19 +191,3 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
         return float(np.round(value, digits))
 
     # ------------------------------------------------------------------ #
-    def render_cycle_dashboards(self, feature_name: str = "AEB"):
-        """
-        Generate per-file cycle dashboards using the feature-specific visualizer.
-        """
-        if self.cycle_kpi_table is None or self.cycle_kpi_table.empty:
-            return
-
-        out_dir = os.path.join(self.out_path_results, feature_name.lower(), "cycle")
-        viz = AebCycleVisualizer(out_dir)
-
-        viz.render_dashboards(
-            self.cycle_kpi_table,
-            feature_name,
-            self.in_path_extracted,
-            signal_extractor=viz.extract_cycle_signals,
-        )

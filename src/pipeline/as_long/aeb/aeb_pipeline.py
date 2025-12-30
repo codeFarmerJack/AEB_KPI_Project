@@ -4,7 +4,6 @@ from src.pipeline.base.base_pipeline import BasePipeline
 from src.pipeline.as_long.aeb.aeb_event_segmenter import AebEventSegmenter
 from src.pipeline.as_long.aeb.aeb_event_kpi_extractor import AebEventKpiExtractor
 from src.pipeline.as_long.aeb.aeb_cycle_kpi_extractor import AebCycleKpiExtractor
-from src.pipeline.as_long.aeb.aeb_cycle_visualizer import AebCycleVisualizer
 from src.pipeline.as_long.aeb.aeb_event_visualizer import AebEventVisualizer
 
 
@@ -45,12 +44,6 @@ class AebPipeline(BasePipeline):
             self.event_viz.interactive = getattr(self, "default_interactive", False)
             self.event_viz.plot()
             if getattr(self, "cycle_kpi", None) is not None and not self.cycle_kpi.cycle_kpi_table.empty:
-                out_dir = os.path.join(self.cycle_kpi.out_path_results, "aeb", "cycle")
-                cycle_viz = AebCycleVisualizer(out_dir)
-                cycle_viz.render_dashboards(
-                    self.cycle_kpi.cycle_kpi_table,
-                    feature_name="AEB",
-                    in_path_extracted=self.cycle_kpi.in_path_extracted,
-                )
+                self.cycle_kpi.render_cycle_dashboards(feature_name="AEB")
         except Exception as e:
             raise RuntimeError(f"❌ AEB visualization failed: {e}")

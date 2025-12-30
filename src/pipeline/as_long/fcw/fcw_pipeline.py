@@ -5,7 +5,6 @@ from src.pipeline.as_long.fcw.fcw_event_kpi_extractor import FcwEventKpiExtracto
 from src.pipeline.as_long.fcw.fcw_cycle_kpi_extractor import FcwCycleKpiExtractor
 import os
 
-from src.pipeline.as_long.fcw.fcw_cycle_visualizer import FcwCycleVisualizer
 from src.pipeline.as_long.fcw.fcw_event_visualizer import FcwEventVisualizer
 
 
@@ -34,7 +33,6 @@ class FcwPipeline(BasePipeline):
             self.cycle_kpi = FcwCycleKpiExtractor(self.ih, self.cfg)
             self.cycle_kpi.process_mdf_cycles()
             self.cycle_kpi.export_cycle_kpis()
-            self.cycle_kpi.render_cycle_dashboards(feature_name="FCW")
 
             print("✅ FCW KPI extraction and Excel export done.")
         except Exception as e:
@@ -47,12 +45,6 @@ class FcwPipeline(BasePipeline):
             self.viz.interactive = getattr(self, "default_interactive", False)
             self.viz.plot()
             if getattr(self, "cycle_kpi", None) is not None and not self.cycle_kpi.cycle_kpi_table.empty:
-                out_dir = os.path.join(self.cycle_kpi.out_path_results, "fcw", "cycle")
-                cycle_viz = FcwCycleVisualizer(out_dir)
-                cycle_viz.render_dashboards(
-                    self.cycle_kpi.cycle_kpi_table,
-                    feature_name="FCW",
-                    in_path_extracted=self.cycle_kpi.in_path_extracted,
-                )
+                self.cycle_kpi.render_cycle_dashboards(feature_name="FCW")
         except Exception as e:
             raise RuntimeError(f"❌ FCW visualization failed: {e}")
