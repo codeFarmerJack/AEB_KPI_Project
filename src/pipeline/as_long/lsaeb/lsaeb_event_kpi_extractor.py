@@ -14,7 +14,21 @@ from src.utils.signal_mdf import get_signal
 # LSAEB KPI Extractor
 # ------------------------------------------------------------------ #
 class LsaebEventKpiExtractor(BaseEventKpiExtractor):
-    """Extracts LSAEB KPI metrics from MF4 chunks (distance + timing)."""
+    """
+    LSAEB event KPIs with explicit criteria.
+
+    Event detection:
+    - `cpmEventType` or `lsaeb_event_type` transitions 0 -> 1/2 start, 1/2 -> 0 end
+      (detect_lsaeb_events, merge_window=2.0s). Uses the first event only.
+
+    KPI criteria:
+    - logTime: time at event start index.
+    - vehSpd: `egoSpeedKph` at event start index.
+    - lsaebIntvLongDist: `cpmLongDist` at event start index.
+    - lsaebIntvLatDist: `cpmLatDist` at event start index.
+    - lsaebStopLongDist: `cpmLongDist` at event end index.
+    - lsaebStopLatDist: `cpmLatDist` at event end index.
+    """
 
     FEATURE_NAME = "LSAEB"
     PARAM_SPECS = {

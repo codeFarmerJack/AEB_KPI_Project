@@ -15,7 +15,26 @@ from src.utils.signal_mdf import get_signal
 # FCW KPI Extractor
 # ------------------------------------------------------------------ #
 class FcwEventKpiExtractor(BaseEventKpiExtractor):
-    """Extracts FCW KPI metrics from MF4 chunks."""
+    """
+    FCW event KPIs with explicit criteria.
+
+    Event detection:
+    - First event per chunk: `fcwRequest` rises 0 -> 2 or 3
+      (detect_fcw_events, merge_window=2.0s).
+
+    KPI criteria:
+    - logTime: start time of the first FCW event.
+    - vehSpd: `egoSpeedKph` at logTime (nearest sample).
+    - brakeJerkStart/End/Dur/Max/brakeAccelMin:
+      * FCW trigger for jerk uses `fcwRequest` rising to >= 3.
+      * Analyze `longActAccelFlt` in [t0 - 0.2, t0 + 1.0] s.
+      * Mean speed within [brakejerk_min_speed, brakejerk_max_speed].
+      * jerk < brakejerk_jerk_neg_thd starts, jerk > brakejerk_jerk_pos_thd ends.
+      * Duration must satisfy 0 < dur <= 0.5 s.
+    - fcwSensitivityLvl/fcwWarningTTC:
+      * First `fcwRequest` rising edge where < 2 -> >= 2.
+      * `fcwTTC` must satisfy 0 < TTC <= 10 at trigger.
+    """
 
     FEATURE_NAME = "FCW"
     PARAM_SPECS = {

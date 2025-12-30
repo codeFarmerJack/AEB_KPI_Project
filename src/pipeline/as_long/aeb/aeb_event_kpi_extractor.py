@@ -33,7 +33,67 @@ class Thresholds:
 # AEB KPI Extractor
 # ------------------------------------------------------------------ #
 class AebEventKpiExtractor(BaseEventKpiExtractor):
-    """Extracts AEB KPI metrics from MF4 chunks."""
+    """
+    AEB event KPIs with explicit criteria.
+
+    Event detection:
+    - Start index/time: first sample where `aebTargetDecel` < pb_tgt_decel
+      (tolerance 0.1 in find_aeb_intv_start).
+    - End index/time: first sample after start where `aebTargetDecel` > aeb_end_thd,
+      or `egoSpeedKph` == 0; if both, take the earlier; otherwise last sample.
+
+    KPI criteria (timing and thresholds):
+    - logTime, aebIntvStartTime: start time.
+    - aebIntvEndTime: end time.
+    - isVehStopped: True if speed hits 0 after start.
+    - intvDur: aebIntvEndTime - aebIntvStartTime.
+    - vehSpd: `egoSpeedKph` at start index.
+    - steerAngTh/steerAngRateTh/pedalPosIncTh/yawRateSuspTh/latAccelTh:
+      interpolate calibratables vs `vehSpd`.
+
+    Distance KPIs (`longGap`, up to end index):
+    - firstDetDist: first non-zero `longGap`.
+    - stableDetDist: first sample of last continuous non-zero segment.
+    - aebIntvDist: `longGap` at start index.
+    - aebStopGap: `longGap` at end index.
+
+    Throttle KPIs (`throttleValue`, from start index to end of chunk):
+    - pedalPosAtStart: `throttleValue` at start.
+    - pedalPosMax: max throttle after start.
+    - pedalPosInc: pedalPosMax - pedalPosAtStart.
+    - isPedalPosIncHigh: pedalPosInc > pedalPosIncTh.
+    - isPedalOnAtStrt: pedalPosAtStart != 0.
+
+    Steering KPIs (`steerWheelAngleDeg`, `steerWheelAngleSpeedDeg`):
+    - Window: [start - time_idx_offset, end of chunk].
+    - absSteerMaxDeg: max |steer angle| in window.
+    - isSteerHigh: absSteerMaxDeg > steerAngTh.
+    - absSteerRateMaxDeg: max |steer rate| in window.
+    - isSteerAngRateHigh: absSteerRateMaxDeg > steerAngRateTh.
+
+    Yaw KPIs (`yawRateDeg`):
+    - Window: [start - time_idx_offset, end of chunk].
+    - absYawRateMaxDeg: max |yaw rate| in window.
+    - isYawRateHigh: absYawRateMaxDeg > yawRateSuspTh.
+
+    Lateral accel KPIs (`latActAccelFlt`):
+    - Window: [start - time_idx_offset, end of chunk].
+    - absLatAccelMax: max |lat accel| in window.
+    - isLatAccelHigh: absLatAccelMax > latAccelTh.
+
+    Brake mode KPIs (`aebTargetDecel`, from start to end of chunk):
+    - isPBOn: any sample within tgt_tol of pb_tgt_decel.
+    - isFBOn: any sample within tgt_tol of fb_tgt_decel.
+    - pbDur: duration of first PB segment before first FB.
+    - fbDur: duration of FB segment.
+
+    Latency KPIs (`longActAccelFlt`, `aebTargetDecel`):
+    - aebSysRespTime: time of first jerk < aeb_jerk_neg_thd in
+      [start, start + latency_window_samples].
+    - aebDeadTime: aebSysRespTime - aebIntvStartTime.
+    - commLatency: after PB segment >= pb_duration, find PB->FB transition,
+      then first jerk < fb_jerk_neg_thd in the latency window; delta is commLatency.
+    """
 
     FEATURE_NAME = "AEB"
     _CALIBRATABLE_KEYS = {

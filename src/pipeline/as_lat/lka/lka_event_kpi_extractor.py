@@ -13,7 +13,24 @@ from src.utils.signal_mdf import get_signal
 # LKA KPI Extractor
 # ------------------------------------------------------------------ #
 class LkaEventKpiExtractor(BaseEventKpiExtractor):
-    """Extracts LKA (Lane Keeping Assist) KPI metrics."""
+    """
+    LKA event KPIs with explicit criteria.
+
+    Event detection:
+    - `lkaInterventionStatus` rising 0 -> 1 starts, falling 1 -> 0 ends
+      (detect_lka_events). Uses the first event only.
+
+    KPI criteria:
+    - logTime: time at event start index.
+    - MinDTLEDelta: `dtleTarget` at start minus min `dtle` in [start, end].
+    - TrigDTLE: `dtle` at start.
+    - isWhlTrqHigh: any |steerWheelTorque| > driver_interaction_torque in [start, end].
+    - TrigRateOfDeparture: `rateOfDeparture` at start.
+    - TrigVehCurv: `vehCurvature` at start.
+    - TrigLaneCurv: `laneCurvature` at start.
+    - vehSpd: `egoSpeedKph` at start (if present, else NaN).
+    - UseCase: `useCase` at start (if present, else NaN).
+    """
 
     FEATURE_NAME = "LKA"
     PARAM_SPECS = {

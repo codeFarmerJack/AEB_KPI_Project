@@ -74,10 +74,10 @@ pyinstaller run_kpi_tool.spec
 Artifacts:
 - `dist/ADAS_KPI_Tool/` directory bundle (contains CLI + GUI).
 - On macOS, a `.app` bundle is also produced.
-If the GUI fails to start due to Qt plugins, verify `PySide6` is installed and rerun the build; the spec already collects PySide6 data and Qt plugins.
+If the GUI fails to start due to Qt plugins, verify `PySide6` is installed and rerun the build; the spec already collects PySide6, pyecharts, and Qt data.
 
 ---
 
 ## 🛠️ Notes
-- Requirements: see `requirements.txt` (asammdf, numpy/pandas/scipy, matplotlib/plotly, openpyxl, PyYAML, pyinstaller, etc.).
+- Requirements: see `requirements.txt` (asammdf, numpy/pandas/scipy, matplotlib/plotly/pyecharts, openpyxl, PyYAML, pyinstaller, etc.).
 - Keep config Excel/JSON in `src/config/` aligned with signal maps, graph specs, and KPI definitions.

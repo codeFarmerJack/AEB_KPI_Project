@@ -3,7 +3,7 @@ import os
 import sys
 from pathlib import Path
 import matplotlib
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
 
@@ -23,6 +23,7 @@ datas = [
 
 # Matplotlib assets
 datas += [(matplotlib.get_data_path(), "matplotlib/mpl-data")]
+datas += collect_data_files("pyecharts", include_py_files=True)
 
 hiddenimports = [
     "matplotlib",
@@ -49,6 +50,8 @@ hiddenimports = [
     "PySide6.QtGui",
     "PySide6.QtWidgets",
 ]
+
+hiddenimports += collect_submodules("pyecharts")
 
 # Windows — include Tcl/Tk
 if sys.platform.startswith('win'):

@@ -10,12 +10,11 @@ from src.utils.exporter import export_kpi_to_excel
 
 class BaseEventKpiExtractor:
     """
-    Base class for KPI extractors (AEB, FCW, etc.)
-    Handles shared setup, parameter loading, and export logic.
-    Subclasses must define:
-        - FEATURE_NAME
-        - PARAM_SPECS
-        - process_mdf_events()
+    Base class for event KPI extractors (AEB, FCW, etc.).
+
+    Criteria: KPIs are extracted per MF4 event chunk, while the subclass
+    defines what constitutes a valid event and which signals/thresholds
+    are required to compute KPIs.
     """
 
     FEATURE_NAME = "BASE"
