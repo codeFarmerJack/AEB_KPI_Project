@@ -28,7 +28,7 @@ Outputs (per run) under `rawdata/analysis_results/`:
 
 ## 🧭 Workflow
 1) **Config load** (`src/config/config.py`)  
-   Reads JSON + Excel (signal map, graphSpec, lineColors, markerShapes, KPI schemas, calibratables).
+   Reads JSON + KPI Excel (vbRcSignals, graphSpec, lineColors, markerShapes, KPI schemas, calibratables).
 2) **Signal extraction** (`src/pipeline/input_handler.py`)  
    Parses MF4, maps signals, writes extracted MF4 chunks and `.mat` files.
 3) **Event detection** (`src/pipeline/base/base_event_segmenter.py` subclasses)  
@@ -80,4 +80,5 @@ If the GUI fails to start due to Qt plugins, verify `PySide6` is installed and r
 
 ## 🛠️ Notes
 - Requirements: see `requirements.txt` (asammdf, numpy/pandas/scipy, matplotlib/plotly/pyecharts, openpyxl, PyYAML, pyinstaller, etc.).
-- Keep config Excel/JSON in `src/config/` aligned with signal maps, graph specs, and KPI definitions.
+- Keep the KPI Excel files in `src/config/` aligned with vbRcSignals, graph specs, and KPI definitions.
+- Migration: `signal_map.xlsx` is deprecated; move vbRcSignals into `kpi_as_long.xlsx` and `kpi_as_lat.xlsx`.

@@ -1,8 +1,4 @@
 {
-    "SignalMap": {
-        "FilePath": "signal_map.xlsx",
-        "Sheets": ["vbRcSignalsLat"]
-    },
     "KpiAsLat": {
         "FilePath": "kpi_as_lat.xlsx",
         "Sheets": ["graphSpec", "lineColors","markerShapes","KPI","params","cycleKPI"]

@@ -25,15 +25,24 @@ class Config:
         config_struct = cls._load_config(json_config_path)
 
         # =====================================================
-        # 1️⃣ Load vbRcSignals from signal_map.xlsx
+        # 1️⃣ Locate KPI workbook (for KPI sheets and vbRcSignals)
         # =====================================================
-        sig_cfg    = config_struct["SignalMap"]
+        kpi_section_key = next(
+            (k for k in config_struct.keys() if k.lower().startswith("kpias")),
+            None,
+        )
+        if not kpi_section_key:
+            raise ValueError("No KPI section found in config (expected 'KpiAsLong' or 'KpiAsLat').")
 
-        # Reads: sig_cfg["FilePath"] → "signal_map.xlsx"
-        sig_path = get_resource(f"config/{sig_cfg['FilePath']}")
+        spec_cfg = config_struct[kpi_section_key]
+        spec_path = get_resource(f"config/{spec_cfg['FilePath']}")
 
-        sig_sheets = sig_cfg["Sheets"]
-        sig_data   = cls._load_signal_map_kpi_plot_spec(sig_path, sig_sheets)
+        # =====================================================
+        # 2️⃣ Load vbRcSignals from KPI workbook
+        # =====================================================
+        sig_path = spec_path
+        sig_sheets = ["vbRcSignals"]
+        sig_data = cls._load_signal_map_kpi_plot_spec(sig_path, sig_sheets)
 
         sig_data = {k.lower(): v for k, v in sig_data.items()}
         sheet_name = sig_sheets[0].lower()     
@@ -41,20 +50,18 @@ class Config:
         cfg.signal_map = sig_data.get(sheet_name)
 
         if cfg.signal_map is None:
-            raise ValueError(f"Signal sheet '{sig_sheets[0]}' not found in {sig_path}")
+            raise ValueError(
+                f"Signal sheet '{sig_sheets[0]}' not found in {Path(sig_path).name}. "
+                "Ensure the KPI workbook includes a 'vbRcSignals' sheet."
+            )
+        print(f"✅ Signal map loaded from {Path(sig_path).name} → sheet '{sig_sheets[0]}'")
         
         # Normalize columns
         cfg.signal_map.columns = cfg.signal_map.columns.str.strip().str.lower()
 
         # =====================================================
-        # 2️⃣ Load KPI/PlotSpec-related sheets (auto-detect Long/Lat/etc.)
+        # 3️⃣ Load KPI/PlotSpec-related sheets (auto-detect Long/Lat/etc.)
         # =====================================================
-        kpi_section_key = next((k for k in config_struct.keys() if k.lower().startswith("kpias")), None)
-        if not kpi_section_key:
-            raise ValueError("No KPI section found in config (expected 'KpiAsLong' or 'KpiAsLat').")
-
-        spec_cfg   = config_struct[kpi_section_key]
-        spec_path = get_resource(f"config/{spec_cfg['FilePath']}")
         sheet_list = spec_cfg["Sheets"]
 
         ## --- Define the name for the KPI excel export ---
@@ -84,7 +91,7 @@ class Config:
 
 
         # =====================================================
-        # 3️⃣ Parse params sheet into dict with type awareness
+        # 4️⃣ Parse params sheet into dict with type awareness
         # =====================================================
         if cfg.params is not None and not cfg.params.empty:
             cfg.params.columns = cfg.params.columns.str.strip().str.lower()
@@ -126,7 +133,7 @@ class Config:
                 warnings.warn(f"⚠️ Failed to parse params sheet: {e}")
 
         # =====================================================
-        # 4️⃣ Normalize and clean line_colors sheet
+        # 5️⃣ Normalize and clean line_colors sheet
         # =====================================================
         if cfg.line_colors is not None and not cfg.line_colors.empty:
             cfg.line_colors.columns = cfg.line_colors.columns.str.strip().str.lower()
@@ -147,7 +154,7 @@ class Config:
                 warnings.warn("⚠️ No valid R,G,B columns found in lineColors sheet.")
 
         # =====================================================
-        # 5️⃣ Load calibratables from calParam in KPI workbook (Optional)
+        # 6️⃣ Load calibratables from calParam in KPI workbook (Optional)
         # =====================================================
         cal_defs = spec_cfg.get("Calibratables", None)
 
@@ -169,7 +176,7 @@ class Config:
 
 
         # =====================================================
-        # 6️⃣ Normalize graph_spec columns
+        # 7️⃣ Normalize graph_spec columns
         # =====================================================
         if cfg.graph_spec is not None:
             cfg.graph_spec.columns = cfg.graph_spec.columns.str.strip().str.lower()
@@ -195,13 +202,8 @@ class Config:
         with open(file_path, "r", encoding="utf-8") as f:
             params = json.load(f)
 
-        # --- Always required ---
-        if "SignalMap" not in params:
-            raise ValueError("Missing 'SignalMap' section in config file.")
-        if "FilePath" not in params["SignalMap"]:
-            raise ValueError("Missing SignalMap.FilePath in config.")
-        if "Sheets" not in params["SignalMap"]:
-            raise ValueError("SignalMap.Sheets must be defined in config.")
+        if "SignalMap" in params:
+            warnings.warn("⚠️ SignalMap section is no longer used; remove it from the config JSON.")
 
 
         # --- Detect KPI section automatically (any key starting with 'KpiAs') ---
