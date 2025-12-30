@@ -817,7 +817,6 @@ class BaseCycleVisualizer:
         kpi_row,
         signals: dict,
         title: str = "Cycle KPI",
-        extra_traces: list | None = None,
     ):
         # allow subclasses to control layout
         layout_kwargs = dict(self.get_layout_params())
@@ -899,11 +898,6 @@ class BaseCycleVisualizer:
                 row=2,
                 col=1,
             )
-
-        # 4) Optional extra traces on the signals row
-        if extra_traces:
-            for tr in extra_traces:
-                fig.add_trace(tr, row=2, col=1)
 
         # If a coloraxis was used, position its colorbar beside the path subplot
         if speed is not None and lon is not None and lat is not None:

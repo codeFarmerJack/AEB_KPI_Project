@@ -157,9 +157,7 @@ class FcwCycleVisualizer(BaseCycleVisualizer):
     def _build_fig_bottom(self, signals):
         return super()._build_fig_bottom(signals)
 
-    def plot_cycle(self, kpi_row, signals: dict, title: str = "Cycle KPI", extra_traces=None):
-        if extra_traces is None:
-            extra_traces = []
+    def plot_cycle(self, kpi_row, signals: dict, title: str = "Cycle KPI"):
 
         fig_top = self._build_fig_top(kpi_row, signals)
         grid_bottom = self._build_fig_bottom(signals)
