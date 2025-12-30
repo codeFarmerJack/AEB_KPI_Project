@@ -236,19 +236,19 @@ class Config:
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
+        excel = pd.ExcelFile(file_path)
         result = {}
         for sheet_name in sheet_list:
 
             # -----------------------------------------------
             # Skip sheets that do not exist in workbook
             # -----------------------------------------------
-            excel = pd.ExcelFile(file_path)
             if sheet_name not in excel.sheet_names:
                 warnings.warn(f"⚠️ Sheet '{sheet_name}' not found in {file_path.name}, skipping.")
                 continue
 
             try:
-                preview = pd.read_excel(file_path, sheet_name=sheet_name, nrows=5, header=None)
+                preview = excel.parse(sheet_name=sheet_name, nrows=5, header=None)
 
                 header_row = 0
                 for i in range(len(preview)):
@@ -257,7 +257,7 @@ class Config:
                         header_row = i
                         break
 
-                df = pd.read_excel(file_path, sheet_name=sheet_name, header=header_row)
+                df = excel.parse(sheet_name=sheet_name, header=header_row)
                 df.columns = df.columns.str.strip().str.lower()
 
                 result[sheet_name] = df

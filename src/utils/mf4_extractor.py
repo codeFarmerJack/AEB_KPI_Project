@@ -136,31 +136,49 @@ def mf4_extractor(
     sigs_copy["ChannelBase"] = sigs_copy["ChannelName"].str.split(r"[\\/]").str[-1]
 
     signals_read, to_read = [], []
+    temp_frames = []
+    min_ts = None
+    max_ts = None
 
     # ================================================================
     # Match requested signals to MDF channels
     # ================================================================
     if signal_database is not None:
+        raster_groups = {}
+        for group_idx in sigs_copy["GroupIndex"].unique():
+            group_rows = sigs_copy[sigs_copy["GroupIndex"] == group_idx]
+            if group_rows.empty:
+                continue
+            raster_name = str(group_rows["RasterName"].iloc[0]).strip().lower()
+            channel_map = {
+                str(ch).lower(): idx
+                for ch, idx in zip(group_rows["ChannelName"], group_rows.index)
+            }
+            raster_groups.setdefault(raster_name, []).append((group_idx, channel_map))
+
         for _, row in signal_database.iterrows():
             generic_name = row["genericname"]
-            raster_val = str(row["raster"]).strip()
-            synonym_val = str(row["synonym"]).strip()
+            raster_val = row["raster"]
+            synonym_val = row["synonym"]
 
+            if pd.isna(raster_val) or pd.isna(synonym_val):
+                continue
+            raster_val = str(raster_val).strip()
+            synonym_val = str(synonym_val).strip()
             if not raster_val or not synonym_val:
                 continue
 
-            # Check raster existence
-            if not any(raster_val.lower() == str(rn).lower() for rn in sigs_copy["RasterName"]):
+            raster_key = raster_val.lower()
+            if raster_key not in raster_groups:
                 print(f"Raster group '{raster_val}' not found in MF4 → skipping {generic_name}")
                 continue
 
-            matching_groups = sigs_copy[sigs_copy["RasterName"].str.lower() == raster_val.lower()]["GroupIndex"].unique()
+            matching_groups = raster_groups.get(raster_key, [])
             found = False
-            for group_idx in matching_groups:
-                group_channels = sigs_copy[sigs_copy["GroupIndex"] == group_idx]
-                matches = group_channels[group_channels["ChannelName"].str.lower() == synonym_val.lower()]
-                if not matches.empty:
-                    best_loc = matches.index[0]
+            synonym_key = synonym_val.lower()
+            for group_idx, channel_map in matching_groups:
+                if synonym_key in channel_map:
+                    best_loc = channel_map[synonym_key]
                     ch_name = sigs.at[best_loc, "ChannelName"]
                     to_read.append(
                         {
@@ -226,22 +244,17 @@ def mf4_extractor(
                                 ignore_index=True,
                             )
 
-            # --- Optional resampling ---
-            if resample is not None:
-                resample_steps = np.arange(timestamps[0], timestamps[-1] + resample / 2, resample)
-                temp_df = temp_df.reindex(resample_steps, method="nearest")
-
             # --- Combine into main DataFrame ---
             if data_out.empty:
-                data_out = temp_df
+                if resample is None:
+                    data_out = temp_df
             else:
-                if resample is not None:
-                    data_out = (
-                        data_out.reindex(resample_steps, method="nearest")
-                        .join(temp_df.reindex(resample_steps, method="nearest"), how="outer")
-                    )
-                else:
+                if resample is None:
                     data_out = data_out.join(temp_df, how="outer").interpolate(method="linear")
+            if resample is not None:
+                min_ts = timestamps[0] if min_ts is None else min(min_ts, timestamps[0])
+                max_ts = timestamps[-1] if max_ts is None else max(max_ts, timestamps[-1])
+                temp_frames.append(temp_df)
 
             # --- Record raster info ---
             r = np.mean(np.diff(timestamps)) if len(timestamps) > 1 else np.inf
@@ -269,6 +282,17 @@ def mf4_extractor(
         if to_read
         else pd.DataFrame(columns=["GenericName", "FullName", "Raster"])
     )
+
+    if resample is not None and temp_frames and min_ts is not None and max_ts is not None:
+        resample_steps = np.arange(min_ts, max_ts + resample / 2, resample)
+        if not data_out.empty:
+            data_out = data_out.reindex(resample_steps, method="nearest")
+        for temp_df in temp_frames:
+            temp_df = temp_df.reindex(resample_steps, method="nearest")
+            if data_out.empty:
+                data_out = temp_df
+            else:
+                data_out = data_out.join(temp_df, how="outer")
 
     if not data_out.empty and data_out.isna().any().any():
         data_out = data_out.interpolate(method="linear")

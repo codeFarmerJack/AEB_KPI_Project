@@ -3,7 +3,7 @@ import gc
 import warnings
 import traceback
 import pandas as pd
-from src.utils.signal_mdf import SignalMDF, safe_load_mdf
+from src.utils.signal_mdf import SignalMDF, safe_load_mdf, get_signal
 from src.utils.load_params import load_params_from_class, load_params_from_config
 
 class BaseEventSegmenter:
@@ -60,17 +60,22 @@ class BaseEventSegmenter:
                 print(f"🔍 Reading MF4 file: {fname}")
                 mdf = safe_load_mdf(file_path)
 
-                # Validate required signal
-                if not hasattr(mdf, self.signal_name):
+                try:
+                    sig = get_signal(mdf, self.signal_name, required=True)
+                except AttributeError:
                     print(f"⚠️ File {fname} missing required signal '{self.signal_name}' → skipped")
                     continue
-
-                sig = getattr(mdf, self.signal_name)
                 if sig.size == 0:
                     print(f"⚠️ '{self.signal_name}' empty → skipped")
                     continue
 
-                df = pd.DataFrame({"time": mdf.time, self.signal_name: sig})
+                try:
+                    time = get_signal(mdf, "time", required=True)
+                except AttributeError:
+                    print(f"⚠️ File {fname} missing required signal 'time' → skipped")
+                    continue
+
+                df = pd.DataFrame({"time": time, self.signal_name: sig})
 
                 start_times, end_times = self.detect_events(df)
                 print(f"   ➝ Detected {len(start_times)} {self.event_name.upper()} events")
@@ -96,7 +101,13 @@ class BaseEventSegmenter:
             print(f"⚠️ No {self.event_name.upper()} events detected for {name}")
             return
 
-        t_min, t_max = float(mdf.time[0]), float(mdf.time[-1])
+        try:
+            time = get_signal(mdf, "time", required=True)
+        except AttributeError:
+            print("⚠️ Missing required signal 'time' → skipped event extraction")
+            return
+
+        t_min, t_max = float(time[0]), float(time[-1])
         print(f"   🕒 File time range: {t_min:.3f}s → {t_max:.3f}s")
 
         for j, start_time in enumerate(start_times):

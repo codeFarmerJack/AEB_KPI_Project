@@ -11,18 +11,33 @@ def get_signal(mdf, name: str, *, required: bool = False, default=None, as_array
     - default is returned when available and signal is missing.
     - as_array=True converts to numpy array.
     """
-    if not hasattr(mdf, name):
-        if required:
-            raise AttributeError(name)
-        return default
-    val = getattr(mdf, name)
-    if as_array:
+    val = None
+
+    if name == "time" and hasattr(mdf, "_time"):
+        val = getattr(mdf, "_time", None)
+    elif hasattr(mdf, "_injected") and name in getattr(mdf, "_injected", {}):
+        val = mdf._injected.get(name)
+    else:
         try:
-            return np.asarray(val)
+            sig = mdf.get(name)
+            val = sig.samples if hasattr(sig, "samples") else sig
         except Exception:
             if required:
                 raise AttributeError(name)
             return default
+
+    if as_array:
+        try:
+            arr = np.asarray(val)
+        except Exception:
+            if required:
+                raise AttributeError(name)
+            return default
+        if arr.size == 0:
+            if required:
+                raise AttributeError(name)
+            return default
+        return arr
     return val
 
 
@@ -38,6 +53,13 @@ class SignalMDF(MDF):
         super().__init__(*args, **kwargs)
         self._injected = {}
         self._time = self._resolve_time()
+
+    @property
+    def time(self):
+        return self._time
+
+    def inject_signal(self, name, value):
+        self._injected[name] = np.asarray(value)
 
     # ------------------------------------------------------------------ #
     def _resolve_time(self):
@@ -76,39 +98,6 @@ class SignalMDF(MDF):
             n = 0
         warnings.warn("⚠️ Synthesized time vector (equidistant).")
         return np.arange(n, dtype=float)
-
-    # ------------------------------------------------------------------ #
-    def __getattr__(self, name):
-        """Allow dot-access to MDF signal channels."""
-        if name == "time":
-            return self._time
-
-        if name in self._injected:
-            return self._injected[name]
-
-        # Allow MDF internal attributes
-        if name in ("groups", "channels", "version", "attachments"):
-            return super().__getattribute__(name)
-
-        try:
-            return super().__getattribute__(name)
-        except AttributeError:
-            pass
-
-        # Treat as signal name
-        try:
-            return self.get(name).samples.flatten()
-        except Exception:
-            warnings.warn(f"⚠️ Missing signal '{name}' in MDF file")
-            return np.array([])
-
-    # ------------------------------------------------------------------ #
-    def __setattr__(self, name, value):
-        """Allow dynamic injection of computed signals."""
-        if isinstance(value, (np.ndarray, list)) and not name.startswith("_"):
-            self._injected[name] = np.asarray(value)
-        else:
-            super().__setattr__(name, value)
 
 def safe_load_mdf(file_path):
     try:

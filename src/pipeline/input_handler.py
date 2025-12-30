@@ -47,6 +47,7 @@ class InputHandler:
         self.in_path_raw_data   = None
         self.out_path_extracted = None
         self._provided_files    = None
+        self.enum_mapper        = EnumMapper(get_resource("config/enum_definitions.yaml"))
 
         # --- Load parameters from class and then override with config ---
         load_params_from_class(self)
@@ -215,19 +216,16 @@ class InputHandler:
 
                 # --- 4️⃣ Save both raw + filtered signals to new MDF ---
 
-                enum_file = get_resource("config/enum_definitions.yaml")
-                mapper = EnumMapper(enum_file)
-
                 new_mdf = MDF()
                 for col in data.columns:
                     try:
                         series = data[col]
                         if series.dtype == object:
-                            enum_name = mapper.get_enum_for_signal(col)
+                            enum_name = self.enum_mapper.get_enum_for_signal(col)
 
                             if enum_name:
                                 # Use YAML enum mapping
-                                enum_table = mapper.enums.get(enum_name, {})
+                                enum_table = self.enum_mapper.enums.get(enum_name, {})
                                 encoded = series.astype(str).map(lambda v: enum_table.get(v, np.nan))
                                 if encoded.isna().any():
                                     missing = series[encoded.isna()].unique().tolist()
