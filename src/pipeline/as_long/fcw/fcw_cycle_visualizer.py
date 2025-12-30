@@ -198,7 +198,8 @@ class FcwCycleVisualizer(BaseCycleVisualizer):
         </html>
         """
 
-        out_path = os.path.join(self.out_dir, f"{title.replace(' ', '_')}.html")
+        safe_title = self._format_title_for_filename(title)
+        out_path = os.path.join(self.out_dir, f"{safe_title}.html")
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(html)
 

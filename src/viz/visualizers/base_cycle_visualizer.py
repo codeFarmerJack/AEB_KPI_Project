@@ -943,7 +943,8 @@ class BaseCycleVisualizer:
         if margins:
             fig.update_layout(margin=margins)
 
-        out_path = os.path.join(self.out_dir, f"{title.replace(' ', '_')}.html")
+        safe_title = self._format_title_for_filename(title)
+        out_path = os.path.join(self.out_dir, f"{safe_title}.html")
         fig.write_html(out_path, include_plotlyjs="cdn", full_html=True)
         print(f"💾 Cycle dashboard saved → {out_path}")
 
@@ -1023,6 +1024,10 @@ class BaseCycleVisualizer:
             except Exception:
                 out.append(v)
         return out
+
+    @staticmethod
+    def _format_title_for_filename(title: str) -> str:
+        return str(title).replace(" - ", "-").replace(" ", "_")
 
     @staticmethod
     def _downsample_indices(length, max_points):
