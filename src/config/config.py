@@ -40,24 +40,17 @@ class Config:
         # =====================================================
         # 2️⃣ Load vbRcSignals from KPI workbook
         # =====================================================
-        sig_path = spec_path
-        sig_sheets = ["vbRcSignals"]
-        sig_data = cls._load_signal_map_kpi_plot_spec(sig_path, sig_sheets)
-
+        sig_data = cls._load_signal_map_kpi_plot_spec(spec_path, ["vbRcSignals"])
         sig_data = {k.lower(): v for k, v in sig_data.items()}
-        sheet_name = sig_sheets[0].lower()     
-
-        cfg.signal_map = sig_data.get(sheet_name)
+        cfg.signal_map = sig_data.get("vbrcsignals")
 
         if cfg.signal_map is None:
             raise ValueError(
-                f"Signal sheet '{sig_sheets[0]}' not found in {Path(sig_path).name}. "
+                f"Signal sheet 'vbRcSignals' not found in {Path(spec_path).name}. "
                 "Ensure the KPI workbook includes a 'vbRcSignals' sheet."
             )
-        print(f"✅ Signal map loaded from {Path(sig_path).name} → sheet '{sig_sheets[0]}'")
-        
-        # Normalize columns
-        cfg.signal_map.columns = cfg.signal_map.columns.str.strip().str.lower()
+        print(f"✅ Signal map loaded from {Path(spec_path).name} → sheet 'vbRcSignals'")
+        cfg.signal_map = cls._normalize_columns(cfg.signal_map)
 
         # =====================================================
         # 3️⃣ Load KPI/PlotSpec-related sheets (auto-detect Long/Lat/etc.)
@@ -75,7 +68,7 @@ class Config:
         print(f"📘 Loading KPI section: '{kpi_section_key}' → {Path(spec_path).name}")
 
         spec_data  = cls._load_signal_map_kpi_plot_spec(spec_path, sheet_list)
-        sheet_map  = {k.lower(): v for k, v in spec_data.items()}
+        sheet_map  = {k.lower(): cls._normalize_columns(v) for k, v in spec_data.items()}
 
         cfg.graph_spec     = sheet_map.get("graphspec")
         cfg.line_colors    = sheet_map.get("linecolors")
@@ -83,10 +76,8 @@ class Config:
         cfg.event_kpi_list = sheet_map.get("kpi")
         cfg.params         = sheet_map.get("params")
 
-        cycle_sheet = sheet_map.get("cyclekpi")
-        cfg.cycle_kpi_list = cycle_sheet
-
-        if cfg.cycle_kpi_list is None or getattr(cfg.cycle_kpi_list, "empty", False):
+        cfg.cycle_kpi_list = sheet_map.get("cyclekpi")
+        if getattr(cfg.cycle_kpi_list, "empty", True):
             warnings.warn("⚠️ No cycleKPI/overallKPI sheet found in config workbook.")
 
 
@@ -94,39 +85,8 @@ class Config:
         # 4️⃣ Parse params sheet into dict with type awareness
         # =====================================================
         if cfg.params is not None and not cfg.params.empty:
-            cfg.params.columns = cfg.params.columns.str.strip().str.lower()
-
             try:
-                df = cfg.params.dropna(subset=["parameter", "value"]).copy()
-                df["parameter"] = df["parameter"].astype(str).str.strip().str.lower()
-
-                param_dict = {}
-                type_dict  = {}
-
-                for _, row in df.iterrows():
-                    name  = row["parameter"]
-                    value = row["value"]
-                    ptype = str(row.get("type", "")).strip().lower()
-
-                    try:
-                        if ptype in ("int", "integer"):
-                            cast_val = int(float(value))
-                        elif ptype in ("float", "double", "numeric"):
-                            cast_val = float(value)
-                        elif ptype in ("bool", "boolean"):
-                            cast_val = bool(value)
-                        elif ptype in ("str", "string"):
-                            cast_val = str(value)
-                        else:
-                            cast_val = float(value)
-                    except Exception:
-                        cast_val = value
-
-                    param_dict[name] = cast_val
-                    type_dict[name]  = ptype or type(cast_val).__name__
-
-                cfg.params = param_dict
-                cfg.param_types = type_dict
+                cfg.params, cfg.param_types = cls._parse_params_sheet(cfg.params)
                 print(f"⚙️ Loaded {len(cfg.params)} parameters from 'params' sheet.")
                 print("   ➝ Keys:", ", ".join(list(cfg.params.keys())[:6]), "...")
             except Exception as e:
@@ -136,7 +96,6 @@ class Config:
         # 5️⃣ Normalize and clean line_colors sheet
         # =====================================================
         if cfg.line_colors is not None and not cfg.line_colors.empty:
-            cfg.line_colors.columns = cfg.line_colors.columns.str.strip().str.lower()
             rgb_cols = [c for c in cfg.line_colors.columns if c in ["r", "g", "b"]]
             if len(rgb_cols) == 3:
                 try:
@@ -174,12 +133,6 @@ class Config:
             cfg.calibratables = {}
             print("⚙️ No Calibratables defined under KPI section.")
 
-
-        # =====================================================
-        # 7️⃣ Normalize graph_spec columns
-        # =====================================================
-        if cfg.graph_spec is not None:
-            cfg.graph_spec.columns = cfg.graph_spec.columns.str.strip().str.lower()
 
         return cfg
 
@@ -228,6 +181,45 @@ class Config:
 
         return params
 
+    @staticmethod
+    def _normalize_columns(df):
+        if df is None:
+            return None
+        df.columns = df.columns.str.strip().str.lower()
+        return df
+
+    @staticmethod
+    def _parse_params_sheet(params_df):
+        df = params_df.dropna(subset=["parameter", "value"]).copy()
+        df["parameter"] = df["parameter"].astype(str).str.strip().str.lower()
+
+        param_dict = {}
+        type_dict = {}
+
+        for _, row in df.iterrows():
+            name = row["parameter"]
+            value = row["value"]
+            ptype = str(row.get("type", "")).strip().lower()
+
+            try:
+                if ptype in ("int", "integer"):
+                    cast_val = int(float(value))
+                elif ptype in ("float", "double", "numeric"):
+                    cast_val = float(value)
+                elif ptype in ("bool", "boolean"):
+                    cast_val = bool(value)
+                elif ptype in ("str", "string"):
+                    cast_val = str(value)
+                else:
+                    cast_val = float(value)
+            except Exception:
+                cast_val = value
+
+            param_dict[name] = cast_val
+            type_dict[name] = ptype or type(cast_val).__name__
+
+        return param_dict, type_dict
+
 
     @staticmethod
     def _load_signal_map_kpi_plot_spec(file_path, sheet_list):
@@ -250,12 +242,10 @@ class Config:
             try:
                 preview = excel.parse(sheet_name=sheet_name, nrows=5, header=None)
 
-                header_row = 0
-                for i in range(len(preview)):
-                    non_na = preview.iloc[i].notna().sum()
-                    if non_na >= 3:
-                        header_row = i
-                        break
+                header_row = next(
+                    (i for i in range(len(preview)) if preview.iloc[i].notna().sum() >= 3),
+                    0,
+                )
 
                 df = excel.parse(sheet_name=sheet_name, header=header_row)
                 df.columns = df.columns.str.strip().str.lower()
