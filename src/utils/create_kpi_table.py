@@ -5,9 +5,6 @@ import warnings
 from pathlib import Path
 
 
-# ------------------------------------------------------------------ #
-# Public API
-# ------------------------------------------------------------------ #
 def create_kpi_table_from_df(schema_df: pd.DataFrame, n: int = 0, feature: str | None = None) -> pd.DataFrame:
     """
     Create KPI DataFrame from DataFrame schema, automatically including 'Common' KPIs.
@@ -31,44 +28,26 @@ def create_kpi_table_from_df(schema_df: pd.DataFrame, n: int = 0, feature: str |
     if not isinstance(schema_df, pd.DataFrame):
         raise TypeError(f"Expected DataFrame, got {type(schema_df)}")
 
-    # --- Normalize column names ---
-    schema_df.columns = schema_df.columns.str.strip().str.lower()
-
-    if "feature" not in schema_df.columns:
+    schema = _normalize_schema(schema_df)
+    if "feature" not in schema.columns:
         raise ValueError("Schema DataFrame must contain column 'Feature' to filter by feature name.")
 
-    # --- Normalize feature names ---
-    schema_df["feature"] = schema_df["feature"].astype(str).str.strip().str.upper()
-
-    # --- Extract subsets ---
-    common_df = schema_df[schema_df["feature"] == "COMMON"]
-
+    common_df = schema[schema["feature"] == "COMMON"]
     if feature is not None:
         feature = feature.strip().upper()
-        feature_df = schema_df[schema_df["feature"] == feature]
+        feature_df = schema[schema["feature"] == feature]
 
         if common_df.empty and feature_df.empty:
             warnings.warn(f"⚠️ No KPIs found for '{feature}' or 'Common' — returning empty table.")
             return pd.DataFrame()
 
-        # --- Combine Common + feature rows (Common first) ---
         combined_df = pd.concat([common_df, feature_df], ignore_index=True)
         print(f"🧩 Combined {len(common_df)} Common + {len(feature_df)} {feature} KPIs")
 
-        # --- Build KPI table ---
         df = _create_kpi_table(combined_df, n)
-
-        # --- Build and attach display name mapping ---
-        display_names = {
-            str(row["name"]): (
-                f"{row['name']} [{row['unit']}]" if pd.notna(row.get("unit")) and str(row["unit"]).strip() else str(row["name"])
-            )
-            for _, row in combined_df.iterrows()
-        }
-        df.attrs["display_names"] = display_names
+        df.attrs["display_names"] = _build_display_names(combined_df)
         return df
 
-    # --- No feature specified → Common only ---
     if common_df.empty:
         warnings.warn("⚠️ No 'Common' KPIs found in schema.")
         return pd.DataFrame()
@@ -76,13 +55,7 @@ def create_kpi_table_from_df(schema_df: pd.DataFrame, n: int = 0, feature: str |
     print(f"🧩 Created KPI table with {len(common_df)} Common KPIs only")
 
     df = _create_kpi_table(common_df, n)
-    display_names = {
-        str(row["name"]): (
-            f"{row['name']} [{row['unit']}]" if pd.notna(row.get("unit")) and str(row["unit"]).strip() else str(row["name"])
-        )
-        for _, row in common_df.iterrows()
-    }
-    df.attrs["display_names"] = display_names
+    df.attrs["display_names"] = _build_display_names(common_df)
     return df
 
 
@@ -104,27 +77,38 @@ def create_kpi_table_from_json(json_file, n: int = 0, feature: str | None = None
     schema_df = pd.DataFrame(schema["variables"])
     return create_kpi_table_from_df(schema_df, n, feature)
 
-# ------------------------------------------------------------------ #
-# Internal helper
-# ------------------------------------------------------------------ #
+def _normalize_schema(schema_df: pd.DataFrame) -> pd.DataFrame:
+    schema = schema_df.copy()
+    schema.columns = schema.columns.str.strip().str.lower()
+    if "feature" in schema.columns:
+        schema["feature"] = schema["feature"].astype(str).str.strip().str.upper()
+    return schema
+
+
+def _build_display_names(schema: pd.DataFrame) -> dict:
+    display_names = {}
+    for _, row in schema.iterrows():
+        name = str(row["name"])
+        unit = row.get("unit")
+        unit_str = str(unit).strip() if pd.notna(unit) else ""
+        display_names[name] = f"{name} [{unit_str}]" if unit_str else name
+    return display_names
+
+
 def _create_kpi_table(schema: pd.DataFrame, n: int = 0) -> pd.DataFrame:
     """
     Build KPI table from schema DataFrame (expects columns: name, type, unit).
     """
-    required_cols = {"name", "type", "unit"}
-    if not required_cols.issubset(schema.columns):
+    required_cols = ["name", "type", "unit"]
+    if not set(required_cols).issubset(schema.columns):
         raise ValueError(
             f"Schema must contain at least {required_cols}, found {schema.columns.tolist()}"
         )
 
-    schema = schema[list(required_cols)]  # keep only needed columns
+    schema = schema[required_cols]  # keep only needed columns
 
     var_names = schema["name"].astype(str).tolist()
     var_types = schema["type"].str.lower().tolist()
-    var_units = schema["unit"].fillna("").astype(str).tolist()
-
-    # Create display names like "vehSpd [km/h]"
-    display_names = [f"{n} [{u}]" if u else n for n, u in zip(var_names, var_units)]
 
     # Map schema types → Pandas dtypes
     valid_types = {"string": "string", "double": "float64", "logical": "boolean"}
@@ -152,7 +136,4 @@ def _create_kpi_table(schema: pd.DataFrame, n: int = 0) -> pd.DataFrame:
     for name, dtype in dtypes.items():
         df[name] = df[name].astype(dtype)
 
-    df.attrs["display_names"] = dict(zip(var_names, display_names))
     return df
-
-
