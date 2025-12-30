@@ -153,7 +153,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         },
     ]
     bottom_row_height_px = 70
-    bottom_row_gap_px = 0
+    bottom_row_gap_px = -2
     bottom_min_height_px = 650
     bottom_legend_pad_px = 12
     bottom_legend_item_gap = -6
