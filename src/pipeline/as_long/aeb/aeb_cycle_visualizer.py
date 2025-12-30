@@ -119,7 +119,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         "AEB Suppression Breakdown",
     ]
     availability_defs = [
-        ("Precond", "AvailDistPct", "#4c6ef5"),
+        ("Driver", "AvailDistPct", "#4c6ef5"),
         ("ROV", "ROVAvail", "#40c057"),
         ("VAL", "VALAvail", "#fab005"),
     ]
