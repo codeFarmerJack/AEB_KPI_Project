@@ -11,13 +11,24 @@ from src.utils.process_calibratables import interpolate_threshold_clamped
 
 class FcwCycleKpiExtractor(BaseCycleKpiExtractor):
     """
-    Computes FCW availability KPIs over distance:
-      - AvailDistPct: distance % where preconditions allow FCW (fcwPrecondBlk == 0)
-      - ROVAvail: distance % with healthy AEB input (aebInputHealthy == 1)
-      - VALAvail: distance % where FCW run setting is active (fcwRunSetting == 2)
-      - Suppression breakdowns: distance % exceeding calibrated thresholds for
-        throttle, steering angle/rate, yaw rate, lateral accel.
-      - LowSpeed is always available for FCW (0% suppression).
+    FCW cycle KPIs with explicit criteria (distance-weighted).
+
+    Distance model:
+    - dist[i] = egoSpeed[m/s] * dt, dt from time diff (non-negative).
+    - KPI % = sum(dist where condition) / sum(dist) * 100.
+
+    Availability KPIs:
+    - AvailDistPct: fcwPrecondBlk == 0.
+    - ROVAvail: aebInputHealthy == 1.
+    - VALAvail: fcwRunSetting == 2.
+
+    Suppression KPIs (distance % where |signal| exceeds threshold):
+    - PedalPosProSuppression: |throttleValue| > PedalPosPro_th(egoSpd).
+    - SteeringWheelAngle: |steerWheelAngleDeg| > SteeringWheelAngle_Th(egoSpd).
+    - SteeringWheelAngleRate: |steerWheelAngleSpeedDeg| > AEB_SteeringAngleRate_Override(egoSpd).
+    - YawRate: |yawRateDeg| > YawrateSuspension_Th(egoSpd).
+    - LatAccel: |latActAccel| > LateralAcceleration_th(egoSpd).
+    - LowSpeed: always 0.0 (FCW not suppressed for low speed).
     """
 
     FEATURE_NAME = "FCW"
@@ -67,19 +78,7 @@ class FcwCycleKpiExtractor(BaseCycleKpiExtractor):
         """
         Compute distance-weighted FCW KPIs from cycle signals.
 
-        Availability metrics are computed as distance percentages:
-          - AvailDistPct: preconditions allow FCW (fcwPrecondBlk == 0).
-          - ROVAvail: AEB input health is OK (aebInputHealthy == 1).
-          - VALAvail: FCW run setting is active (fcwRunSetting == 2).
-
-        Suppression breakdowns (distance % where |signal| exceeds threshold):
-          - PedalPosProSuppression: throttleValue vs PedalPosPro_th(egoSpd)
-          - SteeringWheelAngle: steerWheelAngleDeg vs SteeringWheelAngle_Th(egoSpd)
-          - SteeringWheelAngleRate: steerWheelAngleSpeedDeg vs AEB_SteeringAngleRate_Override(egoSpd)
-          - YawRate: yawRateDeg vs YawrateSuspension_Th(egoSpd)
-          - LatAccel: latActAccel vs LateralAcceleration_th(egoSpd)
-          - LowSpeed: always available for FCW (0% suppression)
-
+        Criteria: see class docstring for per-KPI conditions and thresholds.
         Calibrated thresholds are interpolated per-sample using ego speed.
         """
         signals = self._load_signals(mdf)

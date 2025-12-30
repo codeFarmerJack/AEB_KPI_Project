@@ -12,10 +12,13 @@ from src.viz.visualizers.base_cycle_visualizer import BaseCycleVisualizer
 
 class BaseCycleKpiExtractor(ABC):
     """
-    Base class for CYCLE / AVAILABILITY KPIs.
-    - Operates on extracted MF4 logs
-    - Maintains its own file_list_extracted
-    - Owns overall_kpi_table
+    Base class for cycle/availability KPIs (file-level summaries).
+
+    Criteria and flow:
+    - Operates on full extracted MF4 logs (not event chunks).
+    - Produces ONE ROW per (file x feature) with distance-weighted KPIs.
+    - Subclasses decide KPI criteria and should return:
+      { "<FEATURE>": {"kpi_name": value, ...}, ... }
     """
 
     FEATURE_NAME = "BASE_CYCLE"
@@ -35,10 +38,10 @@ class BaseCycleKpiExtractor(ABC):
     @abstractmethod
     def extract_cycle_kpis(self, mdf, fname):
         """
-        Subclass must implement cycle/availability KPI logic.
+        Subclass must implement cycle/availability KPI logic and criteria.
 
-        Should return a dict:
-            { "kpi_name": value, ... }
+        Expected return structure:
+        { "<FEATURE>": {"kpi_name": value, ...}, ... }
         """
         pass
     

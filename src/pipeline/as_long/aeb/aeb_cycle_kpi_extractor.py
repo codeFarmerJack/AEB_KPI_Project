@@ -13,12 +13,24 @@ from src.utils.process_calibratables import interpolate_threshold_clamped
 
 class AebCycleKpiExtractor(BaseCycleKpiExtractor):
     """
-    Computes AEB availability KPIs over distance:
-      - AvailDistPct: distance % where preconditions allow AEB (aebPrecondBlk == 0)
-      - ROVAvail: distance % with healthy AEB input (aebInputHealthy == 1)
-      - VALAvail: distance % where AEB run setting is active (aebRunSetting == 2)
-      - Suppression breakdowns: distance % exceeding calibrated thresholds for
-        throttle, steering angle/rate, yaw rate, lateral accel, plus low-speed.
+    AEB cycle KPIs with explicit criteria (distance-weighted).
+
+    Distance model:
+    - dist[i] = egoSpeed[m/s] * dt, dt from time diff (non-negative).
+    - KPI % = sum(dist where condition) / sum(dist) * 100.
+
+    Availability KPIs:
+    - AvailDistPct: aebPrecondBlk == 0.
+    - ROVAvail: aebInputHealthy == 1.
+    - VALAvail: aebRunSetting == 2.
+
+    Suppression KPIs (distance % where |signal| exceeds threshold):
+    - PedalPosProSuppression: |throttleValue| > PedalPosPro_th(egoSpd).
+    - SteeringWheelAngle: |steerWheelAngleDeg| > SteeringWheelAngle_Th(egoSpd).
+    - SteeringWheelAngleRate: |steerWheelAngleSpeedDeg| > AEB_SteeringAngleRate_Override(egoSpd).
+    - YawRate: |yawRateDeg| > YawrateSuspension_Th(egoSpd).
+    - LatAccel: |latActAccel| > LateralAcceleration_th(egoSpd).
+    - LowSpeed: egoSpeed < 2 km/h (2/3.6 m/s).
     """
 
     FEATURE_NAME = "AEB"
@@ -69,19 +81,7 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
         """
         Compute distance-weighted AEB KPIs from cycle signals.
 
-        Availability metrics are computed as distance percentages:
-          - AvailDistPct: preconditions allow AEB (aebPrecondBlk == 0).
-          - ROVAvail: AEB input health is OK (aebInputHealthy == 1).
-          - VALAvail: AEB run setting is active (aebRunSetting == 2).
-
-        Suppression breakdowns (distance % where |signal| exceeds threshold):
-          - PedalPosProSuppression: throttleValue vs PedalPosPro_th(egoSpd)
-          - SteeringWheelAngle: steerWheelAngleDeg vs SteeringWheelAngle_Th(egoSpd)
-          - SteeringWheelAngleRate: steerWheelAngleSpeedDeg vs AEB_SteeringAngleRate_Override(egoSpd)
-          - YawRate: yawRateDeg vs YawrateSuspension_Th(egoSpd)
-          - LatAccel: latActAccel vs LateralAcceleration_th(egoSpd)
-          - LowSpeed: egoSpeed < 2 km/h (2/3.6 m/s)
-
+        Criteria: see class docstring for per-KPI conditions and thresholds.
         Calibrated thresholds are interpolated per-sample using ego speed.
         """
         signals = self._load_signals(mdf)
