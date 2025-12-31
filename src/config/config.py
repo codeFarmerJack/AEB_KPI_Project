@@ -1,6 +1,7 @@
 import json
 import warnings
 from pathlib import Path
+import numpy as np
 import pandas as pd
 from openpyxl import load_workbook
 from src.utils.path_manager import get_resource
@@ -15,6 +16,7 @@ class Config:
         self.line_colors    = None       # lineColors sheet
         self.marker_shapes  = None       # markerShapes sheet
         self.calibratables  = {}         # calibratables (optional)
+        self.calibratables_interp = {}  # cached x/y arrays for interpolation
         self.params         = None       # params sheet 
         self.param_types    = {}         # keep parameter type metadata
 
@@ -129,8 +131,10 @@ class Config:
             )
 
             cfg._apply_calibration_scaling()
+            cfg.calibratables_interp = cls._build_calibratable_cache(cfg.calibratables)
         else:
             cfg.calibratables = {}
+            cfg.calibratables_interp = {}
             print("⚙️ No Calibratables defined under KPI section.")
 
 
@@ -187,6 +191,26 @@ class Config:
             return None
         df.columns = df.columns.str.strip().str.lower()
         return df
+
+    @staticmethod
+    def _build_calibratable_cache(calibratables):
+        cache = {}
+        for name, table in (calibratables or {}).items():
+            if table is None:
+                continue
+            try:
+                if isinstance(table, dict) and "x" in table and "y" in table:
+                    cache[name] = (
+                        np.asarray(table["x"], dtype=float),
+                        np.asarray(table["y"], dtype=float),
+                    )
+                    continue
+                arr = np.asarray(table, dtype=float)
+                if arr.ndim == 2 and arr.shape[0] == 2:
+                    cache[name] = (arr[0], arr[1])
+            except Exception:
+                continue
+        return cache
 
     @staticmethod
     def _parse_params_sheet(params_df):

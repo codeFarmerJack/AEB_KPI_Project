@@ -126,7 +126,9 @@ class FcwCycleKpiExtractor(BaseCycleKpiExtractor):
         return [spec["key"] for spec in self._AVAIL_SPECS + self._SUPPRESSION_SPECS]
 
     def _interp_calibratable(self, name, speed_mps):
-        cal = (self.config.calibratables or {}).get(name)
+        cal = (getattr(self.config, "calibratables_interp", None) or {}).get(name)
+        if cal is None:
+            cal = (self.config.calibratables or {}).get(name)
         if cal is None:
             return None
         try:

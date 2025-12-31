@@ -30,7 +30,10 @@ def interpolate_threshold_clamped(table, x):
     if table is None:
         raise ValueError("Calibration table is None")
 
-    if isinstance(table, dict) and "x" in table and "y" in table:
+    if isinstance(table, tuple) and len(table) == 2:
+        x_vals = np.asarray(table[0], dtype=float)
+        y_vals = np.asarray(table[1], dtype=float)
+    elif isinstance(table, dict) and "x" in table and "y" in table:
         x_vals = np.asarray(table["x"], dtype=float)
         y_vals = np.asarray(table["y"], dtype=float)
     else:

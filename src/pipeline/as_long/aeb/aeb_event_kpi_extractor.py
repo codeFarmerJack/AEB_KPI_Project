@@ -152,8 +152,11 @@ class AebEventKpiExtractor(BaseEventKpiExtractor):
 
     def _load_calibratables(self, config):
         calibratables = {}
+        cached = getattr(config, "calibratables_interp", {}) or {}
         for internal_name, cfg_key in self._CALIBRATABLE_KEYS.items():
-            if cfg_key in config.calibratables:
+            if cfg_key in cached:
+                calibratables[internal_name] = cached[cfg_key]
+            elif cfg_key in config.calibratables:
                 calibratables[internal_name] = config.calibratables[cfg_key]
             else:
                 warnings.warn(f"⚠️ Missing calibratable '{cfg_key}' in config.")
