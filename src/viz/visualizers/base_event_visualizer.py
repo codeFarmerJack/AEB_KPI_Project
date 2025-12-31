@@ -30,7 +30,7 @@ class BaseEventVisualizer:
         os.makedirs(self.out_path_output, exist_ok=True)
 
         # --- Shared config references ---
-        self.graph_spec     = config.graph_spec.copy()
+        self.graph_spec     = config.graph_spec.copy() if config.graph_spec is not None else None
         self.line_colors    = config.line_colors
         self.marker_shapes  = config.marker_shapes
         self.calibratables  = config.calibratables
@@ -41,8 +41,8 @@ class BaseEventVisualizer:
         self.interactive    = getattr(config, "interactive", False)
 
         # --- Normalize and prep graph_spec ---
-        self.graph_spec = self.filter_graph_spec()
         self.graph_spec = self._normalize_graph_spec(self.graph_spec)
+        self.graph_spec = self.filter_graph_spec()
         self._group_counter = iter(range(1, 201))
 
         print(f"🎯 BaseEventVisualizer initialized for feature '{self.feature.upper()}'.")
@@ -69,23 +69,11 @@ class BaseEventVisualizer:
             warnings.warn("⚠️ graph_spec is empty — cannot filter.")
             return pd.DataFrame()
 
-        # --- Normalize column names safely ---
-        self.graph_spec.columns = (
-            self.graph_spec.columns
-            .astype(str)
-            .str.strip()
-            .str.lower()
-            .str.replace(" ", "_")
-        )
-
         if "feature" not in self.graph_spec.columns:
             warnings.warn("⚠️ No 'feature' column found in graph_spec — using all rows.")
             return self.graph_spec
 
-        # --- Determine feature-specific common axis label ---
-        common_label = f"common_{self.feature.lower()}"
-
-        # --- Build mask: include rows for this feature or its specific common axis ---
+        common_label = f"common_{self.feature}"
         feature_vals = self.graph_spec["feature"].astype(str).str.strip().str.lower()
         mask = feature_vals.isin([self.feature, common_label])
 
@@ -144,4 +132,3 @@ class BaseEventVisualizer:
                 warnings.warn(f"⚠️ Plotting failed at row {idx}: {e}")
 
         print(f"✅ Event visualization complete for '{self.feature.upper()}'.")
-
