@@ -7,7 +7,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config.config import Config
+from src.config.config_loader import ConfigLoader
 from src.utils.process_calibratables import interpolate_threshold_clamped
 
 
@@ -17,7 +17,7 @@ def test_calibratable_cache_builds_xy_tuple():
         "NoneCal": None,
     }
 
-    cache = Config._build_calibratable_cache(calibratables)
+    cache = ConfigLoader._build_calibratable_cache(calibratables)
 
     assert "TestCal" in cache
     assert "NoneCal" not in cache
