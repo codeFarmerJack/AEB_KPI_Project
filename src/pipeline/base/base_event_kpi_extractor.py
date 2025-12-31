@@ -87,6 +87,15 @@ class BaseEventKpiExtractor:
             self.kpi_table.insert(0, "label", "")
         self.kpi_table.loc[index, "label"] = fname
 
+    def _select_event_indices(self, event_indices, n_samples):
+        start_indices, end_indices = event_indices
+        start_idx = int(start_indices[0])
+        end_idx = int(end_indices[0]) if len(end_indices) else n_samples - 1
+
+        start_idx = max(0, min(start_idx, n_samples - 1))
+        end_idx = max(0, min(end_idx, n_samples - 1))
+        return start_idx, end_idx
+
 # ------------------------------------------------------------------ #
     def extract_event_kpis(self, mdf, fname, index):
         """Subclasses must implement and return a dict of KPI values."""

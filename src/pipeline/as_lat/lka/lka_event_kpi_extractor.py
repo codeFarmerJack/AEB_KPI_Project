@@ -69,7 +69,6 @@ class LkaEventKpiExtractor(BaseEventKpiExtractor):
         if signals is None:
             return None
 
-        signals = self._align_signals(signals, fname)
         event_indices = self._detect_events(signals, fname)
         if event_indices is None:
             return None
@@ -107,37 +106,6 @@ class LkaEventKpiExtractor(BaseEventKpiExtractor):
             ego_speed=ego_speed,
         )
 
-    def _align_signals(self, signals, fname):
-        lengths = [
-            len(signals.time),
-            len(signals.dtle),
-            len(signals.lka_status),
-            len(signals.steer_torque),
-            len(signals.rate_of_departure),
-            len(signals.veh_curvature),
-            len(signals.lane_curvature),
-            len(signals.dtle_target),
-            len(signals.use_case),
-            len(signals.ego_speed),
-        ]
-        min_len = min(lengths)
-        if all(length == min_len for length in lengths):
-            return signals
-
-        warnings.warn(f"[{fname}] Signal length mismatch — trimming to {min_len} samples.")
-        return self._LkaSignals(
-            time=signals.time[:min_len],
-            dtle=signals.dtle[:min_len],
-            dtle_target=signals.dtle_target[:min_len],
-            lka_status=signals.lka_status[:min_len],
-            steer_torque=signals.steer_torque[:min_len],
-            rate_of_departure=signals.rate_of_departure[:min_len],
-            veh_curvature=signals.veh_curvature[:min_len],
-            lane_curvature=signals.lane_curvature[:min_len],
-            use_case=signals.use_case[:min_len],
-            ego_speed=signals.ego_speed[:min_len],
-        )
-
     def _detect_events(self, signals, fname):
         try:
             start_indices, end_indices = detect_lka_events(signals.time, signals.lka_status)
@@ -150,15 +118,6 @@ class LkaEventKpiExtractor(BaseEventKpiExtractor):
             return None
 
         return start_indices, end_indices
-
-    def _select_event_indices(self, event_indices, n_samples):
-        start_indices, end_indices = event_indices
-        start_idx = int(start_indices[0])
-        end_idx = int(end_indices[0]) if len(end_indices) else n_samples - 1
-
-        start_idx = max(0, min(start_idx, n_samples - 1))
-        end_idx = max(0, min(end_idx, n_samples - 1))
-        return start_idx, end_idx
 
     def _build_event_result(self, signals, start_idx, end_idx):
         dtle_target_at_start = safe_scalar(signals.dtle_target[start_idx])

@@ -56,7 +56,6 @@ class LsaebEventKpiExtractor(BaseEventKpiExtractor):
         if signals is None:
             return None
 
-        signals = self._align_signals(signals, fname)
         if self._is_no_event(signals.event_type, fname):
             return None
 
@@ -88,18 +87,6 @@ class LsaebEventKpiExtractor(BaseEventKpiExtractor):
                 return event_type
         raise AttributeError("Missing CPM event type signal (cpmEventType or lsaeb_event_type).")
 
-    def _align_signals(self, signals, fname):
-        if len(signals.time) == len(signals.event_type):
-            return signals
-
-        n = min(len(signals.time), len(signals.event_type))
-        warnings.warn(f"[{fname}] Signal length mismatch — trimming to {n} samples.")
-        return self._LsaebSignals(
-            time=signals.time[:n],
-            ego_speed=signals.ego_speed[:n],
-            event_type=signals.event_type[:n],
-        )
-
     def _is_no_event(self, event_type, fname):
         if np.all(event_type == 0):
             warnings.warn(f"[{fname}] No LSAEB activation found (all zeros).")
@@ -118,15 +105,6 @@ class LsaebEventKpiExtractor(BaseEventKpiExtractor):
             return None
 
         return start_indices, end_indices
-
-    def _select_event_indices(self, event_indices, n_samples):
-        start_indices, end_indices = event_indices
-        start_idx = int(start_indices[0])
-        end_idx = int(end_indices[0]) if len(end_indices) > 0 else n_samples - 1
-
-        start_idx = max(0, min(start_idx, n_samples - 1))
-        end_idx = max(0, min(end_idx, n_samples - 1))
-        return start_idx, end_idx
 
     def _build_event_result(self, signals, start_idx):
         start_time = signals.time[start_idx]
