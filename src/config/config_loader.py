@@ -95,7 +95,6 @@ class ConfigLoader:
             print(f"📗 Loading calibratables from '{cfg.kpi_excel_path.name}' (sheet 'calParam')")
             sheet_map = {"calParam": cal_defs}
             cfg.calibratables = cls._load_calibratables(cfg.kpi_excel_path, sheet_map)
-            cfg._apply_calibration_scaling()
             cfg.calibratables_interp = cls._build_calibratable_cache(cfg.calibratables)
         else:
             cfg.calibratables = {}

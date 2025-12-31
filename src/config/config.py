@@ -35,19 +35,3 @@ class Config:
         if self.event_kpi_list is None:
             warnings.warn("⚠️ event_kpi_list missing; event KPIs may be unavailable.")
         return self
-
-    def _apply_calibration_scaling(self):
-        """
-        Apply scaling or normalization logic to certain calibratables.
-        """
-        key = "PedalPosProIncrease_Th"
-        if key in self.calibratables:
-            val = self.calibratables[key]
-            if isinstance(val, dict) and "y" in val:
-                y_vals = val["y"]
-                if all(isinstance(v, (int, float)) for v in y_vals if v is not None):
-                    if all(0 <= v <= 1 for v in y_vals):
-                        self.calibratables[key]["y"] = [
-                            v * 100 if v is not None else None for v in y_vals
-                        ]
-                        print(f"📏 Scaled '{key}' *100 (0-1 → 0-100).")
