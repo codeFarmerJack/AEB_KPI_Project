@@ -10,6 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.pipeline.input_handler import InputHandler
+from src.utils.mf4_postprocess import build_signal
 
 
 def _make_config():
@@ -44,10 +45,10 @@ def test_input_handler_uses_provided_files(tmp_path):
 
 
 def test_build_signal_fallback_categorical(tmp_path):
-    handler = InputHandler(_make_config(), input_path=tmp_path)
+    enum_mapper = SimpleNamespace(get_enum_for_signal=lambda _: None, enums={})
     series = pd.Series(["b", "a", "b"], index=[0, 1, 2], dtype=object)
 
-    sig = handler._build_signal("unknownSignal", series)
+    sig = build_signal("unknownSignal", series, enum_mapper)
 
     assert sig.samples.tolist() == [1, 0, 1]
     assert np.all(sig.timestamps == series.index.values)

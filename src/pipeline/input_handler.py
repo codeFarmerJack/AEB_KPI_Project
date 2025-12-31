@@ -1,13 +1,11 @@
 import os
 import gc
-import warnings
 from pathlib import Path
 from typing import Optional, Union
-import numpy as np
-from asammdf import MDF, Signal
+from asammdf import MDF
 from src.utils.path_manager import get_resource, init_tkinter_for_bundle
 from src.utils.mf4_extractor import mf4_extractor
-from src.utils.signal_filters import accel_filter
+from src.utils.mf4_postprocess import build_signal, merge_signals, postprocess_signals
 from src.utils.enum_loader import EnumMapper
 from src.utils.load_params import load_params_from_class, load_params_from_config
 
@@ -26,13 +24,6 @@ class InputHandler:
     PARAM_SPECS = {
         "resample_rate": {"default": 0.01, "type": float, "desc": "Resampling interval in seconds (e.g., 0.01 = 100 Hz)"},
         "cutoff_freq": {"default": 10.0, "type": float, "desc": "Low-pass filter cutoff frequency in Hz"},
-    }
-    _FILTER_SIGNALS = ("longActAccel", "latActAccel")
-    _CONVERSIONS = {
-        "egoSpeed": ("egoSpeedKph", lambda x: x * 3.6, "m/s -> km/h"),
-        "steerWheelAngle": ("steerWheelAngleDeg", np.degrees, "rad -> deg"),
-        "steerWheelAngleSpeed": ("steerWheelAngleSpeedDeg", np.degrees, "rad/s -> deg/s"),
-        "yawRate": ("yawRateDeg", np.degrees, "rad/s -> deg/s"),
     }
 
     def __init__(self, config, input_path: Optional[Union[str, Path]] = None, mf4_files=None):
@@ -64,27 +55,6 @@ class InputHandler:
         out_path.mkdir(parents=True, exist_ok=True)
         self.out_path_extracted = str(out_path)
 
-        # -------------------- Helper: Unit Conversions -------------------- #
-    def _apply_conversions(self, data):
-        """
-        Apply all unit conversions to extracted MF4 signals.
-        Adds new converted columns without overwriting originals.
-        """
-
-        for src, (dst, func, desc) in self._CONVERSIONS.items():
-            if src not in data.columns:
-                warnings.warn(f"⚠️ Signal '{src}' not found in extracted data.")
-                continue
-
-            try:
-                data[dst] = func(data[src])
-                print(f"   ✅ Converted {src} → {dst} ({desc})")
-            except Exception as e:
-                warnings.warn(f"⚠️ Failed to convert {src}: {e}")
-
-        return data
-
-
     # -------------------- Public API -------------------- #
     def process_mf4_files(self) -> None:
         """
@@ -93,16 +63,10 @@ class InputHandler:
         Workflow:
         1. Load and extract signals using mf4_extractor()
         2. Close the raw MF4 handle immediately after extraction
-        3. Apply signal filtering:
-            - longActAccel  → longActAccelFlt
-            - latActAccel   → latActAccelFlt
-        4. Apply unit conversions:
-            - egoSpeed               (m/s → km/h)
-            - steerWheelAngle        (rad → deg)
-            - steerWheelAngleSpeed   (rad/s → deg/s)
-            - yawRate                (rad/s → deg/s)
+        3. Post-process signals (filters + unit conversions)
+        4. Merge original + derived signals
         5. Map enum/categorical signals to integer values using enum_definitions.yaml
-        6. Save all signals (original + filtered + converted) into a new MDF file
+        6. Save all signals into a new MDF file
         named '<original>_extracted.mf4' inside the 'extracted' subfolder
         7. Close the new MDF file and force memory cleanup
         """
@@ -197,30 +161,15 @@ class InputHandler:
                 print(f"⚠️ Warning: no data extracted from {file}")
                 return
 
-            # --- 2️⃣ Filter long & lat acceleration ---
-            for sig in self._FILTER_SIGNALS:
-                if sig in data.columns:
-                    try:
-                        sig_flt = accel_filter(
-                            data.index.values,
-                            data[sig].values,
-                            cutoff_freq=self.cutoff_freq,
-                        )
-                        data[f"{sig}Flt"] = sig_flt
-                        print(f"   ✅ Filtered signal: {sig} → {sig}Flt")
-                    except Exception as e:
-                        warnings.warn(f"⚠️ Failed to filter {sig}: {e}")
-                else:
-                    warnings.warn(f"⚠️ Signal '{sig}' not found in extracted data.")
-            # --- 3️⃣ Apply unit conversions (throttle, steering, egoSpeed, yaw, etc.) ---
-            data = self._apply_conversions(data)
+            # --- 2️⃣ Post-process signals (filters + conversions) ---
+            derived = postprocess_signals(data, cutoff_freq=self.cutoff_freq)
+            merged = merge_signals(data, derived)
 
-
-            # --- 4️⃣ Save both raw + filtered signals to new MDF ---
+            # --- 3️⃣ Save merged signals to new MDF ---
             new_mdf = MDF()
-            for col in data.columns:
+            for col in merged.columns:
                 try:
-                    new_mdf.append(self._build_signal(col, data[col]))
+                    new_mdf.append(build_signal(col, merged[col], self.enum_mapper))
                 except Exception as e:
                     print(f"⚠️ Failed to append signal {col}: {e}")
 
@@ -237,49 +186,14 @@ class InputHandler:
                 # ---------- CRITICAL CLEANUP ----------
                 # remove references
                 try:
-                    del data, sigs, summary, used, raster, mods, new_mdf
+                    del data, derived, merged, sigs, summary, used, raster, mods, new_mdf
                 except Exception:
                     pass
 
                 # Force garbage collection to free memory
                 gc.collect()
 
-            print(f"💾 Saved extracted + filtered signals → {extracted_file}")
+            print(f"💾 Saved extracted + processed signals → {extracted_file}")
 
         except Exception as e:
             print(f"❌ Error processing {file}: {e}")
-
-    def _build_signal(self, name, series):
-        if series.dtype == object:
-            enum_name = self.enum_mapper.get_enum_for_signal(name)
-
-            if enum_name:
-                enum_table = self.enum_mapper.enums.get(enum_name, {})
-                encoded = series.astype(str).map(lambda v: enum_table.get(v, np.nan))
-                if encoded.isna().any():
-                    missing = series[encoded.isna()].unique().tolist()
-                    print(f"⚠️ Unmapped values in {name}: {missing}")
-                samples = encoded.fillna(-1).astype(np.int16).to_numpy()
-                return Signal(
-                    samples=samples,
-                    timestamps=series.index.values,
-                    name=name,
-                    unit="u[1]",
-                    comment=f"Enum mapping: {enum_name}",
-                )
-
-            categories, encoded = np.unique(series.astype(str), return_inverse=True)
-            return Signal(
-                samples=encoded.astype(np.int16),
-                timestamps=series.index.values,
-                name=name,
-                unit="u[1]",
-                comment=f"Categorical mapping: {dict(enumerate(categories))}",
-            )
-
-        return Signal(
-            samples=series.to_numpy(dtype=np.float64),
-            timestamps=series.index.values,
-            name=name,
-            unit="u[1]",
-        )
