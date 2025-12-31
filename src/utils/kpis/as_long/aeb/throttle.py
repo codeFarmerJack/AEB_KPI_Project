@@ -77,15 +77,6 @@ class AebThrottleCalculator:
             is_high = False
         kpi_table.at[row_idx, "isPedalPosIncHigh"] = is_high
 
-        # --- Step 8: Debug print (consistent with other KPI calculators)
-        print(
-            f"⚙️ [Row {row_idx}] Throttle KPIs:\n"
-            f"   • Pedal Start      = {pedal_start:.3f}\n"
-            f"   • Pedal Max        = {pedal_max:.3f}\n"
-            f"   • Pedal Increment  = {pedal_inc:.3f}\n"
-            f"   • Threshold ({pedal_pos_inc_th}) → High = {is_high}\n"
-        )
-
     # ------------------------------------------------------------------
     # Internal helper
     # ------------------------------------------------------------------

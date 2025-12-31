@@ -1,4 +1,3 @@
-import numpy as np
 from src.utils.event_detector.as_lat.lka import detect_lka_events
 from src.pipeline.base.base_event_segmenter import BaseEventSegmenter
 
@@ -23,25 +22,24 @@ class LkaEventSegmenter(BaseEventSegmenter):
 
     # -------------------- LKA-specific detection -------------------- #
 
-    def detect_events(self, df):
+    def detect_events(self, time, signal):
         """
         Detect start/end times of LKA events using lkaInterventionStatus signal.
 
         Parameters
         ----------
-        df : pandas.DataFrame
-            Must contain columns ['time', 'lkaInterventionStatus'].
+        time : np.ndarray
+            Time vector for the event signals.
+        signal : np.ndarray
+            Event status signal (lkaInterventionStatus).
 
         Returns
         -------
         start_times, end_times : np.ndarray
             Start and end times (seconds) of detected LKA events.
         """
-        if "time" not in df or self.signal_name not in df:
-            raise KeyError(f"DataFrame must contain 'time' and '{self.signal_name}' columns.")
-
         return detect_lka_events(
-            df["time"].values,
-            df[self.signal_name].values,
+            time,
+            signal,
             output="times",
         )

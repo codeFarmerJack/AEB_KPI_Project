@@ -1,4 +1,3 @@
-import numpy as np
 from src.pipeline.base.base_event_segmenter import BaseEventSegmenter
 from src.utils.event_detector.as_long.lsaeb import detect_lsaeb_events
 
@@ -20,13 +19,11 @@ class LsaebEventSegmenter(BaseEventSegmenter):
 
     # -------------------- LSAEB-specific detection -------------------- #
 
-    def detect_events(self, df, merge_window: float = 2.0):
-        if "time" not in df or self.signal_name not in df:
-            raise KeyError(f"DataFrame must contain 'time' and '{self.signal_name}' columns.")
-        # ask the detector for times for chunk extraction
+    def detect_events(self, time, signal, merge_window: float = 2.0):
+        """Ask the detector for times for chunk extraction."""
         return detect_lsaeb_events(
-            df["time"].values,
-            df[self.signal_name].values,
+            time,
+            signal,
             merge_window,
             output="times",
         )

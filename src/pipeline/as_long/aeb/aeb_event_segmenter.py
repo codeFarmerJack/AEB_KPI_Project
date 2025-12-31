@@ -1,4 +1,3 @@
-import numpy as np
 from src.pipeline.base.base_event_segmenter import BaseEventSegmenter
 from src.utils.event_detector.as_long.aeb import detect_aeb_events
 
@@ -19,13 +18,10 @@ class AebEventSegmenter(BaseEventSegmenter):
         self.in_path_aeb_chunks = self.out_path_chunks
 
     # -------------------- AEB-specific detection -------------------- #
-    def detect_events(self, df):
+    def detect_events(self, time, signal):
         """Wrapper calling the shared detection function."""
-        if "time" not in df or self.signal_name not in df:
-            raise KeyError(f"DataFrame must contain 'time' and '{self.signal_name}' columns.")
-
         return detect_aeb_events(
-            time=df["time"].values,
-            aeb_request=df[self.signal_name].values,
+            time=time,
+            aeb_request=signal,
             post_time=self.post_time,
         )

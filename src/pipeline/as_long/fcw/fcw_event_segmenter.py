@@ -1,4 +1,3 @@
-import numpy as np
 from src.pipeline.base.base_event_segmenter import BaseEventSegmenter
 from src.utils.event_detector.as_long.fcw import detect_fcw_events
 
@@ -20,8 +19,6 @@ class FcwEventSegmenter(BaseEventSegmenter):
 
     # -------------------- FCW-specific detection -------------------- #
 
-    def detect_events(self, df, merge_window: float = 2.0):
+    def detect_events(self, time, signal, merge_window: float = 2.0):
         """Wrapper calling the shared detection function."""
-        if "time" not in df or self.signal_name not in df:
-            raise KeyError(f"DataFrame must contain 'time' and '{self.signal_name}' columns.")
-        return detect_fcw_events(df["time"].values, df[self.signal_name].values, merge_window)
+        return detect_fcw_events(time, signal, merge_window)

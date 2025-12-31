@@ -2,7 +2,6 @@ import os
 import gc
 import warnings
 import traceback
-import pandas as pd
 from src.utils.signal_mdf import SignalMDF, safe_load_mdf, get_signal
 from src.utils.load_params import load_params_from_class, load_params_from_config
 
@@ -61,28 +60,22 @@ class BaseEventSegmenter:
                 mdf = safe_load_mdf(file_path)
 
                 try:
-                    sig = get_signal(mdf, self.signal_name, required=True)
-                except AttributeError:
-                    print(f"⚠️ File {fname} missing required signal '{self.signal_name}' → skipped")
-                    continue
-                if sig.size == 0:
-                    print(f"⚠️ '{self.signal_name}' empty → skipped")
-                    continue
-
-                try:
                     time = get_signal(mdf, "time", required=True)
-                except AttributeError:
-                    print(f"⚠️ File {fname} missing required signal 'time' → skipped")
+                    sig = get_signal(mdf, self.signal_name, required=True)
+                except AttributeError as e:
+                    print(f"⚠️ File {fname} missing required signal '{e}' → skipped")
                     continue
 
-                df = pd.DataFrame({"time": time, self.signal_name: sig})
+                if time.size == 0 or sig.size == 0:
+                    print(f"⚠️ Empty time or '{self.signal_name}' → skipped")
+                    continue
 
-                start_times, end_times = self.detect_events(df)
+                start_times, end_times = self.detect_events(time, sig)
                 print(f"   ➝ Detected {len(start_times)} {self.event_name.upper()} events")
 
                 self.extract_events(mdf, start_times, end_times, name)
 
-                del mdf, df
+                del mdf
                 gc.collect()
 
             except Exception as e:
