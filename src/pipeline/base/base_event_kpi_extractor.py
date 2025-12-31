@@ -103,6 +103,45 @@ class BaseEventKpiExtractor:
             f"{self.__class__.__name__} must implement extract_event_kpis()"
         )
 
+    def _extract_single_event_by_indices(self, mdf, fname, index):
+        signals = self._load_signals(mdf, fname)
+        if signals is None:
+            return None
+
+        if self._should_skip_event(signals, fname):
+            return None
+
+        event_indices = self._detect_events(signals, fname)
+        if event_indices is None:
+            return None
+
+        start_idx, end_idx = self._select_event_indices(event_indices, len(signals.time))
+        result = self._build_event_result(signals, start_idx, end_idx)
+        self._post_process_event_by_indices(mdf, index, signals, start_idx, end_idx, result)
+        return result
+
+    def _extract_single_event_by_time(self, mdf, fname, index):
+        signals = self._load_signals(mdf, fname)
+        if signals is None:
+            return None
+
+        event_time = self._detect_event_time(signals, fname)
+        if event_time is None:
+            return None
+
+        result = self._build_event_result(signals, event_time)
+        self._post_process_event_by_time(mdf, index, signals, event_time, result)
+        return result
+
+    def _should_skip_event(self, signals, fname):
+        return False
+
+    def _post_process_event_by_indices(self, mdf, index, signals, start_idx, end_idx, result):
+        return None
+
+    def _post_process_event_by_time(self, mdf, index, signals, event_time, result):
+        return None
+
     # ------------------------------------------------------------------ #
     def export_event_kpis(self, sheet_name=None):
         """

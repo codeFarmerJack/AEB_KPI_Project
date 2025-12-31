@@ -65,16 +65,7 @@ class LkaEventKpiExtractor(BaseEventKpiExtractor):
         Extract KPI values for a single LKA event segment.
         Returns a dict of KPI values to write into kpi_table.
         """
-        signals = self._load_signals(mdf, fname)
-        if signals is None:
-            return None
-
-        event_indices = self._detect_events(signals, fname)
-        if event_indices is None:
-            return None
-
-        start_idx, end_idx = self._select_event_indices(event_indices, len(signals.time))
-        return self._build_event_result(signals, start_idx, end_idx)
+        return self._extract_single_event_by_indices(mdf, fname, i)
 
     def _load_signals(self, mdf, fname):
         try:

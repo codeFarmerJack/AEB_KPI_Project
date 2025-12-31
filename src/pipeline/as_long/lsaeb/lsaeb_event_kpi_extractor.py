@@ -46,28 +46,15 @@ class LsaebEventKpiExtractor(BaseEventKpiExtractor):
         super().__init__(config, event_segmenter, "in_path_lsaeb_chunks", feature_name="LSAEB")
         self.distance_calc = LsaebDistanceCalculator(self)
 
-
     def extract_event_kpis(self, mdf, fname, i):
         """
         Extract KPI values for a single LSAEB MF4 file.
         Returns a dict of KPI values to write into kpi_table.
         """
-        signals = self._load_signals(mdf, fname)
-        if signals is None:
-            return None
+        return self._extract_single_event_by_indices(mdf, fname, i)
 
-        if self._is_no_event(signals.event_type, fname):
-            return None
-
-        event_indices = self._detect_events(signals, fname)
-        if event_indices is None:
-            return None
-
-        start_idx, end_idx = self._select_event_indices(event_indices, len(signals.time))
-        result = self._build_event_result(signals, start_idx)
-
-        self.distance_calc.compute_distance(mdf, self.kpi_table, i, start_idx, end_idx)
-        return result
+    def _should_skip_event(self, signals, fname):
+        return self._is_no_event(signals.event_type, fname)
 
     def _load_signals(self, mdf, fname):
         try:
@@ -106,9 +93,12 @@ class LsaebEventKpiExtractor(BaseEventKpiExtractor):
 
         return start_indices, end_indices
 
-    def _build_event_result(self, signals, start_idx):
+    def _build_event_result(self, signals, start_idx, end_idx):
         start_time = signals.time[start_idx]
         return {
             "logTime": safe_scalar(start_time),
             "vehSpd": safe_scalar(signals.ego_speed[start_idx]),
         }
+
+    def _post_process_event_by_indices(self, mdf, index, signals, start_idx, end_idx, result):
+        self.distance_calc.compute_distance(mdf, self.kpi_table, index, start_idx, end_idx)

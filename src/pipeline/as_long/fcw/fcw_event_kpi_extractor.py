@@ -65,19 +65,10 @@ class FcwEventKpiExtractor(BaseEventKpiExtractor):
         Extract KPI values for a single FCW MF4 file.
         Returns a dict of KPI values to write into kpi_table.
         """
-        signals = self._load_signals(mdf, fname)
-        if signals is None:
-            return None
+        return self._extract_single_event_by_time(mdf, fname, i)
 
-        fcw_start_time = self._detect_start_time(signals, fname)
-        if fcw_start_time is None:
-            return None
-
-        result = {"logTime": safe_scalar(fcw_start_time)}
-        result["vehSpd"] = self._vehicle_speed_at_time(signals, fcw_start_time)
-
-        self._run_calculators(mdf, i)
-        return result
+    def _detect_event_time(self, signals, fname):
+        return self._detect_start_time(signals, fname)
 
     def _load_signals(self, mdf, fname):
         time = self._prepare_time(mdf)
@@ -114,6 +105,15 @@ class FcwEventKpiExtractor(BaseEventKpiExtractor):
             return np.nan
         start_idx = int(np.argmin(np.abs(signals.time - event_time)))
         return safe_scalar(signals.ego_speed[start_idx])
+
+    def _build_event_result(self, signals, event_time):
+        return {
+            "logTime": safe_scalar(event_time),
+            "vehSpd": self._vehicle_speed_at_time(signals, event_time),
+        }
+
+    def _post_process_event_by_time(self, mdf, index, signals, event_time, result):
+        self._run_calculators(mdf, index)
 
     def _run_calculators(self, mdf, index):
         self.brake_jerk_calc.compute_brake_jerk(mdf, self.kpi_table, index)
