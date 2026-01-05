@@ -118,7 +118,9 @@ def mf4_extractor(
 
     # --- Clean names ---
     sigs_copy = sigs.copy()
-    sigs_copy["ChannelName"] = [remove_mdf_suffixes([name])[0] for name in sigs_copy["ChannelName"]]
+    sigs_copy["ChannelName"] = (
+        sigs_copy["ChannelName"].astype(str).str.split("\\\\", n=1).str[0]
+    )
 
     # --- Build group index -> raster name map ---
     group_to_name = {
@@ -139,33 +141,51 @@ def mf4_extractor(
     temp_frames = []
     min_ts = None
     max_ts = None
+    raster_rows = []
+    mods_rows = []
+
+    signal_db = None
+    tactunit_map = {}
+    generic_names = set()
+    if signal_database is not None:
+        signal_db = signal_database.copy()
+        signal_db.columns = signal_db.columns.str.lower()
+        if "genericname" in signal_db.columns:
+            generic_names = {
+                str(g).strip().lower()
+                for g in signal_db["genericname"]
+                if pd.notna(g)
+            }
+        if "genericname" in signal_db.columns and "tactunit" in signal_db.columns:
+            tactunit_map = {
+                str(g).strip().lower(): t
+                for g, t in zip(signal_db["genericname"], signal_db["tactunit"])
+                if pd.notna(g) and pd.notna(t)
+            }
 
     # ================================================================
     # Match requested signals to MDF channels
     # ================================================================
     if signal_database is not None:
         raster_groups = {}
-        for group_idx in sigs_copy["GroupIndex"].unique():
-            group_rows = sigs_copy[sigs_copy["GroupIndex"] == group_idx]
+        for group_idx, group_rows in sigs_copy.groupby("GroupIndex", sort=False):
             if group_rows.empty:
                 continue
             raster_name = str(group_rows["RasterName"].iloc[0]).strip().lower()
-            channel_map = {
-                str(ch).lower(): idx
-                for ch, idx in zip(group_rows["ChannelName"], group_rows.index)
-            }
+            channel_map = dict(zip(group_rows["ChannelName"].str.lower(), group_rows.index))
             raster_groups.setdefault(raster_name, []).append((group_idx, channel_map))
 
-        for _, row in signal_database.iterrows():
-            generic_name = row["genericname"]
-            raster_val = row["raster"]
-            synonym_val = row["synonym"]
+        for row in signal_db.itertuples(index=False):
+            generic_name = getattr(row, "genericname", None)
+            raster_val = getattr(row, "raster", None)
+            synonym_val = getattr(row, "synonym", None)
 
-            if pd.isna(raster_val) or pd.isna(synonym_val):
+            if pd.isna(generic_name) or pd.isna(raster_val) or pd.isna(synonym_val):
                 continue
+            generic_name = str(generic_name).strip()
             raster_val = str(raster_val).strip()
             synonym_val = str(synonym_val).strip()
-            if not raster_val or not synonym_val:
+            if not raster_val or not synonym_val or not generic_name:
                 continue
 
             raster_key = raster_val.lower()
@@ -198,7 +218,7 @@ def mf4_extractor(
     # ================================================================
     # Read each matched signal
     # ================================================================
-    for _, row in pd.DataFrame(to_read).iterrows():
+    for row in to_read:
         full_name = row["FullName"]
         group_idx = row["GroupIndex"]
         generic_name = row["GenericName"]
@@ -211,25 +231,25 @@ def mf4_extractor(
                 continue
 
             # --- Handle duplicate timestamps ---
-            if len(timestamps) != len(np.unique(timestamps)):
-                dup_count = len(timestamps) - len(np.unique(timestamps))
-                print(f"⚠️ Duplicate timestamps detected in {full_name} ({dup_count} duplicates) → keeping first occurrence")
-                # Build temp_df and drop duplicates
-                temp_df = pd.DataFrame({generic_name: samples}, index=timestamps)
-                temp_df = temp_df[~temp_df.index.duplicated(keep="first")]
-            else:
-                temp_df = pd.DataFrame({generic_name: samples}, index=timestamps)
+            index = pd.Index(timestamps)
+            temp_df = pd.DataFrame({generic_name: samples}, index=index)
+            dup_mask = index.duplicated(keep="first")
+            if dup_mask.any():
+                dup_count = int(dup_mask.sum())
+                print(
+                    f"⚠️ Duplicate timestamps detected in {full_name} "
+                    f"({dup_count} duplicates) → keeping first occurrence"
+                )
+                temp_df = temp_df.loc[~dup_mask]
 
             # --- Optional unit conversion ---
             if convert_to_tact_unit and signal_database is not None:
-                row_idx = signal_database[signal_database["genericname"].str.lower() == generic_name.lower()].index
-                if not row_idx.empty:
+                generic_key = str(generic_name).strip().lower()
+                if generic_key in generic_names:
                     mdf_unit = sig_data.unit if sig_data.unit else "u[1]"
-                    tact_unit = (
-                        signal_database.at[row_idx[0], "tactunit"]
-                        if "tactunit" in signal_database.columns
-                        else "u[1]"
-                    )
+                    tact_unit = tactunit_map.get(generic_key, "u[1]")
+                    if tact_unit is None or (isinstance(tact_unit, float) and np.isnan(tact_unit)):
+                        tact_unit = "u[1]"
                     if mdf_unit != tact_unit:
                         samples_converted, did_convert = convert_tact_unit(
                             samples,
@@ -239,26 +259,15 @@ def mf4_extractor(
                         )
                         temp_df[generic_name] = samples_converted
                         if did_convert:
-                            mods = pd.concat(
-                                [mods, pd.DataFrame({"Signal": [generic_name], "From": [mdf_unit], "To": [tact_unit]})],
-                                ignore_index=True,
-                            )
+                            mods_rows.append({"Signal": generic_name, "From": mdf_unit, "To": tact_unit})
 
-            # --- Combine into main DataFrame ---
-            if data_out.empty:
-                if resample is None:
-                    data_out = temp_df
-            else:
-                if resample is None:
-                    data_out = data_out.join(temp_df, how="outer").interpolate(method="linear")
+            temp_frames.append(temp_df)
             if resample is not None:
-                min_ts = timestamps[0] if min_ts is None else min(min_ts, timestamps[0])
-                max_ts = timestamps[-1] if max_ts is None else max(max_ts, timestamps[-1])
-                temp_frames.append(temp_df)
+                min_ts = index[0] if min_ts is None else min(min_ts, index[0])
+                max_ts = index[-1] if max_ts is None else max(max_ts, index[-1])
 
             # --- Record raster info ---
-            r = np.mean(np.diff(timestamps)) if len(timestamps) > 1 else np.inf
-            raster = pd.concat([raster, pd.DataFrame({"Variable": [generic_name], "Raster": [raster_val]})], ignore_index=True)
+            raster_rows.append({"Variable": generic_name, "Raster": raster_val})
 
         except Exception as e:
             print(f"Error reading {full_name}: {e}")
@@ -266,6 +275,19 @@ def mf4_extractor(
     # ================================================================
     # Summary
     # ================================================================
+    frames = []
+    if data_out is not None and not data_out.empty:
+        frames.append(data_out)
+    frames.extend(temp_frames)
+
+    if frames:
+        if resample is None:
+            data_out = pd.concat(frames, axis=1, join="outer").sort_index()
+        elif min_ts is not None and max_ts is not None:
+            resample_steps = np.arange(min_ts, max_ts + resample / 2, resample)
+            resampled_frames = [df.reindex(resample_steps, method="nearest") for df in frames]
+            data_out = pd.concat(resampled_frames, axis=1)
+
     if req is not None:
         read_signals = data_out.columns.tolist()
         not_read = [r for r in req if r not in read_signals]
@@ -282,17 +304,16 @@ def mf4_extractor(
         if to_read
         else pd.DataFrame(columns=["GenericName", "FullName", "Raster"])
     )
-
-    if resample is not None and temp_frames and min_ts is not None and max_ts is not None:
-        resample_steps = np.arange(min_ts, max_ts + resample / 2, resample)
-        if not data_out.empty:
-            data_out = data_out.reindex(resample_steps, method="nearest")
-        for temp_df in temp_frames:
-            temp_df = temp_df.reindex(resample_steps, method="nearest")
-            if data_out.empty:
-                data_out = temp_df
-            else:
-                data_out = data_out.join(temp_df, how="outer")
+    raster = (
+        pd.DataFrame(raster_rows, columns=["Variable", "Raster"])
+        if raster_rows
+        else pd.DataFrame(columns=["Variable", "Raster"])
+    )
+    mods = (
+        pd.DataFrame(mods_rows, columns=["Signal", "From", "To"])
+        if mods_rows
+        else pd.DataFrame(columns=["Signal", "From", "To"])
+    )
 
     if not data_out.empty and data_out.isna().any().any():
         data_out = data_out.interpolate(method="linear")

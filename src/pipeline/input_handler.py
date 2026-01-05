@@ -167,11 +167,14 @@ class InputHandler:
 
             # --- 3️⃣ Save merged signals to new MDF ---
             new_mdf = MDF()
-            for col in merged.columns:
+            signals = []
+            for col, series in merged.items():
                 try:
-                    new_mdf.append(build_signal(col, merged[col], self.enum_mapper))
+                    signals.append(build_signal(col, series, self.enum_mapper))
                 except Exception as e:
                     print(f"⚠️ Failed to append signal {col}: {e}")
+            if signals:
+                new_mdf.append(signals)
 
             extracted_file = Path(self.out_path_extracted) / f"{full_path.stem}_extracted.mf4"
 

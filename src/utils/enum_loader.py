@@ -12,6 +12,10 @@ class EnumMapper:
             for k, v in content.items()
             if k not in {"EnumToValueMap", "ValueToEnumMap"}
         }
+        self.enums_inv = {
+            name: {v: k for k, v in table.items()}
+            for name, table in self.enums.items()
+        }
         self.signal_to_enum = content.get("EnumToValueMap", {})
         self.value_to_enum = content.get("ValueToEnumMap", {})
 
@@ -30,9 +34,8 @@ class EnumMapper:
 
     def to_name(self, enum_name, number):
         """Convert numeric value → symbolic name."""
-        table = self.enums.get(enum_name, {})
-        inv = {v: k for k, v in table.items()}
-        return inv.get(number, None)
+        table = self.enums_inv.get(enum_name, {})
+        return table.get(number, None)
 
     def decode_values(self, signal_name, values, fallback_enum=None):
         """
@@ -51,6 +54,7 @@ class EnumMapper:
         )
 
         names = []
+        inv_table = self.enums_inv.get(enum_name) if enum_name else None
         for v in np.asarray(values):
             if v is None or (isinstance(v, float) and np.isnan(v)):
                 names.append(None)
@@ -63,8 +67,8 @@ class EnumMapper:
             except Exception:
                 names.append(None)
                 continue
-            if enum_name:
-                names.append(self.to_name(enum_name, code) or str(code))
+            if inv_table:
+                names.append(inv_table.get(code) or str(code))
             else:
                 names.append(str(code))
         return names

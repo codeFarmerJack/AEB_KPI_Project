@@ -87,7 +87,7 @@ def build_signal(name, series, enum_mapper):
 
         if enum_name:
             enum_table = enum_mapper.enums.get(enum_name, {})
-            encoded = series.astype(str).map(lambda v: enum_table.get(v, np.nan))
+            encoded = series.astype(str).map(enum_table)
             if encoded.isna().any():
                 missing = series[encoded.isna()].unique().tolist()
                 print(f"⚠️ Unmapped values in {name}: {missing}")
