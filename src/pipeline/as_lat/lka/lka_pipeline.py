@@ -3,7 +3,7 @@ from src.pipeline.base.base_pipeline import BasePipeline
 from src.pipeline.as_lat.lka.lka_event_segmenter import LkaEventSegmenter
 from src.pipeline.as_lat.lka.lka_event_kpi_extractor import LkaEventKpiExtractor
 from src.pipeline.as_lat.lka.lka_cycle_kpi_extractor import LkaCycleKpiExtractor
-from src.pipeline.as_lat.lka.lka_visualizer import LkaEventVisualizer
+from src.pipeline.as_lat.lka.lka_event_visualizer import LkaEventVisualizer
 
 
 class LkaPipeline(BasePipeline):
@@ -52,5 +52,7 @@ class LkaPipeline(BasePipeline):
             self.viz = LkaEventVisualizer(self.cfg, self.event_kpi)
             self.viz.interactive = getattr(self, "default_interactive", False)
             self.viz.plot()
+            if getattr(self, "cycle_kpi", None) is not None and not self.cycle_kpi.cycle_kpi_table.empty:
+                self.cycle_kpi.render_cycle_dashboards(feature_name="LKA")
         except Exception as e:
             raise RuntimeError(f"❌ LKA visualization failed: {e}")

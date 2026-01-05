@@ -1,6 +1,7 @@
 import numpy as np
 import warnings
 from src.pipeline.base.base_cycle_kpi_extractor import BaseCycleKpiExtractor
+from src.pipeline.as_lat.lka.lka_cycle_visualizer import LkaCycleVisualizer
 from src.utils.signal_mdf import get_signal
 
 class LkaCycleKpiExtractor(BaseCycleKpiExtractor):
@@ -11,6 +12,7 @@ class LkaCycleKpiExtractor(BaseCycleKpiExtractor):
     """
 
     FEATURE_NAME = "LKA"
+    CYCLE_VISUALIZER_CLS = LkaCycleVisualizer
 
     def __init__(self, input_handler, config):
         super().__init__(input_handler, config)
@@ -77,4 +79,3 @@ class LkaCycleKpiExtractor(BaseCycleKpiExtractor):
             }
             for feature in features
         }
-
