@@ -69,12 +69,6 @@ def detect_lsaeb_events(time, cpm_event_type, merge_window: float = 2.0, output:
     starts_idx = np.array(merged_starts, dtype=int)
     ends_idx   = np.array(merged_ends,   dtype=int)
 
-    # friendly debug print
-    print("\n🧩 Detected LSAEB events:")
-    for si, ei in zip(starts_idx, ends_idx):
-        print(f"   ➝ Start idx={si:6d} (t={time[si]:.3f}s), End idx={ei:6d} (t={time[ei]:.3f}s)")
-    print(f"   Total events detected: {len(starts_idx)}\n")
-
     if output == "indices":
         return starts_idx, ends_idx
     elif output == "times":
