@@ -1,7 +1,4 @@
 import numpy as np
-from scipy.signal import argrelextrema
-
-import numpy as np
 import warnings
 
 def detect_aeb_events(time, aeb_request, post_time=3.0):
@@ -36,39 +33,34 @@ def detect_aeb_events(time, aeb_request, post_time=3.0):
     if len(time) != len(req) or len(time) == 0:
         raise ValueError("Input arrays must be the same length and non-empty.")
 
-    # --- Identify transitions ---
-    start_indices = []
-    end_indices = []
+    # --- Identify transitions (vectorized) ---
+    prev = np.roll(req, 1)
+    prev[0] = req[0]
 
-    for i in range(1, len(req)):
-        prev, curr = req[i - 1], req[i]
+    start_idx = np.where(((req == 1) | (req == 2)) & ~((prev == 1) | (prev == 2)))[0]
+    end_idx = np.where(((prev == 1) | (prev == 2) | (prev == 3)) & (req == 0))[0]
 
-        # Detect rising transition → AEB start
-        if curr in (1, 2) and prev not in (1, 2):
-            start_indices.append(i)
-
-        # Detect falling transition → AEB end
-        if prev in (1, 2, 3) and curr == 0:
-            end_indices.append(i)
+    if start_idx.size == 0:
+        return np.array([]), np.array([])
 
     # --- Pair start and end events ---
-    start_times = []
-    end_times = []
+    pos = np.searchsorted(end_idx, start_idx, side="right")
+    has_end = pos < end_idx.size
 
-    for s in start_indices:
-        # Find first end index after this start
-        e_candidates = [e for e in end_indices if e > s]
-        if e_candidates:
-            e = e_candidates[0]
-            start_times.append(time[s])
-            end_times.append(time[e])
-        else:
-            # No matching end found → fallback to +post_time
-            start_times.append(time[s])
-            end_times.append(min(time[-1], time[s] + post_time))
-            warnings.warn(f"⚠️ No AEB end found after {time[s]:.3f}s — used +{post_time:.1f}s buffer.")
+    start_times = time[start_idx]
+    end_times = np.empty_like(start_times)
 
-    return np.array(start_times), np.array(end_times)
+    if has_end.any():
+        end_times[has_end] = time[end_idx[pos[has_end]]]
+
+    if (~has_end).any():
+        end_times[~has_end] = np.minimum(time[-1], start_times[~has_end] + post_time)
+        for t in start_times[~has_end]:
+            warnings.warn(
+                f"⚠️ No AEB end found after {t:.3f}s — used +{post_time:.1f}s buffer."
+            )
+
+    return start_times, end_times
 
 
 def find_first_last_indices(vector, target_value, comparison_mode="equal", tolerance=0.0):
@@ -195,4 +187,3 @@ def find_aeb_intv_end(signal_chunk, aeb_start_idx, aeb_end_thd):
 
     aeb_end_time = float(time[aeb_end_idx])
     return is_veh_stopped, aeb_end_idx, aeb_end_time
-

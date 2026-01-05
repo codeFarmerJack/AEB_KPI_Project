@@ -36,26 +36,33 @@ def detect_lsaeb_events(time, cpm_event_type, merge_window: float = 2.0, output:
     start_idx = np.where((cpm_prev == 0) & ((cpm == 1) | (cpm == 2)))[0]
     end_idx   = np.where(((cpm_prev == 1) | (cpm_prev == 2)) & (cpm == 0))[0]
 
-    # handle open-ended events
-    if len(start_idx) > len(end_idx):
-        end_idx = np.append(end_idx, n - 1)
-
-    # basic guards for segmented data
-    start_idx = np.clip(start_idx, 0, n - 1)
-    end_idx   = np.clip(end_idx,   0, n - 1)
-
-    if len(start_idx) == 0:
+    if start_idx.size == 0:
         # keep prints for visibility; return empty arrays in requested format
         print("⚠️ No LSAEB events detected.")
         return (np.array([], dtype=int) if output == "indices" else np.array([]),
                 np.array([], dtype=int) if output == "indices" else np.array([]))
 
+    # Pair each start with the next end after it
+    pos = np.searchsorted(end_idx, start_idx, side="right")
+    has_end = pos < end_idx.size
+    end_idx_paired = np.empty_like(start_idx)
+    if has_end.any():
+        end_idx_paired[has_end] = end_idx[pos[has_end]]
+    if (~has_end).any():
+        end_idx_paired[~has_end] = n - 1
+        for t in time[start_idx[~has_end]]:
+            print(f"⚠️ No LSAEB end found after {t:.3f}s — using end of log.")
+
+    # basic guards for segmented data
+    start_idx = np.clip(start_idx, 0, n - 1)
+    end_idx_paired = np.clip(end_idx_paired, 0, n - 1)
+
     # merge close events in time
     merged_starts, merged_ends = [], []
-    cur_s, cur_e = int(start_idx[0]), int(end_idx[0])
+    cur_s, cur_e = int(start_idx[0]), int(end_idx_paired[0])
 
     for i in range(1, len(start_idx)):
-        ns, ne = int(start_idx[i]), int(end_idx[i])
+        ns, ne = int(start_idx[i]), int(end_idx_paired[i])
         if time[ns] - time[cur_e] <= merge_window:
             cur_e = ne
         else:

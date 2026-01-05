@@ -37,15 +37,21 @@ def detect_fcw_events(time, fcw_request, merge_window: float = 2.0):
     # Falling edge: 2/3 → 0
     end_idx = np.where(((fcw_prev == 2) | (fcw_prev == 3)) & (fcw == 0))[0]
 
-    start_times = time[start_idx]
-    end_times   = time[end_idx]
-
-    # Handle unclosed last event (if FCW stays active till end)
-    if len(start_times) > len(end_times):
-        end_times = np.append(end_times, time[-1])
-
-    if len(start_times) == 0:
+    if start_idx.size == 0:
         return np.array([]), np.array([])
+
+    # Pair each start with the next end after it
+    pos = np.searchsorted(end_idx, start_idx, side="right")
+    has_end = pos < end_idx.size
+
+    start_times = time[start_idx]
+    end_times = np.empty_like(start_times)
+    if has_end.any():
+        end_times[has_end] = time[end_idx[pos[has_end]]]
+    if (~has_end).any():
+        end_times[~has_end] = time[-1]
+        for t in start_times[~has_end]:
+            print(f"⚠️ No FCW end found after {t:.3f}s — using end of log.")
 
     # Merge events that occur close together
     merged_starts, merged_ends = [], []
