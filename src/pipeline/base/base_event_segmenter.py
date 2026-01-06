@@ -2,6 +2,7 @@ import os
 import gc
 import warnings
 import traceback
+from pathlib import Path
 from src.utils.signal_mdf import SignalMDF, safe_load_mdf, get_signal
 from src.utils.load_params import load_params_from_class, load_params_from_config
 
@@ -30,6 +31,7 @@ class BaseEventSegmenter:
         self.event_name         = event_name.lower()
         self.in_path_raw_data   = input_handler.in_path_raw_data
         self.in_path_extracted  = input_handler.out_path_extracted
+        self.selected_mf4_files = getattr(input_handler, "selected_mf4_files", None)
 
         # --- Set folder for extracted chunks ---
         self.out_path_chunks = os.path.join(self.in_path_raw_data, f"{self.event_name}_chunks")
@@ -45,6 +47,9 @@ class BaseEventSegmenter:
     def process_all_files(self):
         """Loop over all *_extracted.mf4 files and detect/extract events."""
         mdf_files = [f for f in os.listdir(self.in_path_extracted) if f.endswith("_extracted.mf4")]
+        if self.selected_mf4_files:
+            allowed = {f"{Path(p).stem}_extracted.mf4" for p in self.selected_mf4_files}
+            mdf_files = [f for f in mdf_files if f in allowed]
         print(f"\n📂 Found {len(mdf_files)} extracted MF4 files in {self.in_path_extracted}\n")
 
         if not mdf_files:

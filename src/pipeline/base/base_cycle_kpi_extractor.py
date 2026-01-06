@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import os
 import warnings
+from pathlib import Path
 
 import pandas as pd
 
@@ -31,6 +32,7 @@ class BaseCycleKpiExtractor(ABC):
         self.config = config
         self.feature_name = self.FEATURE_NAME
         self._init_paths(input_handler)
+        self.selected_mf4_files = getattr(input_handler, "selected_mf4_files", None)
         self.file_list_extracted = self._collect_extracted_files(self.in_path_extracted)
         self._init_cycle_schema(config)
 
@@ -131,6 +133,9 @@ class BaseCycleKpiExtractor(ABC):
 
     def _collect_extracted_files(self, path):
         files = [f for f in os.listdir(path) if f.lower().endswith(".mf4")]
+        if self.selected_mf4_files:
+            allowed = {f"{Path(p).stem}_extracted.mf4" for p in self.selected_mf4_files}
+            files = [f for f in files if f in allowed]
         if not files:
             raise FileNotFoundError(f"No extracted .mf4 files found in {path}")
         return files

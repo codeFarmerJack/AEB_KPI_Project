@@ -55,12 +55,22 @@ class PipelineRunner(QThread):
         "LKA": LkaPipeline,
     }
 
-    def __init__(self, mf4_folder: Path, features_long: Iterable[str], features_lat: Iterable[str], config_dir: Optional[Path] = None):
+    def __init__(
+        self,
+        mf4_folder: Path,
+        features_long: Iterable[str],
+        features_lat: Iterable[str],
+        config_dir: Optional[Path] = None,
+        mf4_files: Optional[Iterable[Path]] = None,
+    ):
         super().__init__()
         self.mf4_folder = Path(mf4_folder).expanduser().resolve()
         self.features_long = [f for f in features_long if f in self.LONG_FEATURES]
         self.features_lat = [f for f in features_lat if f in self.LAT_FEATURES]
         self.config_dir = Path(config_dir) if config_dir else get_config_dir()
+        self.mf4_files = (
+            [Path(p).expanduser().resolve() for p in mf4_files] if mf4_files else None
+        )
 
     # ------------------ Helpers ------------------ #
     @contextmanager
@@ -80,7 +90,7 @@ class PipelineRunner(QThread):
         cfg_path = self.config_dir / config_name
         self.log.emit(f"📘 Config: {cfg_path.name}")
         cfg = Config.from_json(cfg_path)
-        ih = InputHandler(cfg, input_path=self.mf4_folder)
+        ih = InputHandler(cfg, input_path=self.mf4_folder, mf4_files=self.mf4_files)
         ih.process_mf4_files()
 
         for key in feature_keys:

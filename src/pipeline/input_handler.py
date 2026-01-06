@@ -50,6 +50,9 @@ class InputHandler:
             input_path,
             mf4_files,
         )
+        self.selected_mf4_files = (
+            [Path(p) for p in self._provided_files] if self._provided_files else None
+        )
 
         out_path = Path(self.in_path_raw_data) / "extracted"
         out_path.mkdir(parents=True, exist_ok=True)
