@@ -138,7 +138,8 @@ class LkaCycleVisualizer(BaseCycleVisualizer):
         grid_bottom = self._build_fig_bottom(signals)
 
         html_top = pio.to_html(fig_top, include_plotlyjs="cdn", full_html=False)
-        html_bottom = grid_bottom.render_embed()
+        html_bottom = self._render_bottom_with_cursor_panel(grid_bottom)
+        cursor_css = self._cursor_panel_css()
 
         html = f"""
         <html>
@@ -158,6 +159,7 @@ class LkaCycleVisualizer(BaseCycleVisualizer):
               .spacer {{
                 height: {self.html_gap_px}px;
               }}
+              {cursor_css}
             </style>
           </head>
           <body>

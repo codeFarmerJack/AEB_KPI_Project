@@ -1,4 +1,6 @@
+import html as html_lib
 import os
+import re
 import warnings
 from pathlib import Path
 
@@ -85,12 +87,24 @@ class BaseCycleVisualizer:
         "bottom_legend_pad_px": 12,
         "bottom_legend_item_gap": 0,
         "bottom_legend_gutter_px": 120,
+        "bottom_legend_hidden_gutter_px": 24,
         "bottom_legend_left_pct": 88,
+        "bottom_show_legend": False,
         "bottom_slider_height_px": 16,
         "bottom_slider_label_gap_px": 10,
         "bottom_slider_margin_px": 6,
         "bottom_round_decimals": 2,
         "bottom_max_points": 5000,
+        "bottom_cursor_panel_width_px": 400,
+        "bottom_cursor_panel_gap_px": 12,
+        "bottom_cursor_time_decimals": 3,
+        "bottom_cursor_value_decimals": None,
+        "bottom_cursor_signal_col_width_px": 140,
+        "bottom_cursor_value_col_width_px": 50,
+        "bottom_cursor_unit_col_width_px": 40,
+        "bottom_cursor_color_a": "#f06595",
+        "bottom_cursor_color_b": "#845ef7",
+        "bottom_cursor_line_width": 1,
     }
 
     def __init__(self, out_dir: str):
@@ -574,6 +588,8 @@ class BaseCycleVisualizer:
                 f"{self.__class__.__name__} must define row_defs"
             )
 
+        self._bottom_series_meta = []
+
         time_arr = signals.get("time")
         if time_arr is None:
             raise ValueError("Missing 'time' signal")
@@ -619,7 +635,13 @@ class BaseCycleVisualizer:
             return Grid()
 
         row_gap_px = self.bottom_row_gap_px
-        legend_pad_px = self.bottom_legend_pad_px
+        show_legend = bool(self.bottom_show_legend)
+        legend_pad_px = self.bottom_legend_pad_px if show_legend else 0
+        legend_gutter_px = (
+            self.bottom_legend_gutter_px
+            if show_legend
+            else self.bottom_legend_hidden_gutter_px
+        )
         slider_space_px = (
             self.bottom_slider_height_px
             + self.bottom_slider_label_gap_px
@@ -723,6 +745,13 @@ class BaseCycleVisualizer:
                     linestyle_opts=opts.LineStyleOpts(color=series["color"]),
                     itemstyle_opts=opts.ItemStyleOpts(color=series["color"]),
                 )
+                self._bottom_series_meta.append(
+                    {
+                        "label": series["label"],
+                        "unit": row.get("unit") or "",
+                        "color": series["color"],
+                    }
+                )
 
             y_min, y_max = None, None
             if row.get("y_range"):
@@ -733,7 +762,7 @@ class BaseCycleVisualizer:
 
             legend_orient = "vertical" if len(row["series"]) > 1 else "horizontal"
             legend_opts = opts.LegendOpts(
-                is_show=True,
+                is_show=show_legend,
                 orient=legend_orient,
                 pos_left=f"{self.bottom_legend_left_pct}%",
                 pos_top=f"{top_pct + 0.1}%",
@@ -745,19 +774,14 @@ class BaseCycleVisualizer:
                 textstyle_opts=opts.TextStyleOpts(font_size=10),
             )
 
-            unit = row.get("unit")
-            yaxis_name = f"[{unit}]" if unit else ""
             yaxis_kwargs = {
-                "name": yaxis_name,
-                "name_location": "middle",
-                "name_rotate": 90,
-                "name_gap": 30,
                 "axispointer_opts": opts.AxisPointerOpts(
                     is_show=False,
                     label=opts.LabelOpts(is_show=False),
                 ),
                 "split_number": 2,
             }
+            unit = row.get("unit")
 
             if y_min is not None and y_max is not None:
                 yaxis_kwargs.update(min_=y_min, max_=y_max)
@@ -801,7 +825,7 @@ class BaseCycleVisualizer:
                 line,
                 grid_opts=opts.GridOpts(
                     pos_left="80px",
-                    pos_right=f"{self.bottom_legend_gutter_px}px",
+                    pos_right=f"{legend_gutter_px}px",
                     pos_top=f"{top_pct + legend_pad}%",
                     height=f"{plot_height}%",
                 ),
@@ -811,6 +835,541 @@ class BaseCycleVisualizer:
 
         return grid
 
+    def _cursor_panel_css(self) -> str:
+        panel_width = int(self.bottom_cursor_panel_width_px)
+        panel_gap = int(self.bottom_cursor_panel_gap_px)
+        signal_col_width = int(self.bottom_cursor_signal_col_width_px)
+        value_col_width = int(self.bottom_cursor_value_col_width_px)
+        unit_col_width = int(self.bottom_cursor_unit_col_width_px)
+        return f"""
+        .cycle-bottom-wrap {{
+            display: flex;
+            align-items: stretch;
+            gap: {panel_gap}px;
+        }}
+        .cycle-bottom-chart {{
+            flex: 1 1 auto;
+            min-width: 0;
+        }}
+        .cycle-cursor-panel {{
+            width: {panel_width}px;
+            min-width: {panel_width}px;
+            max-width: {panel_width}px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 8px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 12px;
+            color: #212529;
+        }}
+        .cycle-cursor-title {{
+            font-weight: 600;
+            font-size: 12px;
+        }}
+        .cycle-cursor-summary {{
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2px;
+            font-size: 11px;
+        }}
+        .cycle-cursor-summary span {{
+            font-weight: 600;
+        }}
+        .cycle-cursor-table-wrap {{
+            flex: 1 1 auto;
+            overflow-y: auto;
+            overflow-x: auto;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            background: #ffffff;
+        }}
+        .cycle-cursor-table {{
+            width: max-content;
+            min-width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: 11px;
+        }}
+        .cycle-cursor-table th,
+        .cycle-cursor-table td {{
+            padding: 2px 4px;
+            border-bottom: 1px solid #f1f3f5;
+            text-align: right;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        .cycle-cursor-table th:first-child,
+        .cycle-cursor-table td:first-child {{
+            text-align: left;
+            width: {signal_col_width}px;
+            max-width: {signal_col_width}px;
+            min-width: {signal_col_width}px;
+        }}
+        .cycle-cursor-table th:nth-child(2),
+        .cycle-cursor-table td:nth-child(2),
+        .cycle-cursor-table th:nth-child(3),
+        .cycle-cursor-table td:nth-child(3),
+        .cycle-cursor-table th:nth-child(4),
+        .cycle-cursor-table td:nth-child(4) {{
+            width: {value_col_width}px;
+            max-width: {value_col_width}px;
+            min-width: {value_col_width}px;
+        }}
+        .cycle-cursor-table th:nth-child(5),
+        .cycle-cursor-table td:nth-child(5) {{
+            width: {unit_col_width}px;
+            max-width: {unit_col_width}px;
+            min-width: {unit_col_width}px;
+        }}
+        .cycle-signal-cell {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }}
+        .cycle-signal-swatch {{
+            width: 16px;
+            height: 3px;
+            border-radius: 2px;
+            flex: 0 0 auto;
+        }}
+        .cycle-cursor-table th {{
+            position: sticky;
+            top: 0;
+            background: #f1f3f5;
+            z-index: 1;
+            font-weight: 600;
+        }}
+        .cycle-cursor-hint {{
+            font-size: 10px;
+            color: #868e96;
+        }}
+        """
+
+    def _build_cursor_panel_html(self, chart_id: str) -> str:
+        rows = []
+        series_meta = getattr(self, "_bottom_series_meta", [])
+        for idx, meta in enumerate(series_meta):
+            label = html_lib.escape(str(meta.get("label", "")))
+            unit = html_lib.escape(str(meta.get("unit", "")))
+            color = html_lib.escape(str(meta.get("color", "#adb5bd")))
+            rows.append(
+                f"""
+                <tr data-series-index="{idx}">
+                  <td>
+                    <div class="cycle-signal-cell">
+                      <span class="cycle-signal-swatch" style="background:{color};"></span>
+                      <span>{label}</span>
+                    </div>
+                  </td>
+                  <td class="cursor-val-a">--</td>
+                  <td class="cursor-val-b">--</td>
+                  <td class="cursor-val-diff">--</td>
+                  <td class="cursor-unit">{unit}</td>
+                </tr>
+                """
+            )
+        rows_html = "\n".join(rows)
+        return f"""
+        <div class="cycle-cursor-panel" id="cursor-panel-{chart_id}">
+          <div class="cycle-cursor-title">Cursor Values</div>
+          <div class="cycle-cursor-summary">
+            <div>Cursor A: <span id="cursor-a-{chart_id}">--</span> s</div>
+            <div>Cursor B: <span id="cursor-b-{chart_id}">--</span> s</div>
+            <div>Delta: <span id="cursor-delta-{chart_id}">--</span> s</div>
+          </div>
+          <div class="cycle-cursor-table-wrap">
+            <table class="cycle-cursor-table">
+              <thead>
+                <tr>
+                  <th>Signal</th>
+                  <th>Val1</th>
+                  <th>Val2</th>
+                  <th>Diff</th>
+                  <th>Unit</th>
+                </tr>
+              </thead>
+              <tbody id="cursor-body-{chart_id}">
+                {rows_html}
+              </tbody>
+            </table>
+          </div>
+          <div class="cycle-cursor-hint">Click to set A then B, Shift+click to set B</div>
+        </div>
+        """
+
+    @staticmethod
+    def _inject_before_body_end(html: str, extra: str) -> str:
+        marker = "</body>"
+        if marker in html:
+            return html.replace(marker, f"{extra}\n{marker}", 1)
+        return html + extra
+
+    def _wrap_bottom_html(self, html: str, chart_id: str, panel_html: str) -> str:
+        pattern = rf'(<div id="{re.escape(chart_id)}"[^>]*></div>)'
+        match = re.search(pattern, html)
+        if not match:
+            return html + panel_html
+        chart_div = match.group(1)
+        wrapped = (
+            f'<div class="cycle-bottom-wrap" id="cycle-wrap-{chart_id}">'
+            f'<div class="cycle-bottom-chart">{chart_div}</div>'
+            f'{panel_html}'
+            f"</div>"
+        )
+        return html.replace(chart_div, wrapped, 1)
+
+    def _build_cursor_panel_script(self, chart_id: str) -> str:
+        time_decimals = (
+            int(self.bottom_cursor_time_decimals)
+            if self.bottom_cursor_time_decimals is not None
+            else 3
+        )
+        value_decimals = self.bottom_cursor_value_decimals
+        if value_decimals is None:
+            value_decimals = self.bottom_round_decimals
+        if value_decimals is None:
+            value_decimals = 3
+        value_decimals = int(value_decimals)
+        color_a = self.bottom_cursor_color_a
+        color_b = self.bottom_cursor_color_b
+        line_width = int(self.bottom_cursor_line_width)
+        return f"""
+        <script>
+        (function() {{
+          var chartId = "{chart_id}";
+          var chartEl = document.getElementById(chartId);
+          if (!chartEl || !window.echarts) {{
+            return;
+          }}
+          var chart = echarts.getInstanceByDom(chartEl);
+          if (!chart) {{
+            setTimeout(function () {{
+              var retry = echarts.getInstanceByDom(chartEl);
+              if (retry && !retry.__cursorPanelAttached) {{
+                retry.__cursorPanelAttached = true;
+                init(retry);
+              }}
+            }}, 100);
+            return;
+          }}
+          if (chart.__cursorPanelAttached) {{
+            return;
+          }}
+          chart.__cursorPanelAttached = true;
+          init(chart);
+
+          function init(chart) {{
+            var option = chart.getOption();
+            var seriesList = option.series || [];
+            if (!seriesList.length) {{
+              return;
+            }}
+
+          function extractX(series) {{
+            var data = series.data || [];
+            if (!data.length) {{
+              return [];
+            }}
+            var first = data[0];
+            if (Array.isArray(first)) {{
+              return data.map(function (d) {{
+                return Array.isArray(d) ? d[0] : null;
+              }});
+            }}
+            if (first && typeof first === "object" && Array.isArray(first.value)) {{
+              return data.map(function (d) {{
+                return d && Array.isArray(d.value) ? d.value[0] : null;
+              }});
+            }}
+            var xAxisIdx = series.xAxisIndex || 0;
+            var xAxis = option.xAxis || [];
+            if (Array.isArray(xAxis) && xAxis[xAxisIdx] && xAxis[xAxisIdx].data) {{
+              return xAxis[xAxisIdx].data;
+            }}
+            return [];
+          }}
+
+          function getSeriesValue(series, idx) {{
+            var data = series.data || [];
+            if (idx == null || idx < 0 || idx >= data.length) {{
+              return null;
+            }}
+            var point = data[idx];
+            if (Array.isArray(point)) {{
+              return point[1];
+            }}
+            if (point && typeof point === "object") {{
+              if (Array.isArray(point.value)) {{
+                return point.value[1];
+              }}
+              if (point.value !== undefined) {{
+                return point.value;
+              }}
+            }}
+            return null;
+          }}
+
+          function formatValue(val, decimals) {{
+            if (val === null || val === undefined || val === "") {{
+              return "--";
+            }}
+            if (typeof val === "number") {{
+              if (!isFinite(val)) {{
+                return "--";
+              }}
+              if (Math.abs(val - Math.round(val)) < 1e-9) {{
+                return String(Math.round(val));
+              }}
+              return val.toFixed(decimals);
+            }}
+            return String(val);
+          }}
+
+          function findNearestIndex(list, value) {{
+            if (!list || !list.length) {{
+              return null;
+            }}
+            var bestIdx = null;
+            var bestDiff = Infinity;
+            for (var i = 0; i < list.length; i++) {{
+              var v = list[i];
+              if (v === null || v === undefined || !isFinite(v)) {{
+                continue;
+              }}
+              var diff = Math.abs(v - value);
+              if (diff < bestDiff) {{
+                bestDiff = diff;
+                bestIdx = i;
+              }}
+            }}
+            return bestIdx;
+          }}
+
+          function pickBaseSeries(list) {{
+            for (var i = 0; i < list.length; i++) {{
+              if (list[i] && list[i].data && list[i].data.length) {{
+                return list[i];
+              }}
+            }}
+            return list[0];
+          }}
+
+          var xList = extractX(pickBaseSeries(seriesList));
+          var cursorA = null;
+          var cursorB = null;
+
+          function updateMarkLines() {{
+            var lineData = [];
+            if (cursorA !== null) {{
+              lineData.push({{
+                xAxis: cursorA.x,
+                lineStyle: {{ color: "{color_a}", width: {line_width} }},
+                label: {{ show: false }}
+              }});
+            }}
+            if (cursorB !== null) {{
+              lineData.push({{
+                xAxis: cursorB.x,
+                lineStyle: {{ color: "{color_b}", width: {line_width} }},
+                label: {{ show: false }}
+              }});
+            }}
+            var seriesUpdates = seriesList.map(function () {{
+              return {{
+                markLine: {{
+                  symbol: ["none", "none"],
+                  silent: true,
+                  data: lineData
+                }}
+              }};
+            }});
+            chart.setOption({{ series: seriesUpdates }});
+          }}
+
+          function updateTable() {{
+            var aLabel = document.getElementById("cursor-a-{chart_id}");
+            var bLabel = document.getElementById("cursor-b-{chart_id}");
+            var dLabel = document.getElementById("cursor-delta-{chart_id}");
+            if (aLabel) {{
+              aLabel.textContent = cursorA !== null ? cursorA.x.toFixed({time_decimals}) : "--";
+            }}
+            if (bLabel) {{
+              bLabel.textContent = cursorB !== null ? cursorB.x.toFixed({time_decimals}) : "--";
+            }}
+            if (dLabel) {{
+              if (cursorA !== null && cursorB !== null) {{
+                dLabel.textContent = (cursorB.x - cursorA.x).toFixed({time_decimals});
+              }} else {{
+                dLabel.textContent = "--";
+              }}
+            }}
+
+            var body = document.getElementById("cursor-body-{chart_id}");
+            if (!body) {{
+              return;
+            }}
+            var rows = body.querySelectorAll("tr");
+            rows.forEach(function (row) {{
+              var idx = parseInt(row.getAttribute("data-series-index"), 10);
+              var series = seriesList[idx];
+              var valA = cursorA !== null ? getSeriesValue(series, cursorA.idx) : null;
+              var valB = cursorB !== null ? getSeriesValue(series, cursorB.idx) : null;
+              var diff = null;
+              if (valA !== null && valB !== null && typeof valA === "number" && typeof valB === "number") {{
+                diff = valB - valA;
+              }}
+              var cellA = row.querySelector(".cursor-val-a");
+              var cellB = row.querySelector(".cursor-val-b");
+              var cellD = row.querySelector(".cursor-val-diff");
+              if (cellA) {{
+                cellA.textContent = formatValue(valA, {value_decimals});
+              }}
+              if (cellB) {{
+                cellB.textContent = formatValue(valB, {value_decimals});
+              }}
+              if (cellD) {{
+                cellD.textContent = formatValue(diff, {value_decimals});
+              }}
+            }});
+          }}
+
+          function setCursor(xValue, forceB) {{
+            var idx = findNearestIndex(xList, xValue);
+            if (idx === null) {{
+              return;
+            }}
+            var snapped = xList[idx];
+            if (forceB && cursorA !== null) {{
+              cursorB = {{ x: snapped, idx: idx }};
+            }} else if (cursorA === null) {{
+              cursorA = {{ x: snapped, idx: idx }};
+            }} else if (cursorB === null) {{
+              cursorB = {{ x: snapped, idx: idx }};
+            }} else {{
+              cursorA = {{ x: snapped, idx: idx }};
+              cursorB = null;
+            }}
+            updateTable();
+            updateMarkLines();
+          }}
+
+          function pickXValueFromPixel(pixel) {{
+            var grids = option.grid || [];
+            if (!Array.isArray(grids)) {{
+              grids = [grids];
+            }}
+            var xAxes = option.xAxis || [];
+            if (!Array.isArray(xAxes)) {{
+              xAxes = [xAxes];
+            }}
+            if (!grids.length) {{
+              var fallback = chart.convertFromPixel({{ xAxisIndex: 0 }}, pixel);
+              return Array.isArray(fallback) ? fallback[0] : fallback;
+            }}
+            for (var i = 0; i < grids.length; i++) {{
+              if (!chart.containPixel({{ gridIndex: i }}, pixel)) {{
+                continue;
+              }}
+              var axisIndex = 0;
+              for (var j = 0; j < xAxes.length; j++) {{
+                if (xAxes[j] && xAxes[j].gridIndex === i) {{
+                  axisIndex = j;
+                  break;
+                }}
+              }}
+              var coord = chart.convertFromPixel({{ xAxisIndex: axisIndex }}, pixel);
+              var xValue = Array.isArray(coord) ? coord[0] : coord;
+              if (typeof xValue === "number" && isFinite(xValue)) {{
+                return xValue;
+              }}
+            }}
+            for (var k = 0; k < xAxes.length; k++) {{
+              var coordAny = chart.convertFromPixel({{ xAxisIndex: k }}, pixel);
+              var xAny = Array.isArray(coordAny) ? coordAny[0] : coordAny;
+              if (typeof xAny === "number" && isFinite(xAny)) {{
+                return xAny;
+              }}
+            }}
+            return null;
+          }}
+
+          function getPixel(evt) {{
+            if (!evt) {{
+              return null;
+            }}
+            var domEvt = evt.event || evt;
+            if (domEvt && typeof domEvt.clientX === "number" && typeof domEvt.clientY === "number") {{
+              var rect = chartEl.getBoundingClientRect();
+              return [domEvt.clientX - rect.left, domEvt.clientY - rect.top];
+            }}
+            var px = evt.offsetX;
+            var py = evt.offsetY;
+            if (px === undefined || py === undefined) {{
+              px = evt.zrX;
+              py = evt.zrY;
+            }}
+            return [px, py];
+          }}
+
+          chart.getZr().on("click", function (evt) {{
+            var pixel = getPixel(evt);
+            if (!pixel || pixel[0] === undefined || pixel[1] === undefined) {{
+              return;
+            }}
+            var xValue = pickXValueFromPixel(pixel);
+            if (typeof xValue !== "number" || !isFinite(xValue)) {{
+              return;
+            }}
+            var shift = (evt.event && evt.event.shiftKey) || evt.shiftKey;
+            setCursor(xValue, shift);
+          }});
+
+          chart.on("click", function (params) {{
+            if (!params) {{
+              return;
+            }}
+            var xValue = null;
+            if (Array.isArray(params.value)) {{
+              xValue = params.value[0];
+            }} else if (typeof params.value === "number") {{
+              xValue = params.value;
+            }} else if (Array.isArray(params.data)) {{
+              xValue = params.data[0];
+            }}
+            if (typeof xValue !== "number" || !isFinite(xValue)) {{
+              return;
+            }}
+            var shift = params.event && params.event.shiftKey;
+            setCursor(xValue, shift);
+          }});
+          chartEl.addEventListener("click", function (evt) {{
+            var pixel = getPixel(evt);
+            if (!pixel || pixel[0] === undefined || pixel[1] === undefined) {{
+              return;
+            }}
+            var xValue = pickXValueFromPixel(pixel);
+            if (typeof xValue !== "number" || !isFinite(xValue)) {{
+              return;
+            }}
+            setCursor(xValue, evt.shiftKey);
+          }});
+        }}
+        }})();
+        </script>
+        """
+
+    def _render_bottom_with_cursor_panel(self, grid: Grid) -> str:
+        html = grid.render_embed()
+        chart_id = grid.chart_id
+        panel_html = self._build_cursor_panel_html(chart_id)
+        html = self._wrap_bottom_html(html, chart_id, panel_html)
+        script = self._build_cursor_panel_script(chart_id)
+        return self._inject_before_body_end(html, script)
 
     def plot_cycle(
         self,

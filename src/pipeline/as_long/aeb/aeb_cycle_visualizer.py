@@ -195,10 +195,11 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         # COMBINE & SAVE
         # ================================
         html_top = pio.to_html(fig_top, include_plotlyjs="cdn", full_html=False)
-        html_bottom = grid_bottom.render_embed()
+        html_bottom = self._render_bottom_with_cursor_panel(grid_bottom)
+        cursor_css = self._cursor_panel_css()
 
         full_html = f"""
-        <html><head><title>{title}</title></head>
+        <html><head><title>{title}</title><style>{cursor_css}</style></head>
         <body style="margin:0; padding:20px; background:#f9f9f9;">
             <h2 style="text-align:center; color:#1e3d73;">{title}</h2>
             {html_top}
