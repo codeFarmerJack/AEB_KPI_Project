@@ -107,14 +107,15 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         ]
     layout_top = {
         "rows": 1,
-        "cols": 3,
-        "column_widths": [0.45, 0.25, 0.30],
-        "horizontal_spacing": 0.10,
+        "cols": 4,
+        "column_widths": [0.30, 0.30, 0.20, 0.20],
+        "horizontal_spacing": 0.06,
         "vertical_spacing": 0.00,
         "margins": {"l": 20, "r": 20, "t": 2, "b": 8},
     }
     fig_top_titles = [
-        "Path (colored by speed)",
+        "Path (aeb-fb state)",
+        "Path (aeb-pb state)",
         "AEB Availability",
         "AEB Suppression Breakdown",
     ]
@@ -139,19 +140,22 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_UNAVAILABLE": "#868e96",
         "AUTO_EMERGENCY_BRAKING_PLANNER_STATE_DEGRADED": "#ffa94d",
     }
-    default_state_color = "#adb5bd"
-    state_defs = [
+    path_subplot_defs = [
         {
+            "col": 1,
             "signal_name": "aebFullState",
             "label_prefix": "aeb-fb",
-            "offset_scale": 0.008,
         },
         {
+            "col": 2,
             "signal_name": "aebPartialState",
             "label_prefix": "aeb-pb",
-            "offset_scale": 0.014,
         },
     ]
+    availability_col = 3
+    suppression_col = 4
+    default_state_color = "#adb5bd"
+    state_defs = []
     bottom_row_height_px = 70
     bottom_row_gap_px = -2
     bottom_min_height_px = 650

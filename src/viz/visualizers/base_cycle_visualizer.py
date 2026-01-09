@@ -225,32 +225,97 @@ class BaseCycleVisualizer:
             if state_values is None:
                 continue
             label_prefix = state_def.get("label_prefix", signal_name)
-            offset_scale = state_def.get("offset_scale", 0.01)
-            self._add_offset_path(
+            state_names = self._decode_state_names(signal_name, state_values)
+            self._add_state_segments(
                 fig,
                 lon_to_plot,
                 lat_to_plot,
-                signal_name,
-                state_values,
+                state_names,
                 label_prefix,
-                offset_scale,
-                self.state_colors,
-                self.default_state_color,
-                seen_legend,
+                row=1,
+                col=1,
+                color_map=self.state_colors,
+                default_color=self.default_state_color,
+                seen_legend=seen_legend,
             )
 
-    def _add_path_subplot(self, fig, signals, row=1, col=1):
+    def _plot_path_state(self, fig, signals, row, col, signal_name, label_prefix=None,
+                         legend_id=None):
         lon = signals.get("lon")
         lat = signals.get("lat")
-        spd = signals.get("speed")
-        if lon is None or lat is None or spd is None:
-            return None
+        if lon is None or lat is None:
+            return False
 
         lon_arr = np.asarray(lon, dtype=float)
         lat_arr = np.asarray(lat, dtype=float)
-        spd_arr = np.asarray(spd, dtype=float)
 
         lon_to_plot, lat_to_plot = self._smooth_path(lon_arr, lat_arr)
+        seen_legend = set()
+        state_values = signals.get(signal_name)
+        label_prefix = label_prefix or signal_name
+        if state_values is not None:
+            state_names = self._decode_state_names(signal_name, state_values)
+            self._add_state_segments(
+                fig,
+                lon_to_plot,
+                lat_to_plot,
+                state_names,
+                label_prefix,
+                row=row,
+                col=col,
+                color_map=self.state_colors,
+                default_color=self.default_state_color,
+                seen_legend=seen_legend,
+                legend_id=legend_id,
+            )
+        else:
+            fig.add_trace(
+                go.Scatter(
+                    x=lon_to_plot,
+                    y=lat_to_plot,
+                    mode="lines",
+                    line=dict(width=3, color=self.default_state_color),
+                    connectgaps=True,
+                    showlegend=False,
+                ),
+                row=row,
+                col=col,
+            )
+        return True
+
+    def _add_path_subplot(self, fig, signals, row=1, col=1,
+                          path_state_signal=None, path_label_prefix=None):
+        lon = signals.get("lon")
+        lat = signals.get("lat")
+        if lon is None or lat is None:
+            return None
+
+        path_state_signal = (
+            path_state_signal
+            if path_state_signal is not None
+            else getattr(self, "path_color_signal", None)
+        )
+        if path_state_signal:
+            label_prefix = path_label_prefix
+            if label_prefix is None:
+                label_prefix = getattr(self, "path_color_label_prefix", path_state_signal)
+            return self._plot_path_state(
+                fig,
+                signals,
+                row=row,
+                col=col,
+                signal_name=path_state_signal,
+                label_prefix=label_prefix,
+            )
+
+        lon_arr = np.asarray(lon, dtype=float)
+        lat_arr = np.asarray(lat, dtype=float)
+        lon_to_plot, lat_to_plot = self._smooth_path(lon_arr, lat_arr)
+
+        spd = signals.get("speed")
+        if spd is None:
+            return None
+        spd_arr = np.asarray(spd, dtype=float)
         fig.add_trace(
             go.Scatter(
                 x=lon_to_plot,
@@ -265,6 +330,7 @@ class BaseCycleVisualizer:
             col=col,
         )
         self._add_state_overlays(fig, lon_to_plot, lat_to_plot, signals)
+        self._path_uses_speed_color = True
         return True
 
     def _apply_speed_colorbar(self, fig, xaxis_key="xaxis", yaxis_key="yaxis"):
@@ -294,86 +360,6 @@ class BaseCycleVisualizer:
                 ),
             ),
         )
-    def _compute_offset_path(self, lon, lat, offset_scale=0.02, min_offset=1e-6):
-        def _smooth_series(values, window=5):
-            if window < 2 or len(values) < window:
-                return values
-            kernel = np.ones(window, dtype=float) / float(window)
-            return np.convolve(values, kernel, mode="same")
-
-        def _fill_vector_gaps(dx, dy, eps=1e-9):
-            mag = np.hypot(dx, dy)
-            valid = mag > eps
-            if valid.all():
-                return dx, dy
-            idx = np.arange(len(dx))
-            if valid.any():
-                last = idx[valid][0]
-                for i in range(last + 1, len(dx)):
-                    if valid[i]:
-                        last = i
-                    else:
-                        dx[i] = dx[last]
-                        dy[i] = dy[last]
-                first = idx[valid][0]
-                for i in range(first - 1, -1, -1):
-                    dx[i] = dx[first]
-                    dy[i] = dy[first]
-            else:
-                dx[:] = 1.0
-                dy[:] = 0.0
-            return dx, dy
-
-        lon_arr = np.asarray(lon, dtype=float)
-        lat_arr = np.asarray(lat, dtype=float)
-        if lon_arr.size == 0 or lat_arr.size == 0:
-            return None
-        mask = np.isfinite(lon_arr) & np.isfinite(lat_arr)
-        if not mask.any():
-            return None
-        finite_lon = lon_arr[mask]
-        finite_lat = lat_arr[mask]
-        idx = np.arange(lon_arr.size)
-        lon_filled = lon_arr.copy()
-        lat_filled = lat_arr.copy()
-        if not np.isfinite(lon_filled).all():
-            lon_filled[~np.isfinite(lon_filled)] = np.interp(
-                idx[~np.isfinite(lon_filled)],
-                idx[np.isfinite(lon_filled)],
-                lon_filled[np.isfinite(lon_filled)],
-            )
-        if not np.isfinite(lat_filled).all():
-            lat_filled[~np.isfinite(lat_filled)] = np.interp(
-                idx[~np.isfinite(lat_filled)],
-                idx[np.isfinite(lat_filled)],
-                lat_filled[np.isfinite(lat_filled)],
-            )
-        span = max(finite_lon.max() - finite_lon.min(), finite_lat.max() - finite_lat.min())
-        if not np.isfinite(span) or span == 0:
-            span = 1.0
-        offset = max(span * offset_scale, min_offset)
-
-        cx = finite_lon.mean()
-        cy = finite_lat.mean()
-        lon_smooth = _smooth_series(lon_filled, window=7)
-        lat_smooth = _smooth_series(lat_filled, window=7)
-        dx = np.gradient(lon_smooth)
-        dy = np.gradient(lat_smooth)
-        dx, dy = _fill_vector_gaps(dx, dy)
-        mag = np.hypot(dx, dy)
-        mag[mag == 0] = 1.0
-        nx = -dy / mag
-        ny = dx / mag
-        for i in range(1, len(nx)):
-            if nx[i] * nx[i - 1] + ny[i] * ny[i - 1] < 0:
-                nx[i] = -nx[i]
-                ny[i] = -ny[i]
-        vx = lon_filled - cx
-        vy = lat_filled - cy
-        if np.nanmean(nx * vx + ny * vy) < 0:
-            nx = -nx
-            ny = -ny
-        return lon_filled + nx * offset, lat_filled + ny * offset
 
     def _decode_state_names(self, signal_name, values):
         if values is None:
@@ -407,7 +393,7 @@ class BaseCycleVisualizer:
         return label.replace("_", " ").title()
 
     def _add_state_segments(self, fig, x, y, state_names, label_prefix, row, col,
-                            color_map, default_color, seen_legend=None):
+                            color_map, default_color, seen_legend=None, legend_id=None):
         if x is None or y is None or state_names is None:
             return
         x_arr = np.asarray(x)
@@ -454,6 +440,7 @@ class BaseCycleVisualizer:
                     mode="lines",
                     line=dict(width=2, color=color),
                     name=legend_name,
+                    legend=legend_id,
                     showlegend=showlegend,
                     connectgaps=True,
                     text=[name] * (end - i),
@@ -477,54 +464,90 @@ class BaseCycleVisualizer:
 
         return candidates
 
-    def _add_offset_path(self, fig, lon_to_plot, lat_to_plot, signal_name, state_values,
-                         label_prefix, offset_scale, state_colors, default_state_color,
-                         seen_legend):
-        if state_values is None:
-            return
-
-        offset_path = self._compute_offset_path(
-            lon_to_plot,
-            lat_to_plot,
-            offset_scale=offset_scale,
-        )
-        if not offset_path:
-            return
-        lon_state, lat_state = offset_path
-        state_names = self._decode_state_names(signal_name, state_values)
-        self._add_state_segments(
-            fig,
-            lon_state,
-            lat_state,
-            state_names,
-            label_prefix,
-            row=1,
-            col=1,
-            color_map=state_colors,
-            default_color=default_state_color,
-            seen_legend=seen_legend,
-        )
-
     def _build_fig_top(self, kpi_row, signals):
         lt = self.layout_top or self.DEFAULT_TOP_LAYOUT
+        path_subplot_defs = getattr(self, "path_subplot_defs", None) or [{"row": 1, "col": 1}]
+        layout_top = dict(lt)
+        path_cols = sorted(
+            {
+                path_def.get("col", 1)
+                for path_def in path_subplot_defs
+                if path_def.get("signal_name")
+            }
+        )
+        column_widths = layout_top.get("column_widths")
+        if column_widths:
+            if len(path_cols) >= 2:
+                shrink_factor = getattr(self, "path_col_shrink_factor", 0.8)
+                adjusted = list(column_widths)
+                for col in path_cols:
+                    idx = col - 1
+                    if 0 <= idx < len(adjusted):
+                        adjusted[idx] *= shrink_factor
+                layout_top["column_widths"] = adjusted
+        if len(path_cols) <= 1:
+            spacing = getattr(self, "single_path_horizontal_spacing", None)
+            if spacing is None:
+                spacing = layout_top.get("horizontal_spacing")
+                if spacing is not None:
+                    spacing = min(spacing, 0.06)
+            if spacing is not None:
+                layout_top["horizontal_spacing"] = spacing
         subplot_titles = self.fig_top_titles or self.DEFAULT_TOP_TITLES
 
         fig_top = make_subplots(
-            rows=lt["rows"],
-            cols=lt["cols"],
+            rows=layout_top["rows"],
+            cols=layout_top["cols"],
             subplot_titles=subplot_titles,
-            horizontal_spacing=lt["horizontal_spacing"],
-            vertical_spacing=lt["vertical_spacing"],
-            column_widths=lt["column_widths"],
+            horizontal_spacing=layout_top["horizontal_spacing"],
+            vertical_spacing=layout_top["vertical_spacing"],
+            column_widths=layout_top["column_widths"],
         )
 
-        fig_top.update_layout(margin=lt["margins"])
+        fig_top.update_layout(margin=layout_top["margins"])
 
-        path_added = self._add_path_subplot(fig_top, signals, row=1, col=1)
-
-        fig_top.update_yaxes(scaleanchor="x", row=1, col=1)
+        self._path_uses_speed_color = False
+        path_added = False
+        path_legends = []
+        legend_idx = 0
+        for path_def in path_subplot_defs:
+            row = path_def.get("row", 1)
+            col = path_def.get("col", 1)
+            signal_name = path_def.get("signal_name")
+            label_prefix = path_def.get("label_prefix")
+            if signal_name:
+                legend_idx += 1
+                legend_id = path_def.get("legend_id")
+                if not legend_id:
+                    legend_id = "legend" if legend_idx == 1 else f"legend{legend_idx}"
+                added = self._plot_path_state(
+                    fig_top,
+                    signals,
+                    row=row,
+                    col=col,
+                    signal_name=signal_name,
+                    label_prefix=label_prefix,
+                    legend_id=legend_id,
+                )
+            else:
+                legend_id = None
+                added = self._add_path_subplot(
+                    fig_top,
+                    signals,
+                    row=row,
+                    col=col,
+                    path_state_signal=None,
+                    path_label_prefix=None,
+                )
+            if added:
+                path_added = True
+                if legend_id:
+                    path_legends.append((legend_id, row, col))
+                fig_top.update_yaxes(scaleanchor="x", row=row, col=col)
 
         # Subplot(1, 2) - Availability (Feature / ROV / VAL)
+        availability_row = getattr(self, "availability_row", 1)
+        availability_col = getattr(self, "availability_col", 2)
         labels, values, colors = self._collect_availability_values(kpi_row)
 
         if labels:
@@ -537,12 +560,20 @@ class BaseCycleVisualizer:
                     textposition="inside",
                     showlegend=False,
                 ),
-                row=1,
-                col=2,
+                row=availability_row,
+                col=availability_col,
             )
-            fig_top.update_yaxes(range=[0, 100], title_text="Percent [%]", title_standoff=5, row=1, col=2)
+            fig_top.update_yaxes(
+                range=[0, 100],
+                title_text="Percent [%]",
+                title_standoff=5,
+                row=availability_row,
+                col=availability_col,
+            )
 
         # Subplot(1, 3) - Suppression breakdown
+        suppression_row = getattr(self, "suppression_row", 1)
+        suppression_col = getattr(self, "suppression_col", 3)
         reason_keys, values = self._collect_suppression_values(kpi_row)
         if reason_keys:
             fig_top.add_trace(
@@ -555,12 +586,23 @@ class BaseCycleVisualizer:
                     textposition="inside",
                     showlegend=False,
                 ),
-                row=1,
-                col=3,
+                row=suppression_row,
+                col=suppression_col,
             )
 
-        fig_top.update_yaxes(autorange="reversed", row=1, col=3)
-        fig_top.update_xaxes(range=[0, 100], title_text="Percent [%]", title_standoff=5, row=1, col=3)
+        fig_top.update_yaxes(
+            autorange="reversed",
+            tickangle=-45,
+            row=suppression_row,
+            col=suppression_col,
+        )
+        fig_top.update_xaxes(
+            range=[0, 100],
+            title_text="Percent [%]",
+            title_standoff=5,
+            row=suppression_row,
+            col=suppression_col,
+        )
 
         fig_top.update_layout(
             height=400,
@@ -568,16 +610,36 @@ class BaseCycleVisualizer:
             template="plotly_white",
             showlegend=True,
             barmode="group",
-            legend=dict(
-                orientation="v",
-                yanchor="top",
-                y=0.99,
-                xanchor="left",
-                x=0.0,
-                font=dict(size=10),
-            ),
         )
-        if path_added:
+        if path_legends:
+            legend_pad_x = getattr(self, "path_legend_pad_x", 0.015)
+            legend_pad_y = getattr(self, "path_legend_pad_y", 0.015)
+            legend_layout = {}
+            cols = layout_top.get("cols", 1)
+            for legend_id, row, col in path_legends:
+                axis_index = (row - 1) * cols + col
+                xaxis_key = "xaxis" if axis_index == 1 else f"xaxis{axis_index}"
+                yaxis_key = "yaxis" if axis_index == 1 else f"yaxis{axis_index}"
+                xaxis = getattr(fig_top.layout, xaxis_key, None)
+                yaxis = getattr(fig_top.layout, yaxis_key, None)
+                if xaxis is not None and yaxis is not None:
+                    x0, x1 = xaxis.domain
+                    y0, y1 = yaxis.domain
+                    legend_x = x0 + legend_pad_x
+                    legend_y = y1 - legend_pad_y
+                else:
+                    legend_x = 0.0
+                    legend_y = 1.0
+                legend_layout[legend_id] = dict(
+                    orientation="v",
+                    xanchor="left",
+                    yanchor="top",
+                    x=legend_x,
+                    y=legend_y,
+                    font=dict(size=10),
+                )
+            fig_top.update_layout(**legend_layout)
+        if path_added and getattr(self, "_path_uses_speed_color", False):
             self._apply_speed_colorbar(fig_top, xaxis_key="xaxis", yaxis_key="yaxis")
 
         return fig_top

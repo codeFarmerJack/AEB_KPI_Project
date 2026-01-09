@@ -89,7 +89,7 @@ class LkaCycleVisualizer(BaseCycleVisualizer):
         "margins": {"l": 20, "r": 20, "t": 2, "b": 8},
     }
     fig_top_titles = [
-        "Path (colored by speed)",
+        "Path (lka state)",
         "LKA Availability",
         "LKA Suppression Breakdown",
     ]
@@ -105,14 +105,15 @@ class LkaCycleVisualizer(BaseCycleVisualizer):
         "DI_ACTIVE_SAFETY_EVENT_LEVEL_3": "#ffa94d",
         "DI_ACTIVE_SAFETY_EVENT_LEVEL_4": "#fa5252",
     }
-    default_state_color = "#adb5bd"
-    state_defs = [
+    path_subplot_defs = [
         {
+            "col": 1,
             "signal_name": "lkaInterventionStatus",
             "label_prefix": "lka",
-            "offset_scale": 0.010,
         },
     ]
+    default_state_color = "#adb5bd"
+    state_defs = []
     bottom_row_height_px = 70
     bottom_row_gap_px = -2
     bottom_min_height_px = 650

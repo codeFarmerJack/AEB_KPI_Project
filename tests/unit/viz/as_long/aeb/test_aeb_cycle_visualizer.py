@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+from plotly.subplots import make_subplots
 
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 if str(PROJECT_ROOT) not in sys.path:
@@ -20,18 +21,25 @@ def _get_out_dir(tmp_path):
     return Path(__file__).resolve().parent
 
 
-def test_offset_path_differs_from_base(tmp_path):
+def test_aeb_path_uses_base_coords_without_offset(tmp_path):
     out_dir = _get_out_dir(tmp_path)
     viz = AebCycleVisualizer(out_dir=str(out_dir))
+    viz.path_smoothing = {"enabled": False}
     lon = np.array([0.0, 1.0, 2.0], dtype=float)
-    lat = np.array([0.0, 0.0, 0.0], dtype=float)
+    lat = np.array([0.0, 0.5, 1.0], dtype=float)
+    signals = {
+        "lon": lon,
+        "lat": lat,
+        "aebFullState": np.array([1, 1, 1], dtype=float),
+    }
 
-    offset_path = viz._compute_offset_path(lon, lat)
+    fig = make_subplots(rows=1, cols=1)
+    viz._plot_path_state(fig, signals, row=1, col=1, signal_name="aebFullState")
 
-    assert offset_path is not None
-    offset_lon, offset_lat = offset_path
-    assert len(offset_lon) == len(lon)
-    assert not np.allclose(offset_lat, lat, equal_nan=True)
+    assert len(fig.data) == 1
+    trace = fig.data[0]
+    assert np.allclose(trace["x"], lon, equal_nan=True)
+    assert np.allclose(trace["y"], lat, equal_nan=True)
 
 
 def test_aeb_fb_path_has_legend_and_connectgaps(tmp_path):
@@ -43,6 +51,7 @@ def test_aeb_fb_path_has_legend_and_connectgaps(tmp_path):
         "lat": np.array([0.0, 0.5, np.nan, 1.5, 2.0], dtype=float),
         "speed": np.array([10.0, 20.0, 30.0, 40.0, 50.0], dtype=float),
         "aebFullState": np.array([1, 1, 2, 2, 1], dtype=float),
+        "aebPartialState": np.array([0, 1, 1, 2, 2], dtype=float),
         "longGap": np.zeros(5, dtype=float),
     }
 
@@ -52,4 +61,5 @@ def test_aeb_fb_path_has_legend_and_connectgaps(tmp_path):
     assert out_file.exists()
     html = out_file.read_text(encoding="utf-8")
     assert "aeb-fb:" in html
+    assert "aeb-pb:" in html
     assert '"connectgaps":true' in html or '"connectgaps": true' in html

@@ -102,7 +102,7 @@ class FcwCycleVisualizer(BaseCycleVisualizer):
         "margins": {"l": 20, "r": 20, "t": 2, "b": 8},
     }
     fig_top_titles = [
-        "Path (colored by speed)",
+        "Path (fcw state)",
         "FCW Availability",
         "FCW Suppression Breakdown",
     ]
@@ -126,14 +126,15 @@ class FcwCycleVisualizer(BaseCycleVisualizer):
         "FORWARD_COLLISION_WARNING_PLANNER_STATE_UNAVAILABLE": "#868e96",
         "FORWARD_COLLISION_WARNING_PLANNER_STATE_DEGRADED": "#ffa94d",
     }
-    default_state_color = "#adb5bd"
-    state_defs = [
+    path_subplot_defs = [
         {
+            "col": 1,
             "signal_name": "fcwState",
             "label_prefix": "fcw",
-            "offset_scale": 0.010,
         },
     ]
+    default_state_color = "#adb5bd"
+    state_defs = []
     bottom_row_height_px = 70
     bottom_row_gap_px = -2
     bottom_min_height_px = 650
