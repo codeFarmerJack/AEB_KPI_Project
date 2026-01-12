@@ -101,6 +101,10 @@ class ScatterPlotter(BasePlotter):
         )
         x_vals    = data.loc[mask, x_col].to_numpy()
         y_vals    = data.loc[mask, y_col].to_numpy()
+        if self._mask_zero_markers(title):
+            nonzero_mask = np.isfinite(y_vals) & (y_vals != 0)
+            x_vals = x_vals[nonzero_mask]
+            y_vals = y_vals[nonzero_mask]
 
         # ---- draw series ----
         if connect:
@@ -160,3 +164,13 @@ class ScatterPlotter(BasePlotter):
         if isinstance(cp_raw, (bool, int, float)):
             return bool(cp_raw)
         return str(cp_raw).strip().lower() in ["true", "1", "yes", "y"]
+
+    def _mask_zero_markers(self, title: str) -> bool:
+        title_l = str(title).strip().lower()
+        targets = (
+            "brake jerk duration",
+            "max brake jerk",
+            "min brake jerk acceleration",
+            "communication latency",
+        )
+        return any(t in title_l for t in targets)
