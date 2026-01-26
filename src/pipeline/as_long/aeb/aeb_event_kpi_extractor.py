@@ -115,12 +115,6 @@ class AebEventKpiExtractor(BaseEventKpiExtractor):
         "fb_jerk_neg_thd":        {"default": -20.0, "type": float, "desc": "FB negative jerk threshold (m/s³)"},
     }
 
-    @dataclass(frozen=True)
-    class _AebSignals:
-        time: np.ndarray
-        ego_speed: np.ndarray
-        aeb_tgt_decel: np.ndarray
-
     # ------------------------------------------------------------------ #
     def __init__(self, config, event_segmenter=None):
         super().__init__(config, event_segmenter, "in_path_aeb_chunks", feature_name="AEB")
@@ -140,8 +134,9 @@ class AebEventKpiExtractor(BaseEventKpiExtractor):
 
         aeb_start_idx, aeb_start_time, aeb_end_idx, aeb_end_time, is_veh_stopped = event
         result = self._build_timing_result(aeb_start_time, aeb_end_time, is_veh_stopped)
+        result["aebSuspDur"] = self._compute_susp_duration(signals)
 
-        veh_spd = self._vehicle_speed_at_start(signals.ego_speed, aeb_start_idx)
+        veh_spd = self._vehicle_speed_at_start(signals.get("ego_speed"), aeb_start_idx)
         result["vehSpd"] = veh_spd
 
         thd = self._interpolate_thresholds(veh_spd)
@@ -174,18 +169,88 @@ class AebEventKpiExtractor(BaseEventKpiExtractor):
 
     def _load_signals(self, mdf):
         time = self._prepare_time(mdf)
-        ego_speed = get_signal(mdf, "egoSpeedKph")
-        aeb_tgt_decel = get_signal(mdf, "aebTargetDecel")
-        return self._AebSignals(time=time, ego_speed=ego_speed, aeb_tgt_decel=aeb_tgt_decel)
+        return {
+            "time": time,
+            "ego_speed": get_signal(mdf, "egoSpeedKph"),
+            "aeb_tgt_decel": get_signal(mdf, "aebTargetDecel"),
+            "aeb_abort": get_signal(mdf, "aebAbortFromNdas"),
+        }
+
+    def _compute_susp_duration(self, signals):
+        time = signals.get("time")
+        aeb_tgt_decel = signals.get("aeb_tgt_decel")
+        aeb_abort = signals.get("aeb_abort")
+
+        if time is None or aeb_abort is None or aeb_tgt_decel is None:
+            warnings.warn("aebSuspDur: missing time, aebTargetDecel, or aebAbortFromNdas signal.")
+            return None
+
+        t = np.asarray(time)
+        tgt_decel = np.asarray(aeb_tgt_decel)
+        abort = np.asarray(aeb_abort)
+
+        lengths = [len(t), len(abort), len(tgt_decel)]
+        min_len = min(lengths) if lengths else 0
+        if min_len < 2:
+            warnings.warn(f"aebSuspDur: insufficient samples (min_len={min_len}).")
+            return None
+
+        t = t[:min_len]
+        abort = abort[:min_len]
+        tgt_decel = tgt_decel[:min_len]
+
+        abort_prev = abort[:-1]
+        abort_next = abort[1:]
+        abort_rise = (abort_prev == 0) & (abort_next == 1)
+
+        decel_prev = tgt_decel[:-1]
+        fb_tgt = getattr(self, "fb_tgt_decel", -15.0)
+        pb_tgt = getattr(self, "pb_tgt_decel", -6.0)
+        decel_match = (
+            np.isclose(decel_prev, fb_tgt, atol=1e-3)
+            | np.isclose(decel_prev, pb_tgt, atol=1e-3)
+            | np.isclose(decel_prev, -5.0, atol=1e-3)
+        )
+
+        start_candidates = np.where(decel_match & abort_rise)[0]
+        if start_candidates.size == 0:
+            warnings.warn(
+                "aebSuspDur: no start transition found "
+                f"(decel_match={int(decel_match.sum())}, abort_rise={int(abort_rise.sum())})."
+            )
+            return None
+        start_transition = int(start_candidates[0])
+        start_idx = start_transition + 1
+
+        abort_fall = (abort_prev == 1) & (abort_next == 0)
+        end_candidates = np.where(abort_fall & (np.arange(min_len - 1) > start_transition))[0]
+        if end_candidates.size == 0:
+            warnings.warn(
+                "aebSuspDur: no end transition found "
+                f"(abort_fall={int(abort_fall.sum())}, start_transition={start_transition})."
+            )
+            return None
+        end_idx = int(end_candidates[0]) + 1
+
+        if not np.isfinite(t[start_idx]) or not np.isfinite(t[end_idx]):
+            warnings.warn(
+                f"aebSuspDur: non-finite time at indices (start={start_idx}, end={end_idx})."
+            )
+            return None
+        return round(float(t[end_idx] - t[start_idx]), 3)
 
     def _detect_event(self, signals, fname):
         try:
             aeb_start_idx, aeb_start_time = find_aeb_intv_start(
-                {"aebTargetDecel": signals.aeb_tgt_decel, "time": signals.time},
+                {"aebTargetDecel": signals.get("aeb_tgt_decel"), "time": signals.get("time")},
                 self.pb_tgt_decel,
             )
             is_veh_stopped, aeb_end_idx, aeb_end_time = find_aeb_intv_end(
-                {"egoSpeed": signals.ego_speed, "aebTargetDecel": signals.aeb_tgt_decel, "time": signals.time},
+                {
+                    "egoSpeed": signals.get("ego_speed"),
+                    "aebTargetDecel": signals.get("aeb_tgt_decel"),
+                    "time": signals.get("time"),
+                },
                 aeb_start_idx,
                 self.aeb_end_thd,
             )
