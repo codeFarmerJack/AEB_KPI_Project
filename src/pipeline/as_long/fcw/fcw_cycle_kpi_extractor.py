@@ -19,7 +19,7 @@ class FcwCycleKpiExtractor(BaseCycleKpiExtractor):
     - KPI % = sum(dist where condition) / sum(dist) * 100.
 
     Availability KPIs:
-    - AvailDistPct: fcwPrecondBlk == 0.
+    - AvailDistPct: fcwPrecondBlkFromNdas == 0.
     - ROVAvail: aebInputHealthy == 1.
     - VALAvail: fcwRunSetting == 2.
 
@@ -37,7 +37,7 @@ class FcwCycleKpiExtractor(BaseCycleKpiExtractor):
     _SIGNAL_SPECS = {
         "time": ("time", True),
         "speed_mps": ("egoSpeed", True),
-        "precond_blocked": ("fcwPrecondBlk", True),
+        "precond_blocked": ("fcwPrecondBlkFromNdas", True),
         "throttle": ("throttleValue", True),
         "steer_angle": ("steerWheelAngleDeg", True),
         "steer_rate": ("steerWheelAngleSpeedDeg", True),

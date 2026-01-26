@@ -19,7 +19,7 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
     - KPI % = sum(dist where condition) / sum(dist) * 100.
 
     Availability KPIs:
-    - AvailDistPct: aebPrecondBlk == 0.
+    - AvailDistPct: aebPrecondBlkFromNdas == 0.
     - ROVAvail: aebInputHealthy == 1.
     - VALAvail: aebRunSetting == 2.
 
@@ -38,7 +38,7 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
     _SIGNAL_SPECS = {
         "time": ("time", True),
         "speed_mps": ("egoSpeed", True),
-        "precond_blocked": ("aebPrecondBlk", True),
+        "precond_blocked": ("aebPrecondBlkFromNdas", True),
         "throttle": ("throttleValue", True),
         "steer_angle": ("steerWheelAngleDeg", True),
         "steer_rate": ("steerWheelAngleSpeedDeg", True),

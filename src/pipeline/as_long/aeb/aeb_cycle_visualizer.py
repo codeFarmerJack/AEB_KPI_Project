@@ -60,8 +60,8 @@ class AebCycleVisualizer(BaseCycleVisualizer):
                 "height_px": 40,
                 "unit": None,
                 "series": [
-                    ("aebPrecondBlk", "#5c7cfa", "AebPrecondBlk", {"cast": "int"}),
-                    ("aebAbort", "#f03e3e", "AebAbort", {"cast": "int"}),
+                    ("aebPrecondBlkFromNdas", "#5c7cfa", "aebPrecondBlkFromNdas", {"cast": "int"}),
+                    ("aebAbortFromNdas", "#f03e3e", "aebAbortFromNdas", {"cast": "int"}),
                 ],
             },
             {

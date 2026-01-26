@@ -48,8 +48,8 @@ class FcwCycleVisualizer(BaseCycleVisualizer):
             "height_px": 40,
             "unit": None,
             "series": [
-                ("fcwPrecondBlk", "#5c7cfa", "FcwPrecondBlk", {"cast": "int"}),
-                ("fcwAbort", "#f03e3e", "FcwAbort", {"cast": "int"}),
+                ("fcwPrecondBlkFromNdas", "#5c7cfa", "fcwPrecondBlkFromNdas", {"cast": "int"}),
+                ("fcwAbortFromNdas", "#f03e3e", "fcwAbortFromNdas", {"cast": "int"}),
             ],
         },
         {
