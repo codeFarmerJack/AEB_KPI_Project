@@ -9,6 +9,7 @@ from src.utils.signal_filters import accel_filter
 FILTER_SIGNALS = ("longActAccel", "latActAccel")
 CONVERSIONS = {
     "egoSpeed": ("egoSpeedKph", lambda x: x * 3.6, "m/s -> km/h"),
+    "objSpeed": ("objSpeedKph", lambda x: x * 3.6, "m/s -> km/h"),
     "steerWheelAngle": ("steerWheelAngleDeg", np.degrees, "rad -> deg"),
     "steerWheelAngleSpeed": ("steerWheelAngleSpeedDeg", np.degrees, "rad/s -> deg/s"),
     "yawRate": ("yawRateDeg", np.degrees, "rad/s -> deg/s"),
