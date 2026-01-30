@@ -13,6 +13,7 @@ class AebImpactRelSpeedCalculator:
       - (aebPartialState == 2 OR aebFullState == 2)
       - longGap transitions from >= 1 to < 1 between samples n and n+1
     Relative speed is evaluated at sample n+1 (first below 1).
+    If egoSpeedKph == 0 while AEB is active, ImpactRelSpdKph is set to 0.
     """
 
     def __init__(self, extractor):
@@ -65,14 +66,20 @@ class AebImpactRelSpeedCalculator:
         ego_spd = np.asarray(ego_spd[:min_len], dtype=float)
         tgt_spd = np.asarray(tgt_spd[:min_len], dtype=float)
 
+        state_active = (aeb_partial == 2) | (aeb_full == 2)
+        if np.any(state_active & (ego_spd == 0)):
+            print(f"🧪 [Row {row_idx}] ImpactRelSpdKph debug: egoSpeedKph==0 while AEB active")
+            kpi_table.at[row_idx, col] = 0.0
+            return
+
         gap_cross = (long_gap[:-1] >= 1.0) & (long_gap[1:] < 1.0)
-        state_active = (aeb_partial[:-1] == 2) | (aeb_full[:-1] == 2)
-        idxs = np.where(state_active & gap_cross)[0]
+        state_active_n = state_active[:-1]
+        idxs = np.where(state_active_n & gap_cross)[0]
 
         if idxs.size == 0:
             print(
                 f"🧪 [Row {row_idx}] ImpactRelSpdKph debug: no idxs "
-                f"(gap_cross={int(gap_cross.sum())}, state_active={int(state_active.sum())})"
+                f"(gap_cross={int(gap_cross.sum())}, state_active={int(state_active_n.sum())})"
             )
             kpi_table.at[row_idx, col] = np.nan
             return
