@@ -22,6 +22,7 @@ class FcwCycleKpiExtractor(BaseCycleKpiExtractor):
     - AvailDistPct: fcwPrecondBlkFromNdas == 0.
     - ROVAvail: aebInputHealthy == 1.
     - VALAvail: fcwRunSetting == 2.
+    - NoDegradation: fcwDegradation == 1.
 
     Suppression KPIs (distance % where |signal| exceeds threshold):
     - PedalPosProSuppression: |throttleValue| > PedalPosPro_th(egoSpd).
@@ -45,11 +46,13 @@ class FcwCycleKpiExtractor(BaseCycleKpiExtractor):
         "lat_accel": ("latActAccel", True),
         "aeb_input_healthy": ("aebInputHealthy", False),
         "fcw_run_setting": ("fcwRunSetting", False),
+        "fcw_degradation": ("fcwDegradation", False),
     }
     _AVAIL_SPECS = (
         {"key": "AvailDistPct", "signal": "precond_blocked", "op": "eq", "value": 0},
         {"key": "ROVAvail", "signal": "aeb_input_healthy", "op": "eq", "value": 1},
         {"key": "VALAvail", "signal": "fcw_run_setting", "op": "eq", "value": 2},
+        {"key": "NoDegradation", "signal": "fcw_degradation", "op": "eq", "value": 1},
     )
     _SUPPRESSION_SPECS = (
         {"key": "PedalPosProSuppression", "signal": "throttle", "op": "abs_gt", "calibratable": "PedalPosPro_th"},
@@ -75,6 +78,7 @@ class FcwCycleKpiExtractor(BaseCycleKpiExtractor):
         lat_accel: np.ndarray
         aeb_input_healthy: Optional[np.ndarray]
         fcw_run_setting: Optional[np.ndarray]
+        fcw_degradation: Optional[np.ndarray]
 
     def extract_cycle_kpis(self, mdf, fname):
         """
