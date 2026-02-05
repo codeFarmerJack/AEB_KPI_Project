@@ -22,6 +22,7 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
     - AvailDistPct: aebPrecondBlkFromNdas == 0.
     - ROVAvail: aebInputHealthy == 1.
     - VALAvail: aebRunSetting == 2.
+    - NoDegradation: aebDegradation == 1.
 
     Suppression KPIs (distance % where |signal| exceeds threshold):
     - PedalPosProSuppression: |throttleValue| > PedalPosPro_th(egoSpd).
@@ -46,11 +47,13 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
         "lat_accel": ("latActAccel", True),
         "aeb_input_healthy": ("aebInputHealthy", False),
         "aeb_run_setting": ("aebRunSetting", False),
+        "aeb_degradation": ("aebDegradation", False),
     }
     _AVAIL_SPECS = (
         {"key": "AvailDistPct", "signal": "precond_blocked", "op": "eq", "value": 0},
         {"key": "ROVAvail", "signal": "aeb_input_healthy", "op": "eq", "value": 1},
         {"key": "VALAvail", "signal": "aeb_run_setting", "op": "eq", "value": 2},
+        {"key": "NoDegradation", "signal": "aeb_degradation", "op": "eq", "value": 1},
     )
     _SUPPRESSION_SPECS = (
         {"key": "PedalPosProSuppression", "signal": "throttle", "op": "abs_gt", "calibratable": "PedalPosPro_th"},
@@ -76,6 +79,7 @@ class AebCycleKpiExtractor(BaseCycleKpiExtractor):
         lat_accel: np.ndarray
         aeb_input_healthy: Optional[np.ndarray]
         aeb_run_setting: Optional[np.ndarray]
+        aeb_degradation: Optional[np.ndarray]
 
     def extract_cycle_kpis(self, mdf, fname):
         """

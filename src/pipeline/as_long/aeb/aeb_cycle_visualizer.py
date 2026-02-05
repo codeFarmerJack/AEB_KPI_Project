@@ -123,6 +123,7 @@ class AebCycleVisualizer(BaseCycleVisualizer):
         ("Driver", "AvailDistPct", "#4c6ef5"),
         ("ROV", "ROVAvail", "#40c057"),
         ("VAL", "VALAvail", "#fab005"),
+        ("No Degradation", "NoDegradation", "#15aabf"),
     ]
     suppression_patterns = [
         "SteeringWheelAngleRate",
