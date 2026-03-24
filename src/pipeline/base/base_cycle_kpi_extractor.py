@@ -97,6 +97,28 @@ class BaseCycleKpiExtractor(ABC):
         ]
         return [str(n) for n in names.dropna().tolist()]
 
+    def get_configured_features(self, include_common: bool = False):
+        """Return features declared in the cycle KPI schema."""
+        if not self._schema_has_columns("feature"):
+            return []
+
+        features = (
+            self.cycle_kpi_schema["feature"]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .str.upper()
+            .tolist()
+        )
+
+        ordered = []
+        for feature in features:
+            if not include_common and feature == "COMMON":
+                continue
+            if feature not in ordered:
+                ordered.append(feature)
+        return ordered
+
     # ------------------------------------------------------------------ #
     def render_cycle_dashboards(self, feature_name: str = None):
         """

@@ -8,10 +8,7 @@ from PySide6.QtCore import QThread, Signal
 
 from src.config.config import Config
 from src.pipeline.input_handler import InputHandler
-from src.pipeline.as_long.aeb.aeb_pipeline import AebPipeline
-from src.pipeline.as_long.fcw.fcw_pipeline import FcwPipeline
-from src.pipeline.as_long.lsaeb.lsaeb_pipeline import LsaebPipeline
-from src.pipeline.as_lat.lka.lka_pipeline import LkaPipeline
+from src.pipeline.registry import get_config_name, get_feature_map
 from src.utils.path_manager import get_config_dir
 
 
@@ -46,14 +43,8 @@ class PipelineRunner(QThread):
     finished_all = Signal()
     error = Signal(str)
 
-    LONG_FEATURES = {
-        "AEB": AebPipeline,
-        "FCW": FcwPipeline,
-        "LSAEB": LsaebPipeline,
-    }
-    LAT_FEATURES = {
-        "LKA": LkaPipeline,
-    }
+    LONG_FEATURES = get_feature_map("as_long")
+    LAT_FEATURES = get_feature_map("as_lat")
 
     def __init__(
         self,
@@ -83,11 +74,11 @@ class PipelineRunner(QThread):
         finally:
             sys.stdout, sys.stderr = stdout_old, stderr_old
 
-    def _run_domain(self, feature_keys, config_name, feature_map):
+    def _run_domain(self, feature_keys, domain, feature_map):
         if not feature_keys:
             return
 
-        cfg_path = self.config_dir / config_name
+        cfg_path = self.config_dir / get_config_name(domain)
         self.log.emit(f"📘 Config: {cfg_path.name}")
         cfg = Config.from_json(cfg_path)
         ih = InputHandler(cfg, input_path=self.mf4_folder, mf4_files=self.mf4_files)
@@ -121,8 +112,8 @@ class PipelineRunner(QThread):
 
         try:
             with self._capture_output():
-                self._run_domain(self.features_long, "config_as_long.json", self.LONG_FEATURES)
-                self._run_domain(self.features_lat, "config_as_lat.json", self.LAT_FEATURES)
+                self._run_domain(self.features_long, "as_long", self.LONG_FEATURES)
+                self._run_domain(self.features_lat, "as_lat", self.LAT_FEATURES)
         except Exception:
             # errors already emitted
             pass

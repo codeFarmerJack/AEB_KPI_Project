@@ -23,6 +23,7 @@ Configs: `src/config/config_as_long.json` and `src/config/config_as_lat.json`.
 Outputs (per run) under `rawdata/analysis_results/`:
 - `*_kpi_results.xlsx` with event sheets (`aeb`, `fcw`, `lsaeb`, `lka`) plus shared `cycleKPI`.
 - HTML plots per feature in subfolders (e.g., `analysis_results/aeb/`).
+- KPI catalog: `docs/kpi_catalog.md`.
 
 ---
 
@@ -35,7 +36,7 @@ Outputs (per run) under `rawdata/analysis_results/`:
    Splits logs into per-event chunks (AEB/FCW/LSAEB/LKA).
 4) **KPI extraction**  
    - Event KPIs via `BaseEventKpiExtractor` subclasses.  
-   - Cycle/availability KPIs via `BaseCycleKpiExtractor` subclasses.  
+   - Cycle/availability KPIs via `BaseCycleKpiExtractor` subclasses. Shared distance-weighted features now use `src/pipeline/base/rule_based_cycle_kpi_extractor.py`.  
    Exported into `*_kpi_results.xlsx`.
 5) **Visualization**  
    `src/viz` renders Matplotlib → Plotly HTML (calibrations, averages, legend ordering).
@@ -44,10 +45,18 @@ Outputs (per run) under `rawdata/analysis_results/`:
 
 ## 📂 Key Modules
 - `src/config/` — configs, enum definitions, KPI schemas.
-- `src/pipeline/` — domain pipelines, event/cycle extractors, visualizers.
+- `src/pipeline/` — feature registry, declarative pipelines, event/cycle extractors, visualizers.
 - `src/viz/` — plotter registry, exporters, figure/style/filter managers.
 - `src/gui/` — PySide6 desktop UI (folder selection, feature toggles, runner).
 - `src/utils/` — IO helpers, KPI table builders, path utilities.
+
+---
+
+## 🧱 Extension Model
+- Add new features in `src/pipeline/registry.py`; the GUI runner and domain entrypoints read from that registry instead of hard-coding feature lists.
+- Reuse `src/pipeline/base/base_pipeline.py` by declaring component classes on the pipeline class rather than re-implementing `_detect_events`, `_extract_kpis`, and `_visualize_results`.
+- Reuse `src/pipeline/base/rule_based_cycle_kpi_extractor.py` for distance-based cycle KPIs driven by signal masks and calibratable thresholds.
+- Keep exported KPI names documented in `docs/kpi_catalog.md`.
 
 ---
 

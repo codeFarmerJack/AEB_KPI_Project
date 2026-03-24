@@ -1,4 +1,3 @@
-from pathlib import Path
 from src.pipeline.base.base_pipeline import BasePipeline
 from src.pipeline.as_long.lsaeb.lsaeb_event_segmenter import LsaebEventSegmenter
 from src.pipeline.as_long.lsaeb.lsaeb_event_kpi_extractor import LsaebEventKpiExtractor
@@ -8,34 +7,7 @@ from src.pipeline.as_long.lsaeb.lsaeb_visualizer import LsaebEventVisualizer
 class LsaebPipeline(BasePipeline):
     """Pipeline orchestrator for LSAEB KPI extraction and visualization."""
 
-    # --------------------------------------------------------------
-    def _detect_events(self):
-        print("\n➡️ [3/5] Detecting LSAEB events...")
-        try:
-            self.event = LsaebEventSegmenter(self.ih, self.cfg)
-            print("🚦 Running LSAEB event detection...\n")
-            self.event.process_all_files()
-            print("✅ LSAEB event detection finished.\n")
-        except Exception as e:
-            raise RuntimeError(f"❌ LSAEB event detection failed: {e}")
-
-    # --------------------------------------------------------------
-    def _extract_kpis(self):
-        print("\n➡️ [4/5] Extracting LSAEB KPIs...")
-        try:
-            self.kpi = LsaebEventKpiExtractor(self.cfg, self.event)
-            self.kpi.process_mdf_events()
-            self.kpi.export_event_kpis()
-            print("✅ LSAEB KPI extraction and Excel export done.")
-        except Exception as e:
-            raise RuntimeError(f"❌ LSAEB KPI extraction failed: {e}")
-
-    # --------------------------------------------------------------
-    def _visualize_results(self):
-        print("\n➡️ [5/5] Launching LSAEB visualization...\n")
-        try:
-            self.viz = LsaebEventVisualizer(self.cfg, self.kpi)
-            self.viz.interactive = getattr(self, "default_interactive", False)
-            self.viz.plot()
-        except Exception as e:
-            raise RuntimeError(f"❌ LSAEB visualization failed: {e}")
+    FEATURE_NAME = "LSAEB"
+    SEGMENTER_CLS = LsaebEventSegmenter
+    EVENT_EXTRACTOR_CLS = LsaebEventKpiExtractor
+    EVENT_VISUALIZER_CLS = LsaebEventVisualizer

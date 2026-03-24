@@ -1,38 +1,41 @@
-import os
-import sys
 from pathlib import Path
 from typing import Optional, Union
+
 from src.config.config import Config
-from src.utils.path_manager import get_config_dir
 from src.pipeline.input_handler import InputHandler
-
-# Lateral feature pipelines
-from src.pipeline.as_lat.lka.lka_pipeline import LkaPipeline
-# Add other lateral pipelines later in same structure
+from src.pipeline.registry import get_config_name, get_feature_map
+from src.utils.path_manager import get_config_dir
 
 
-def main(config_file: Optional[Union[Path, str]] = None, mf4_folder: Optional[Union[Path, str]] = None, mf4_files=None):
+def main(
+    config_file: Optional[Union[Path, str]] = None,
+    mf4_folder: Optional[Union[Path, str]] = None,
+    mf4_files=None,
+    feature_keys=None,
+):
     """
     Entry point for AS_LAT KPI extractor.
     Can be called by launcher or used standalone.
     """
 
-    # 1) Determine config path
-    config_file = Path(config_file) if config_file else get_config_dir() / "config_as_lat.json"
-
+    feature_map = get_feature_map("as_lat")
+    selected_keys = list(feature_keys) if feature_keys else list(feature_map.keys())
+    config_name = get_config_name("as_lat")
+    config_file = Path(config_file) if config_file else get_config_dir() / config_name
 
     print(f"\n📘 Loading config: {config_file}")
 
-    # 2) Load configuration and initialize shared input handler
     cfg = Config.from_json(config_file)
-    ih  = InputHandler(cfg, input_path=mf4_folder, mf4_files=mf4_files)
+    ih = InputHandler(cfg, input_path=mf4_folder, mf4_files=mf4_files)
 
     print("🔄 Processing MF4 files (shared for all AS_LAT pipelines)...")
     ih.process_mf4_files()
 
-    print("\n🚀 Running LKA pipeline...")
-    lka = LkaPipeline(config_file, input_handler=ih)
-    lka.run(skip_mf4_processing=True)
+    for key in selected_keys:
+        pipeline_cls = feature_map[key]
+        print(f"\n🚀 Running {key} pipeline...")
+        pipeline = pipeline_cls(config_file, input_handler=ih)
+        pipeline.run(skip_mf4_processing=True)
 
     print("\n🎯 All AS_LAT pipelines completed successfully.\n")
 
