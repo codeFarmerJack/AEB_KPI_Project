@@ -7,7 +7,7 @@ from src.utils.signal_mdf import get_signal
 
 
 class BrakingAverageAccelCalculator:
-    """Compute average longitudinal acceleration over the autonomous braking window."""
+    """Compute time-weighted average longitudinal acceleration over the braking window."""
 
     def __init__(self, extractor):
         self.extractor = extractor
@@ -25,12 +25,16 @@ class BrakingAverageAccelCalculator:
         if column_name not in kpi_table.columns:
             kpi_table[column_name] = pd.Series([np.nan] * len(kpi_table), dtype="float")
 
+        time = get_signal(mdf, "time")
+        if time is None and hasattr(self.extractor, "_prepare_time"):
+            time = self.extractor._prepare_time(mdf)
         target_decel = get_signal(mdf, "aebTargetDecel")
         brake_pedal = get_signal(mdf, "brakePedalPressed")
         vehicle_speed = get_signal(mdf, "egoSpeedKph")
         long_accel = get_signal(mdf, "longActAccel")
 
         required = {
+            "time": time,
             "aebTargetDecel": target_decel,
             "brakePedalPressed": brake_pedal,
             "egoSpeedKph": vehicle_speed,
@@ -50,6 +54,7 @@ class BrakingAverageAccelCalculator:
             kpi_table.at[row_idx, column_name] = np.nan
             return
 
+        time = np.asarray(time[:min_len], dtype=float)
         target_decel = np.asarray(target_decel[:min_len], dtype=float)
         brake_pedal = np.asarray(brake_pedal[:min_len], dtype=float)
         vehicle_speed = np.asarray(vehicle_speed[:min_len], dtype=float)
@@ -79,14 +84,31 @@ class BrakingAverageAccelCalculator:
             return
 
         end_idx = start_idx + int(rel_stop_idx[0])
-        segment = long_accel[start_idx : end_idx + 1]
-        finite_segment = segment[np.isfinite(segment)]
-        if finite_segment.size == 0:
-            warnings.warn(f"[Row {row_idx}] {column_name}: no finite longActAccel samples in braking window")
+        time_segment = time[start_idx : end_idx + 1]
+        accel_segment = long_accel[start_idx : end_idx + 1]
+        finite_mask = np.isfinite(time_segment) & np.isfinite(accel_segment)
+        if np.count_nonzero(finite_mask) < 2:
+            warnings.warn(
+                f"[Row {row_idx}] {column_name}: insufficient finite time/longActAccel samples in braking window"
+            )
             kpi_table.at[row_idx, column_name] = np.nan
             return
 
-        kpi_table.at[row_idx, column_name] = float(np.mean(finite_segment))
+        time_segment = time_segment[finite_mask]
+        accel_segment = accel_segment[finite_mask]
+        if np.any(np.diff(time_segment) < 0):
+            warnings.warn(f"[Row {row_idx}] {column_name}: non-monotonic time vector in braking window")
+            kpi_table.at[row_idx, column_name] = np.nan
+            return
+
+        duration = float(time_segment[-1] - time_segment[0])
+        if duration <= 0:
+            warnings.warn(f"[Row {row_idx}] {column_name}: non-positive braking duration")
+            kpi_table.at[row_idx, column_name] = np.nan
+            return
+
+        integral = self._trapezoid(accel_segment, time_segment)
+        kpi_table.at[row_idx, column_name] = float(integral / duration)
 
     @staticmethod
     def _find_start_idx(target_decel, brake_pedal):
@@ -104,3 +126,9 @@ class BrakingAverageAccelCalculator:
         if max_speed_kph is not None and not speed_kph <= max_speed_kph:
             return False
         return True
+
+    @staticmethod
+    def _trapezoid(y, x):
+        if hasattr(np, "trapezoid"):
+            return np.trapezoid(y, x)
+        return np.trapz(y, x)
