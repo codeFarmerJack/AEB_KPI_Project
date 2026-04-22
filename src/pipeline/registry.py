@@ -62,6 +62,7 @@ LONG_FEATURES = (
             "aebDeadTime",
             "commLatency",
             "ImpactRelSpdKph",
+            "aebAverageAccel",
         ),
         cycle_kpis=(
             "AvailDistPct",
@@ -119,6 +120,7 @@ LONG_FEATURES = (
             "lsaebIntvLatDist",
             "lsaebStopLongDist",
             "lsaebStopLatDist",
+            "lsaebAverageAccel",
         ),
     ),
 )

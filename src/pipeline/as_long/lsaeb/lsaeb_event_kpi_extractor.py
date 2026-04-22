@@ -6,6 +6,7 @@ import numpy as np
 from src.pipeline.base.base_event_kpi_extractor import BaseEventKpiExtractor
 from src.utils.event_detector.as_long.lsaeb import detect_lsaeb_events
 from src.utils.data_utils import safe_scalar
+from src.utils.kpis.as_long.braking_average_accel import BrakingAverageAccelCalculator
 from src.utils.kpis.as_long.lsaeb.distance import LsaebDistanceCalculator
 from src.utils.signal_mdf import get_signal
 
@@ -45,6 +46,7 @@ class LsaebEventKpiExtractor(BaseEventKpiExtractor):
     def __init__(self, config, event_segmenter=None):
         super().__init__(config, event_segmenter, "in_path_lsaeb_chunks", feature_name="LSAEB")
         self.distance_calc = LsaebDistanceCalculator(self)
+        self.avg_accel_calc = BrakingAverageAccelCalculator(self)
 
     def extract_event_kpis(self, mdf, fname, i):
         """
@@ -102,3 +104,11 @@ class LsaebEventKpiExtractor(BaseEventKpiExtractor):
 
     def _post_process_event_by_indices(self, mdf, index, signals, start_idx, end_idx, result):
         self.distance_calc.compute_distance(mdf, self.kpi_table, index, start_idx, end_idx)
+        self.avg_accel_calc.compute_average_accel(
+            mdf,
+            self.kpi_table,
+            index,
+            "lsaebAverageAccel",
+            min_speed_kph=2.0,
+            max_speed_kph=10.0,
+        )

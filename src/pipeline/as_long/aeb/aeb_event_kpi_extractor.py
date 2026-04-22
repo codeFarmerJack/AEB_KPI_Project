@@ -16,6 +16,7 @@ from src.utils.kpis.as_long.aeb.throttle import AebThrottleCalculator
 from src.utils.kpis.as_long.aeb.yaw_rate import AebYawRateCalculator   
 from src.utils.kpis.as_long.aeb.latency import AebLatencyCalculator 
 from src.utils.kpis.as_long.aeb.impact_rel_speed import AebImpactRelSpeedCalculator
+from src.utils.kpis.as_long.braking_average_accel import BrakingAverageAccelCalculator
 from src.utils.signal_mdf import get_signal
 
 # ------------------------------------------------------------------ #
@@ -168,6 +169,7 @@ class AebEventKpiExtractor(BaseEventKpiExtractor):
         self.yaw_rate_calc = AebYawRateCalculator(self)
         self.lat_accel_calc = AebLatAccelCalculator(self)
         self.impact_rel_spd_calc = AebImpactRelSpeedCalculator(self)
+        self.avg_accel_calc = BrakingAverageAccelCalculator(self)
 
     def _load_signals(self, mdf):
         time = self._prepare_time(mdf)
@@ -332,3 +334,10 @@ class AebEventKpiExtractor(BaseEventKpiExtractor):
         self.brake_mode_calc.compute_brake_mode(mdf, self.kpi_table, index, start_idx)
         self.latency_calc.compute_all(mdf, self.kpi_table, index, start_idx)
         self.impact_rel_spd_calc.compute_impact_rel_speed(mdf, self.kpi_table, index)
+        self.avg_accel_calc.compute_average_accel(
+            mdf,
+            self.kpi_table,
+            index,
+            "aebAverageAccel",
+            min_speed_kph=10.0,
+        )

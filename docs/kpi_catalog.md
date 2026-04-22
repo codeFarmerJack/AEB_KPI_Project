@@ -5,7 +5,7 @@ This catalog documents the KPI names currently exported by the tool. It is align
 ## AEB
 
 Event KPIs:
-`logTime`, `aebIntvStartTime`, `aebIntvEndTime`, `intvDur`, `isVehStopped`, `aebSuspDur`, `vehSpd`, `steerAngTh`, `steerAngRateTh`, `pedalPosIncTh`, `yawRateSuspTh`, `latAccelTh`, `firstDetDist`, `stableDetDist`, `aebIntvDist`, `aebStopGap`, `pedalPosAtStart`, `pedalPosMax`, `pedalPosInc`, `isPedalPosIncHigh`, `isPedalOnAtStrt`, `absSteerMaxDeg`, `isSteerHigh`, `absSteerRateMaxDeg`, `isSteerAngRateHigh`, `absYawRateMaxDeg`, `isYawRateHigh`, `absLatAccelMax`, `isLatAccelHigh`, `pbDur`, `fbDur`, `isPBOn`, `isFBOn`, `aebSysRespTime`, `aebDeadTime`, `commLatency`, `ImpactRelSpdKph`
+`logTime`, `aebIntvStartTime`, `aebIntvEndTime`, `intvDur`, `isVehStopped`, `aebSuspDur`, `vehSpd`, `steerAngTh`, `steerAngRateTh`, `pedalPosIncTh`, `yawRateSuspTh`, `latAccelTh`, `firstDetDist`, `stableDetDist`, `aebIntvDist`, `aebStopGap`, `pedalPosAtStart`, `pedalPosMax`, `pedalPosInc`, `isPedalPosIncHigh`, `isPedalOnAtStrt`, `absSteerMaxDeg`, `isSteerHigh`, `absSteerRateMaxDeg`, `isSteerAngRateHigh`, `absYawRateMaxDeg`, `isYawRateHigh`, `absLatAccelMax`, `isLatAccelHigh`, `pbDur`, `fbDur`, `isPBOn`, `isFBOn`, `aebSysRespTime`, `aebDeadTime`, `commLatency`, `ImpactRelSpdKph`, `aebAverageAccel`
 
 Cycle KPIs:
 `AvailDistPct`, `ROVAvail`, `VALAvail`, `NoDegradation`, `PedalPosProSuppression`, `SteeringWheelAngle`, `SteeringWheelAngleRate`, `YawRate`, `LatAccel`, `LowSpeed`
@@ -21,7 +21,7 @@ Cycle KPIs:
 ## LSAEB
 
 Event KPIs:
-`logTime`, `vehSpd`, `lsaebIntvLongDist`, `lsaebIntvLatDist`, `lsaebStopLongDist`, `lsaebStopLatDist`
+`logTime`, `vehSpd`, `lsaebIntvLongDist`, `lsaebIntvLatDist`, `lsaebStopLongDist`, `lsaebStopLatDist`, `lsaebAverageAccel`
 
 Cycle KPIs:
 None currently exported.
