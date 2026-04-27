@@ -8,6 +8,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.config.config_loader import ConfigLoader
+from src.utils.path_manager import get_resource
 
 
 def test_parse_params_sheet_casts_types():
@@ -30,3 +31,38 @@ def test_parse_params_sheet_casts_types():
     assert types["b"] == "float"
     assert types["c"] == "bool"
     assert types["d"] == "string"
+
+
+def test_graph_spec_contains_brake_distance_scatter_rows():
+    graph_spec = pd.read_excel(get_resource("config/kpi_as_long.xlsx"), sheet_name="graphSpec")
+    graph_spec.columns = graph_spec.columns.str.strip().str.lower()
+
+    required = {
+        "brakeDistAeb": {
+            "feature": "AEB",
+            "title": "AEB Stop Distance",
+            "plottype": "scatter",
+            "axis_name": "Distance (cm)",
+            "min_axis_value": 0,
+            "max_axis_value": 4000,
+        },
+        "brakeDistLsaeb": {
+            "feature": "LSAEB",
+            "title": "LSAEB Stop Distance",
+            "plottype": "scatter",
+            "axis_name": "Distance (cm)",
+            "min_axis_value": 0,
+            "max_axis_value": 200,
+        },
+    }
+
+    for reference, expected in required.items():
+        row = graph_spec.loc[graph_spec["reference"] == reference]
+        assert not row.empty, f"missing graphSpec row for {reference}"
+        match = row.iloc[0]
+        assert match["feature"] == expected["feature"]
+        assert match["title"] == expected["title"]
+        assert match["plottype"] == expected["plottype"]
+        assert match["axis_name"] == expected["axis_name"]
+        assert match["min_axis_value"] == expected["min_axis_value"]
+        assert match["max_axis_value"] == expected["max_axis_value"]

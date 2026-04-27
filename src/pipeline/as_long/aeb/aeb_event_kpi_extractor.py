@@ -10,6 +10,7 @@ from src.utils.process_calibratables import interpolate_threshold_clamped
 from src.utils.data_utils import safe_scalar
 from src.utils.kpis.as_long.aeb.brake_mode import AebBrakeModeCalculator
 from src.utils.kpis.as_long.aeb.distance import AebDistanceCalculator
+from src.utils.kpis.as_long.braking_stop_distance import BrakingStopDistanceCalculator
 from src.utils.kpis.as_long.aeb.lat_accel import AebLatAccelCalculator
 from src.utils.kpis.as_long.aeb.steering_wheel import AebSteeringCalculator
 from src.utils.kpis.as_long.aeb.throttle import AebThrottleCalculator
@@ -170,6 +171,7 @@ class AebEventKpiExtractor(BaseEventKpiExtractor):
         self.lat_accel_calc = AebLatAccelCalculator(self)
         self.impact_rel_spd_calc = AebImpactRelSpeedCalculator(self)
         self.avg_accel_calc = BrakingAverageAccelCalculator(self)
+        self.stop_distance_calc = BrakingStopDistanceCalculator(self)
 
     def _load_signals(self, mdf):
         time = self._prepare_time(mdf)
@@ -340,4 +342,10 @@ class AebEventKpiExtractor(BaseEventKpiExtractor):
             index,
             "aebAverageAccel",
             min_speed_kph=10.0,
+        )
+        self.stop_distance_calc.compute_stop_distance(
+            mdf,
+            self.kpi_table,
+            index,
+            "brakeDistAeb",
         )
