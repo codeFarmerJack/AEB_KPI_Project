@@ -33,7 +33,7 @@ def test_parse_params_sheet_casts_types():
     assert types["d"] == "string"
 
 
-def test_graph_spec_contains_lsaeb_scatter_rows():
+def test_graph_spec_contains_aeb_lsaeb_scatter_rows():
     graph_spec = pd.read_excel(get_resource("config/kpi_as_long.xlsx"), sheet_name="graphSpec")
     graph_spec.columns = graph_spec.columns.str.strip().str.lower()
 
@@ -60,15 +60,23 @@ def test_graph_spec_contains_lsaeb_scatter_rows():
             "plottype": "scatter",
             "axis_name": "Acceleration Magnitude (m/s2)",
             "min_axis_value": 0,
-            "max_axis_value": 6,
+            "max_axis_value": 10,
+        },
+        "aebAverageAccel": {
+            "feature": "AEB",
+            "title": "AEB Average Acceleration Magnitude",
+            "plottype": "scatter",
+            "axis_name": "Acceleration Magnitude (m/s2)",
+            "min_axis_value": 0,
+            "max_axis_value": 15,
         },
     }
 
     for reference, expected in required.items():
         reference_match = (
             graph_spec["reference"] == reference
-            if reference != "lsaebAverageAccel"
-            else graph_spec["reference"] == "abs(lsaebAverageAccel)"
+            if reference not in {"lsaebAverageAccel", "aebAverageAccel"}
+            else graph_spec["reference"] == f"abs({reference})"
         )
         row = graph_spec.loc[reference_match]
         assert not row.empty, f"missing graphSpec row for {reference}"
