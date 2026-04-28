@@ -27,7 +27,11 @@ from src.utils.path_manager import get_config_dir
 
 
 class FileTreeModel(QFileSystemModel):
-    check_state_changed = Signal()
+    check_state_changed = Signal(str, int)
+
+    @staticmethod
+    def _state_value(state):
+        return int(getattr(state, "value", state))
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -57,7 +61,7 @@ class FileTreeModel(QFileSystemModel):
             if self._checks.get(path) != state:
                 self._checks[path] = state
                 self.dataChanged.emit(index, index, [Qt.CheckStateRole])
-                self.check_state_changed.emit()
+                self.check_state_changed.emit(path, self._state_value(state))
             return True
         return super().setData(index, value, role)
 
@@ -74,11 +78,12 @@ class FileTreeModel(QFileSystemModel):
                     self.dataChanged.emit(idx, idx, [Qt.CheckStateRole])
                 changed = True
         if changed:
-            self.check_state_changed.emit()
+            self.check_state_changed.emit("", self._state_value(Qt.Unchecked))
 
     def set_checked_paths(self, paths, checked=True):
         state = Qt.Checked if checked else Qt.Unchecked
         changed = False
+        last_path = ""
         for path in paths:
             idx = self.index(str(path))
             if not idx.isValid():
@@ -87,8 +92,9 @@ class FileTreeModel(QFileSystemModel):
                 self._checks[str(path)] = state
                 self.dataChanged.emit(idx, idx, [Qt.CheckStateRole])
                 changed = True
+                last_path = str(path)
         if changed:
-            self.check_state_changed.emit()
+            self.check_state_changed.emit(last_path, self._state_value(state))
 
     def clear_checks_outside_dir(self, folder: Path):
         folder = Path(folder).resolve()
@@ -103,7 +109,7 @@ class FileTreeModel(QFileSystemModel):
                     self.dataChanged.emit(idx, idx, [Qt.CheckStateRole])
                 changed = True
         if changed:
-            self.check_state_changed.emit()
+            self.check_state_changed.emit("", self._state_value(Qt.Unchecked))
 
     def _is_mf4(self, index):
         if not index.isValid() or self.isDir(index):
@@ -412,23 +418,30 @@ class KpiGui(QWidget):
         self.log(f"MF4 folder set to: {self.mf4_folder}")
         self._reveal_path_in_tree(self.mf4_folder)
 
-    def _on_check_state_changed(self):
+    def _on_check_state_changed(self, changed_path="", state=None):
         selected = self._selected_files()
         if not selected:
             self._update_file_count()
             return
 
-        parent = selected[0].parent
-        if any(p.parent != parent for p in selected):
-            self.file_model.clear_checks_outside_dir(parent)
+        preferred_parent = None
+        changed = Path(changed_path).resolve() if changed_path else None
+        checked_state = int(getattr(Qt.Checked, "value", Qt.Checked))
+        if changed is not None and state == checked_state and changed in selected:
+            preferred_parent = changed.parent
+        else:
+            preferred_parent = selected[0].parent
+
+        if any(p.parent != preferred_parent for p in selected):
+            self.file_model.clear_checks_outside_dir(preferred_parent)
             self.log("⚠️ Files must be selected from a single folder; cleared other folders.")
             selected = self._selected_files()
             if not selected:
                 self._update_file_count()
                 return
 
-        if self.mf4_folder != parent:
-            self.mf4_folder = parent
+        if self.mf4_folder != preferred_parent:
+            self.mf4_folder = preferred_parent
             if self.folder_label is not None:
                 self.folder_label.setText(str(self.mf4_folder))
 
