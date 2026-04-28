@@ -8,7 +8,8 @@ from src.utils.kpis.as_long.braking_stop_distance import BrakingStopDistanceCalc
 
 
 class DummyExtractor:
-    pass
+    aeb_jerk_neg_thd = -20.0
+    latency_window_samples = 30
 
 
 class DummyExtractorWithResample:
@@ -27,7 +28,7 @@ class DummyMdf:
         self._injected = signals
 
 
-def test_brake_distance_uses_aeb_target_decel_falling_edge_to_vehicle_stop():
+def test_brake_distance_uses_request_edge_when_no_actual_onset_is_detected():
     calc = BrakingStopDistanceCalculator(DummyExtractor())
     kpi_table = pd.DataFrame(index=[0])
     mdf = DummyMdf(
@@ -91,3 +92,31 @@ def test_brake_distance_uses_configured_100hz_step_for_synthesized_time():
     calc.compute_stop_distance(mdf, kpi_table, 0, "brakeDistAeb")
 
     assert kpi_table.at[0, "brakeDistAeb"] == pytest.approx(1.0, rel=1e-9)
+
+
+def test_brake_distance_starts_at_actual_decel_onset_not_target_decel_edge():
+    calc = BrakingStopDistanceCalculator(DummyExtractor())
+    kpi_table = pd.DataFrame(index=[0])
+
+    time = np.round(np.arange(0.0, 0.61, 0.01), 2)
+    target_decel = np.zeros_like(time)
+    target_decel[10:] = -0.2
+
+    long_accel_flt = np.zeros_like(time)
+    long_accel_flt[28:51] = -3.0
+
+    ego_speed = np.full_like(time, 2.0)
+    ego_speed[51:] = 0.0
+
+    mdf = DummyMdf(
+        {
+            "time": time,
+            "aebTargetDecel": target_decel,
+            "egoSpeed": ego_speed,
+            "longActAccelFlt": long_accel_flt,
+        }
+    )
+
+    calc.compute_stop_distance(mdf, kpi_table, 0, "brakeDistLsaeb")
+
+    assert kpi_table.at[0, "brakeDistLsaeb"] == pytest.approx(47.0, abs=1e-9)
