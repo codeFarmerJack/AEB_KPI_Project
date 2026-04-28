@@ -6,7 +6,8 @@ from src.utils.kpis.as_long.braking_average_accel import BrakingAverageAccelCalc
 
 
 class DummyExtractor:
-    pass
+    aeb_jerk_neg_thd = -20.0
+    latency_window_samples = 30
 
 
 class DummyMdf:
@@ -85,3 +86,40 @@ def test_lsaeb_average_accel_respects_speed_range_gate():
     )
 
     assert np.isnan(kpi_table.at[0, "lsaebAverageAccel"])
+
+
+def test_average_accel_starts_at_actual_decel_onset_not_target_decel_edge():
+    calc = BrakingAverageAccelCalculator(DummyExtractor())
+    kpi_table = pd.DataFrame(index=[0])
+
+    time = np.round(np.arange(0.0, 0.61, 0.01), 2)
+    target_decel = np.zeros_like(time)
+    target_decel[10:] = -0.2
+
+    long_accel = np.zeros_like(time)
+    long_accel[28:51] = -3.0
+
+    ego_speed = np.full_like(time, 12.0)
+    ego_speed[51:] = 0.0
+    ego_speed[50] = 0.04
+
+    mdf = DummyMdf(
+        {
+            "time": time,
+            "aebTargetDecel": target_decel,
+            "brakePedalPressed": np.zeros_like(time),
+            "egoSpeedKph": ego_speed,
+            "longActAccel": long_accel,
+            "longActAccelFlt": long_accel,
+        }
+    )
+
+    calc.compute_average_accel(
+        mdf,
+        kpi_table,
+        0,
+        "aebAverageAccel",
+        min_speed_kph=10.0,
+    )
+
+    assert kpi_table.at[0, "aebAverageAccel"] == pytest.approx(-2.935, abs=1e-3)
