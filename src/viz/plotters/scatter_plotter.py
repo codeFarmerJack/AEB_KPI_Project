@@ -100,7 +100,10 @@ class ScatterPlotter(BasePlotter):
             data, self.graph_spec.loc[graph_idx, "plotenabled"]
         )
         x_vals    = data.loc[mask, x_col].to_numpy()
-        y_vals    = data.loc[mask, y_col].to_numpy()
+        y_vals    = DataAdapters.apply_reference_transform(
+            y_var,
+            data.loc[mask, y_col].to_numpy(),
+        )
         if self._mask_zero_markers(title):
             nonzero_mask = np.isfinite(y_vals) & (y_vals != 0)
             x_vals = x_vals[nonzero_mask]

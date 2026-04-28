@@ -33,7 +33,7 @@ def test_parse_params_sheet_casts_types():
     assert types["d"] == "string"
 
 
-def test_graph_spec_contains_brake_distance_scatter_rows():
+def test_graph_spec_contains_lsaeb_scatter_rows():
     graph_spec = pd.read_excel(get_resource("config/kpi_as_long.xlsx"), sheet_name="graphSpec")
     graph_spec.columns = graph_spec.columns.str.strip().str.lower()
 
@@ -54,10 +54,23 @@ def test_graph_spec_contains_brake_distance_scatter_rows():
             "min_axis_value": 0,
             "max_axis_value": 200,
         },
+        "lsaebAverageAccel": {
+            "feature": "LSAEB",
+            "title": "LSAEB Average Acceleration Magnitude",
+            "plottype": "scatter",
+            "axis_name": "Acceleration Magnitude (m/s2)",
+            "min_axis_value": 0,
+            "max_axis_value": 6,
+        },
     }
 
     for reference, expected in required.items():
-        row = graph_spec.loc[graph_spec["reference"] == reference]
+        reference_match = (
+            graph_spec["reference"] == reference
+            if reference != "lsaebAverageAccel"
+            else graph_spec["reference"] == "abs(lsaebAverageAccel)"
+        )
+        row = graph_spec.loc[reference_match]
         assert not row.empty, f"missing graphSpec row for {reference}"
         match = row.iloc[0]
         assert match["feature"] == expected["feature"]

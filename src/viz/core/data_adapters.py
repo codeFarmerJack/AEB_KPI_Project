@@ -1,6 +1,7 @@
 # src/viz/core/data_adapters.py
 import warnings
 import pandas as pd
+import numpy as np
 
 
 class DataAdapters:
@@ -37,6 +38,8 @@ class DataAdapters:
                 .replace("]", "")
             )
 
+        x_var = DataAdapters.base_reference(x_var)
+        y_var = DataAdapters.base_reference(y_var)
         cols = list(kpi_data.columns)
         mapping = {clean(c): c for c in cols}
 
@@ -60,3 +63,18 @@ class DataAdapters:
             warnings.warn(f"⚠️ X ({x_var}) or Y ({y_var}) not found in KPI data")
 
         return x_col, y_col
+
+    @staticmethod
+    def base_reference(reference: str) -> str:
+        ref = str(reference).strip()
+        if ref.lower().startswith("abs(") and ref.endswith(")"):
+            return ref[4:-1].strip()
+        return ref
+
+    @staticmethod
+    def apply_reference_transform(reference: str, values):
+        ref = str(reference).strip().lower()
+        arr = np.asarray(values)
+        if ref.startswith("abs(") and ref.endswith(")"):
+            return np.abs(arr)
+        return arr
