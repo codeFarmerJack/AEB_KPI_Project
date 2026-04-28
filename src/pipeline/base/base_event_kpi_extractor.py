@@ -72,14 +72,41 @@ class BaseEventKpiExtractor:
     def _prepare_time(self, mdf):
         """Extract or synthesize a time vector."""
         time = get_signal(mdf, "time")
-        if time is None or len(time) == 0:
-            try:
-                time = mdf.get_master(0).flatten()
-            except Exception:
-                n = len(mdf.groups[0].channels[0].samples) if mdf.groups else 0
-                time = np.arange(n, dtype=float)
-            warnings.warn("⚠️ Synthesized time vector (equidistant).")
-        return time
+        if time is not None and len(time) > 0:
+            if getattr(mdf, "_time_is_synthesized", False):
+                step_s = self._get_resample_interval_s()
+                warnings.warn(
+                    f"⚠️ Rebuilt synthesized time vector using configured resample_rate={step_s}s."
+                )
+                return np.arange(len(time), dtype=float) * step_s
+            return np.asarray(time, dtype=float)
+
+        try:
+            time = mdf.get_master(0).flatten()
+            if time is not None and len(time) > 0:
+                return np.asarray(time, dtype=float)
+        except Exception:
+            pass
+
+        n = len(mdf.groups[0].channels[0].samples) if mdf.groups else 0
+        step_s = self._get_resample_interval_s()
+        warnings.warn(
+            f"⚠️ Synthesized time vector using configured resample_rate={step_s}s."
+        )
+        return np.arange(n, dtype=float) * step_s
+
+    def _get_resample_interval_s(self):
+        params = getattr(self.config, "params", {}) or {}
+        if isinstance(params, dict):
+            for key in ("resample_rate", "RESAMPLE_RATE"):
+                if key in params:
+                    try:
+                        step_s = float(params[key])
+                        if step_s > 0:
+                            return step_s
+                    except Exception:
+                        pass
+        return 0.01
 
     def _insert_label(self, index, fname):
         """Ensure label column exists and assign filename."""

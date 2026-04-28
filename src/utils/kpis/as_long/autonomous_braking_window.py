@@ -37,9 +37,11 @@ class AutonomousBrakingWindowResolver:
         stop_value=0.0,
         stop_tolerance=1e-6,
     ):
-        time = get_signal(mdf, "time")
-        if time is None and hasattr(self.extractor, "_prepare_time"):
+        time = None
+        if hasattr(self.extractor, "_prepare_time"):
             time = self.extractor._prepare_time(mdf)
+        if time is None:
+            time = get_signal(mdf, "time")
 
         target_decel = get_signal(mdf, "aebTargetDecel")
         brake_pedal = get_signal(mdf, "brakePedalPressed") if require_brake_pedal_released else None

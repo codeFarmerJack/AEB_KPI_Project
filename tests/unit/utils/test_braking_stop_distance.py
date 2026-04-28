@@ -1,12 +1,25 @@
 import numpy as np
 import pandas as pd
 import pytest
+from types import SimpleNamespace
 
+from src.pipeline.base.base_event_kpi_extractor import BaseEventKpiExtractor
 from src.utils.kpis.as_long.braking_stop_distance import BrakingStopDistanceCalculator
 
 
 class DummyExtractor:
     pass
+
+
+class DummyExtractorWithResample:
+    def __init__(self, resample_rate=0.01):
+        self.config = SimpleNamespace(params={"resample_rate": resample_rate})
+
+    def _prepare_time(self, mdf):
+        return BaseEventKpiExtractor._prepare_time(self, mdf)
+
+    def _get_resample_interval_s(self):
+        return BaseEventKpiExtractor._get_resample_interval_s(self)
 
 
 class DummyMdf:
@@ -61,3 +74,20 @@ def test_brake_distance_can_fallback_to_ego_speed_kph_when_needed():
     calc.compute_stop_distance(mdf, kpi_table, 0, "brakeDistAeb")
 
     assert kpi_table.at[0, "brakeDistAeb"] == pytest.approx(450.0, rel=1e-9)
+
+
+def test_brake_distance_uses_configured_100hz_step_for_synthesized_time():
+    calc = BrakingStopDistanceCalculator(DummyExtractorWithResample(0.01))
+    kpi_table = pd.DataFrame(index=[0])
+    mdf = DummyMdf(
+        {
+            "aebTargetDecel": np.array([0.0, -0.2, -0.2, 0.0]),
+            "egoSpeed": np.array([2.0, 1.0, 0.5, 0.0]),
+        }
+    )
+    mdf._time = np.array([0.0, 1.0, 2.0, 3.0])
+    mdf._time_is_synthesized = True
+
+    calc.compute_stop_distance(mdf, kpi_table, 0, "brakeDistAeb")
+
+    assert kpi_table.at[0, "brakeDistAeb"] == pytest.approx(1.0, rel=1e-9)

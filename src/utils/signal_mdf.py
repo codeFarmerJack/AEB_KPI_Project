@@ -52,6 +52,7 @@ class SignalMDF(MDF):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._injected = {}
+        self._time_is_synthesized = False
         self._time = self._resolve_time()
 
     @property
@@ -96,6 +97,7 @@ class SignalMDF(MDF):
             n = len(self.groups[0].channels[0].samples)
         except Exception:
             n = 0
+        self._time_is_synthesized = True
         warnings.warn("⚠️ Synthesized time vector (equidistant).")
         return np.arange(n, dtype=float)
 
