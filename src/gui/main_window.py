@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt, QDir, Signal, QEvent
+from PySide6.QtCore import Qt, QDir, Signal, QEvent, QSettings
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -135,16 +135,22 @@ class FileTreeDelegate(QStyledItemDelegate):
 
 
 class KpiGui(QWidget):
-    def __init__(self, config_dir=None, parent=None):
+    _SETTINGS_ORG = "JackWang401"
+    _SETTINGS_APP = "ADAS_KPI_Extractor"
+    _LAST_FOLDER_KEY = "gui/last_mf4_folder"
+
+    def __init__(self, config_dir=None, parent=None, settings=None, tree_root=None):
         super().__init__(parent)
         self.config_dir = Path(config_dir) if config_dir else get_config_dir()
+        self.settings = settings or QSettings(self._SETTINGS_ORG, self._SETTINGS_APP)
         self.mf4_folder: Optional[Path] = None
         self.folder_label = None
         self.runner = None
         self.long_checks = {}
         self.lat_checks = {}
-        self.tree_root = Path(QDir.rootPath())
+        self.tree_root = Path(tree_root) if tree_root else Path(QDir.rootPath())
         self._build_ui()
+        self._restore_last_active_folder()
 
     # ---------------- UI ----------------
     def _build_ui(self):
@@ -412,10 +418,34 @@ class KpiGui(QWidget):
             parent = parent.parent()
 
     def _set_active_folder(self, folder: Path):
-        self.mf4_folder = folder
+        self.mf4_folder = Path(folder).expanduser().resolve()
         if self.folder_label is not None:
             self.folder_label.setText(str(self.mf4_folder))
+        self._persist_active_folder()
         self.log(f"MF4 folder set to: {self.mf4_folder}")
+        self._reveal_path_in_tree(self.mf4_folder)
+
+    def _persist_active_folder(self):
+        if self.mf4_folder is None:
+            self.settings.remove(self._LAST_FOLDER_KEY)
+        else:
+            self.settings.setValue(self._LAST_FOLDER_KEY, str(self.mf4_folder))
+        self.settings.sync()
+
+    def _restore_last_active_folder(self):
+        folder = self.settings.value(self._LAST_FOLDER_KEY, "", type=str)
+        if not folder:
+            return
+
+        folder_path = Path(folder).expanduser()
+        if not folder_path.exists() or not folder_path.is_dir():
+            self.settings.remove(self._LAST_FOLDER_KEY)
+            self.settings.sync()
+            return
+
+        self.mf4_folder = folder_path.resolve()
+        if self.folder_label is not None:
+            self.folder_label.setText(str(self.mf4_folder))
         self._reveal_path_in_tree(self.mf4_folder)
 
     def _on_check_state_changed(self, changed_path="", state=None):
@@ -444,6 +474,7 @@ class KpiGui(QWidget):
             self.mf4_folder = preferred_parent
             if self.folder_label is not None:
                 self.folder_label.setText(str(self.mf4_folder))
+            self._persist_active_folder()
 
         self._update_file_count()
 
