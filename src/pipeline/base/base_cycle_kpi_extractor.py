@@ -7,6 +7,7 @@ import pandas as pd
 
 from src.utils.signal_mdf import safe_load_mdf
 from src.utils.create_kpi_table import create_kpi_table_from_df
+from src.utils.output_naming import build_kpi_result_filename
 from src.utils.exporter import export_kpi_to_excel
 from src.viz.visualizers.base_cycle_visualizer import BaseCycleVisualizer
 
@@ -152,6 +153,10 @@ class BaseCycleKpiExtractor(ABC):
         self.out_path_results = os.path.join(self.in_path_raw_data, "analysis_results")
         os.makedirs(self.out_path_results, exist_ok=True)
         self.in_path_extracted = input_handler.out_path_extracted
+        self.config.kpi_result_filename = build_kpi_result_filename(
+            getattr(self.config, "kpi_result_filename", "kpi_results.xlsx"),
+            getattr(input_handler, "selected_mf4_files", None),
+        )
 
     def _collect_extracted_files(self, path):
         files = [f for f in os.listdir(path) if f.lower().endswith(".mf4")]

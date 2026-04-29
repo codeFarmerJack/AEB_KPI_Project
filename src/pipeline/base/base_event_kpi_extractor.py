@@ -5,6 +5,7 @@ import numpy as np
 
 from src.utils.signal_mdf import SignalMDF, get_signal
 from src.utils.create_kpi_table import create_kpi_table_from_df
+from src.utils.output_naming import build_kpi_result_filename
 from src.utils.exporter import export_kpi_to_excel
 
 
@@ -213,6 +214,11 @@ class BaseEventKpiExtractor:
         os.makedirs(self.out_path_results, exist_ok=True)
         self.in_path_extracted = event_segmenter.in_path_extracted
         self.out_path_chunks = getattr(event_segmenter, chunk_attr_name)
+        self.selected_mf4_files = getattr(event_segmenter, "selected_mf4_files", None)
+        self.config.kpi_result_filename = build_kpi_result_filename(
+            getattr(self.config, "kpi_result_filename", "kpi_results.xlsx"),
+            self.selected_mf4_files,
+        )
 
     def _collect_event_files(self, path):
         files = [f for f in os.listdir(path) if f.endswith(self._EVENT_EXT)]

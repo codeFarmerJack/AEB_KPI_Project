@@ -3,6 +3,7 @@ from pathlib import Path
 
 from src.config.config import Config
 from src.pipeline.input_handler import InputHandler
+from src.utils.output_naming import build_kpi_result_filename
 
 
 class BasePipeline:
@@ -43,6 +44,7 @@ class BasePipeline:
         else:
             print("🪄 Using external InputHandler instance.")
 
+        self._sync_output_filename()
         self._detect_events()
         self._extract_kpis()
         self._visualize_results()
@@ -83,6 +85,14 @@ class BasePipeline:
             print("✅ MF4 files processed successfully.")
         except Exception as exc:
             raise RuntimeError(f"❌ MF4 processing failed: {exc}") from exc
+
+    def _sync_output_filename(self):
+        if self.cfg is None or self.ih is None:
+            return
+        self.cfg.kpi_result_filename = build_kpi_result_filename(
+            getattr(self.cfg, "kpi_result_filename", "kpi_results.xlsx"),
+            getattr(self.ih, "selected_mf4_files", None),
+        )
 
     def _detect_events(self):
         """Step 3: Run feature event detection if a segmenter is configured."""
