@@ -5,7 +5,12 @@ from typing import Optional, Union
 from asammdf import MDF
 from src.utils.path_manager import get_resource, init_tkinter_for_bundle
 from src.utils.mf4_extractor import mf4_extractor
-from src.utils.mf4_postprocess import build_signal, merge_signals, postprocess_signals
+from src.utils.mf4_postprocess import (
+    build_signal,
+    merge_signals,
+    normalize_source_signals,
+    postprocess_signals,
+)
 from src.utils.enum_loader import EnumMapper
 from src.utils.load_params import load_params_from_class, load_params_from_config
 
@@ -26,7 +31,13 @@ class InputHandler:
         "cutoff_freq": {"default": 10.0, "type": float, "desc": "Low-pass filter cutoff frequency in Hz"},
     }
 
-    def __init__(self, config, input_path: Optional[Union[str, Path]] = None, mf4_files=None):
+    def __init__(
+        self,
+        config,
+        input_path: Optional[Union[str, Path]] = None,
+        mf4_files=None,
+        signal_source: str = "roadcast_log",
+    ):
         """
         Constructor: accepts a Config object, loads key parameters.
         If mf4_files/input_path are provided, uses them directly; otherwise,
@@ -40,6 +51,8 @@ class InputHandler:
             raise TypeError("Config object must define signal_map")
 
         self.signal_map = config.signal_map
+        self.signal_source = signal_source or "roadcast_log"
+        setattr(config, "signal_source", self.signal_source)
         self.enum_mapper = EnumMapper(get_resource("config/enum_definitions.yaml"))
 
         # --- Load parameters from class and then override with config ---
@@ -150,6 +163,7 @@ class InputHandler:
                 req=None,
                 resample=self.resample_rate,
                 convert_to_tact_unit=True,
+                signal_source=self.signal_source,
             )
 
             # --- right after extraction, immediately close raw MF4 ---
@@ -163,6 +177,8 @@ class InputHandler:
             if data.empty:
                 print(f"⚠️ Warning: no data extracted from {file}")
                 return
+
+            data = normalize_source_signals(data, self.signal_source)
 
             # --- 2️⃣ Post-process signals (filters + conversions) ---
             derived = postprocess_signals(data, cutoff_freq=self.cutoff_freq)

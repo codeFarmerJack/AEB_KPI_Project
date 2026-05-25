@@ -10,7 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.pipeline.input_handler import InputHandler
-from src.utils.mf4_postprocess import build_signal
+from src.utils.mf4_postprocess import build_signal, normalize_source_signals
 
 
 def _make_config():
@@ -52,3 +52,28 @@ def test_build_signal_fallback_categorical(tmp_path):
 
     assert sig.samples.tolist() == [1, 0, 1]
     assert np.all(sig.timestamps == series.index.values)
+
+
+def test_motion_1_normalization_converts_units_and_derives_requests():
+    df = pd.DataFrame(
+        {
+            "egoSpeed": [36.0],
+            "steerWheelAngle": [180.0],
+            "steerWheelAngleSpeed": [90.0],
+            "yawRate": [45.0],
+            "aebTargetDecel": [-6.0],
+            "fcwState": [5.0],
+        },
+        index=[0.0],
+    )
+
+    out = normalize_source_signals(df, "motion_1")
+
+    assert np.isclose(out["egoSpeed"].iloc[0], 10.0)
+    assert np.isclose(out["steerWheelAngle"].iloc[0], np.pi)
+    assert np.isclose(out["steerWheelAngleSpeed"].iloc[0], np.pi / 2)
+    assert np.isclose(out["yawRate"].iloc[0], np.pi / 4)
+    assert out["aebRequest"].iloc[0] == 1
+    assert out["aebPartialState"].iloc[0] == 2
+    assert out["aebFullState"].iloc[0] == 1
+    assert out["fcwRequest"].iloc[0] == 3

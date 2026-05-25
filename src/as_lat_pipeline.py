@@ -12,6 +12,7 @@ def main(
     mf4_folder: Optional[Union[Path, str]] = None,
     mf4_files=None,
     feature_keys=None,
+    signal_source: str = "roadcast_log",
 ):
     """
     Entry point for AS_LAT KPI extractor.
@@ -26,7 +27,12 @@ def main(
     print(f"\n📘 Loading config: {config_file}")
 
     cfg = Config.from_json(config_file)
-    ih = InputHandler(cfg, input_path=mf4_folder, mf4_files=mf4_files)
+    ih = InputHandler(
+        cfg,
+        input_path=mf4_folder,
+        mf4_files=mf4_files,
+        signal_source=signal_source,
+    )
 
     print("🔄 Processing MF4 files (shared for all AS_LAT pipelines)...")
     ih.process_mf4_files()

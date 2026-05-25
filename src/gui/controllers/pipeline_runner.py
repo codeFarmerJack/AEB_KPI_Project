@@ -53,6 +53,7 @@ class PipelineRunner(QThread):
         features_lat: Iterable[str],
         config_dir: Optional[Path] = None,
         mf4_files: Optional[Iterable[Path]] = None,
+        signal_source: str = "roadcast_log",
     ):
         super().__init__()
         self.mf4_folder = Path(mf4_folder).expanduser().resolve()
@@ -62,6 +63,7 @@ class PipelineRunner(QThread):
         self.mf4_files = (
             [Path(p).expanduser().resolve() for p in mf4_files] if mf4_files else None
         )
+        self.signal_source = signal_source or "roadcast_log"
 
     # ------------------ Helpers ------------------ #
     @contextmanager
@@ -81,7 +83,12 @@ class PipelineRunner(QThread):
         cfg_path = self.config_dir / get_config_name(domain)
         self.log.emit(f"📘 Config: {cfg_path.name}")
         cfg = Config.from_json(cfg_path)
-        ih = InputHandler(cfg, input_path=self.mf4_folder, mf4_files=self.mf4_files)
+        ih = InputHandler(
+            cfg,
+            input_path=self.mf4_folder,
+            mf4_files=self.mf4_files,
+            signal_source=self.signal_source,
+        )
         ih.process_mf4_files()
 
         for key in feature_keys:

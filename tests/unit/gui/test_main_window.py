@@ -71,3 +71,19 @@ def test_gui_restores_last_active_mf4_folder(tmp_path):
     restored_gui = KpiGui(settings=restored_settings, tree_root=tmp_path)
 
     assert restored_gui.mf4_folder == folder.resolve()
+
+
+def test_gui_signal_source_selector_maps_motion_1(tmp_path):
+    _get_app()
+
+    settings = QSettings(str(tmp_path / "gui_settings.ini"), QSettings.IniFormat)
+    settings.clear()
+    settings.sync()
+
+    gui = KpiGui(settings=settings, tree_root=tmp_path)
+    gui.source_combo.setCurrentText("MOTION_1")
+
+    assert gui._selected_signal_source() == "motion_1"
+
+    restored_gui = KpiGui(settings=settings, tree_root=tmp_path)
+    assert restored_gui.source_combo.currentText() == "MOTION_1"

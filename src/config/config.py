@@ -20,6 +20,7 @@ class Config:
         self.kpi_excel_name = None
         self.domain_name = None
         self.kpi_result_filename = None
+        self.signal_source = "roadcast_log"
 
     @classmethod
     def from_json(cls, json_config_path):

@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QSplitter,
     QSpacerItem,
     QSizePolicy,
+    QComboBox,
 )
 
 from src.gui.controllers.pipeline_runner import PipelineRunner
@@ -138,6 +139,11 @@ class KpiGui(QWidget):
     _SETTINGS_ORG = "JackWang401"
     _SETTINGS_APP = "ADAS_KPI_Extractor"
     _LAST_FOLDER_KEY = "gui/last_mf4_folder"
+    _LAST_SOURCE_KEY = "gui/last_signal_source"
+    _SOURCE_OPTIONS = {
+        "Roadcast Log": "roadcast_log",
+        "MOTION_1": "motion_1",
+    }
 
     def __init__(self, config_dir=None, parent=None, settings=None, tree_root=None):
         super().__init__(parent)
@@ -145,11 +151,13 @@ class KpiGui(QWidget):
         self.settings = settings or QSettings(self._SETTINGS_ORG, self._SETTINGS_APP)
         self.mf4_folder: Optional[Path] = None
         self.folder_label = None
+        self.source_combo = None
         self.runner = None
         self.long_checks = {}
         self.lat_checks = {}
         self.tree_root = Path(tree_root) if tree_root else Path(QDir.rootPath())
         self._build_ui()
+        self._restore_signal_source()
         self._restore_last_active_folder()
 
     # ---------------- UI ----------------
@@ -214,6 +222,14 @@ class KpiGui(QWidget):
             QCheckBox::indicator:checked {
                 background: #3b82f6;
             }
+            QComboBox {
+                background: #f8fafc;
+                border: 1px solid #cbd5e1;
+                border-radius: 8px;
+                padding: 8px 10px;
+                color: #1f2937;
+                font-weight: 600;
+            }
             QTextEdit {
                 background: #f8fafc;
                 border: 1px solid #cbd5e1;
@@ -246,7 +262,7 @@ class KpiGui(QWidget):
         header.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         root.addWidget(header)
 
-        badge = QLabel("1) Select MF4 Files  •  2) Pick Features  •  3) Run")
+        badge = QLabel("1) Select MF4 Files  •  2) Pick Source  •  3) Pick Features  •  4) Run")
         badge.setObjectName("badge")
         root.addWidget(badge)
 
@@ -261,6 +277,16 @@ class KpiGui(QWidget):
         right_layout = QVBoxLayout(right_panel)
         right_layout.setSpacing(14)
         right_layout.setContentsMargins(0, 0, 0, 0)
+
+        source_row = QHBoxLayout()
+        source_label = QLabel("Input source")
+        source_label.setObjectName("headline")
+        self.source_combo = QComboBox()
+        self.source_combo.addItems(list(self._SOURCE_OPTIONS.keys()))
+        self.source_combo.currentTextChanged.connect(self._persist_signal_source)
+        source_row.addWidget(source_label)
+        source_row.addWidget(self.source_combo, 1)
+        right_layout.addLayout(source_row)
 
         # Feature selection columns
         selection = QHBoxLayout()
@@ -447,6 +473,25 @@ class KpiGui(QWidget):
         if self.folder_label is not None:
             self.folder_label.setText(str(self.mf4_folder))
         self._reveal_path_in_tree(self.mf4_folder)
+        self._restore_signal_source()
+
+    def _selected_signal_source(self):
+        if self.source_combo is None:
+            return "roadcast_log"
+        return self._SOURCE_OPTIONS.get(self.source_combo.currentText(), "roadcast_log")
+
+    def _persist_signal_source(self):
+        if self.source_combo is None:
+            return
+        self.settings.setValue(self._LAST_SOURCE_KEY, self.source_combo.currentText())
+        self.settings.sync()
+
+    def _restore_signal_source(self):
+        if self.source_combo is None:
+            return
+        source_label = self.settings.value(self._LAST_SOURCE_KEY, "Roadcast Log", type=str)
+        if source_label in self._SOURCE_OPTIONS:
+            self.source_combo.setCurrentText(source_label)
 
     def _on_check_state_changed(self, changed_path="", state=None):
         selected = self._selected_files()
@@ -510,6 +555,7 @@ class KpiGui(QWidget):
             lat_sel,
             self.config_dir,
             mf4_files=self._selected_files() or None,
+            signal_source=self._selected_signal_source(),
         )
         self.runner.log.connect(self.log)
         self.runner.error.connect(self.log)

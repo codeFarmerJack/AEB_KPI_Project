@@ -15,6 +15,13 @@ CONVERSIONS = {
     "yawRate": ("yawRateDeg", np.degrees, "rad/s -> deg/s"),
 }
 
+MOTION_1_UNIT_NORMALIZERS = {
+    "egoSpeed": lambda x: x / 3.6,
+    "steerWheelAngle": np.radians,
+    "steerWheelAngleSpeed": np.radians,
+    "yawRate": np.radians,
+}
+
 
 def apply_filters(data, cutoff_freq, signals=FILTER_SIGNALS):
     if data is None or data.empty:
@@ -68,6 +75,47 @@ def postprocess_signals(data, cutoff_freq):
         if df is not None and not df.empty:
             derived = derived.join(df, how="outer")
     return derived
+
+
+def normalize_source_signals(data, signal_source):
+    if data is None or data.empty:
+        return data
+
+    source_key = str(signal_source or "roadcast_log").strip().lower()
+    if source_key not in {"motion_1", "motion1"}:
+        return data
+
+    normalized = data.copy()
+    for signal_name, func in MOTION_1_UNIT_NORMALIZERS.items():
+        if signal_name in normalized.columns:
+            normalized[signal_name] = func(normalized[signal_name].astype(float))
+            print(f"   ✅ Normalized MOTION_1 {signal_name} into KPI base units")
+
+    if "aebTargetDecel" in normalized.columns:
+        target_decel = normalized["aebTargetDecel"].astype(float)
+        normalized["aebRequest"] = np.select(
+            [
+                np.isclose(target_decel, -6.0),
+                np.isclose(target_decel, -11.0),
+                np.isclose(target_decel, -5.0),
+            ],
+            [1, 2, 3],
+            default=0,
+        )
+        normalized["aebPartialState"] = np.where(np.isclose(target_decel, -6.0), 2, 1)
+        normalized["aebFullState"] = np.where(
+            np.isclose(target_decel, -11.0) | np.isclose(target_decel, -5.0),
+            2,
+            1,
+        )
+        print("   ✅ Derived MOTION_1 AEB request/state signals from DADCAxLmtIT4")
+
+    if "fcwState" in normalized.columns:
+        fcw_state = normalized["fcwState"].astype(float)
+        normalized["fcwRequest"] = np.where(fcw_state == 5, 3, 0)
+        print("   ✅ Derived MOTION_1 fcwRequest from FCWState")
+
+    return normalized
 
 
 def merge_signals(raw, derived):

@@ -87,3 +87,23 @@ def test_graph_spec_contains_aeb_lsaeb_scatter_rows():
         assert match["axis_name"] == expected["axis_name"]
         assert match["min_axis_value"] == expected["min_axis_value"]
         assert match["max_axis_value"] == expected["max_axis_value"]
+
+
+def test_as_long_signal_map_contains_motion_1_mappings():
+    signals = pd.read_excel(get_resource("config/kpi_as_long.xlsx"), sheet_name="vbRcSignals")
+    signals.columns = signals.columns.str.strip()
+
+    assert "MOTION_1" in signals.columns
+
+    mapping = (
+        signals.dropna(subset=["genericName"])
+        .set_index("genericName")["MOTION_1"]
+        .dropna()
+        .to_dict()
+    )
+    assert mapping["egoSpeed"] == "VehicleSpeed"
+    assert mapping["steerWheelAngle"] == "SteeringWheelAngle"
+    assert mapping["steerWheelAngleSpeed"] == "SteeringWheelAngleSpeed"
+    assert mapping["yawRate"] == "YawRate"
+    assert mapping["aebTargetDecel"] == "DADCAxLmtIT4"
+    assert mapping["fcwState"] == "FCWState"

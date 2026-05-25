@@ -67,6 +67,31 @@ def convert_tact_unit(data_in: np.ndarray, unit_in: str, unit_out: str, full_nam
     return data_out, convert
 
 
+def _is_present(value) -> bool:
+    if value is None:
+        return False
+    try:
+        return not pd.isna(value)
+    except TypeError:
+        return True
+
+
+def _match_channel(group_rows: pd.DataFrame, signal_name: str):
+    signal_key = str(signal_name).strip().lower()
+    if not signal_key:
+        return None
+
+    exact_name = group_rows[group_rows["ChannelName"].str.lower() == signal_key]
+    if not exact_name.empty:
+        return exact_name.index[0]
+
+    exact_base = group_rows[group_rows["ChannelBase"].str.lower() == signal_key]
+    if not exact_base.empty:
+        return exact_base.index[0]
+
+    return None
+
+
 # ================================================================
 # Core extractor
 # ================================================================
@@ -81,6 +106,7 @@ def mf4_extractor(
     convert_to_tact_unit: bool = True,
     load_signals: bool = True,
     waitbar: bool = False,
+    signal_source: str = "roadcast_log",
 ):
     """
     Reads MDF (.dat/.mf4), extracts signals into a pandas DataFrame.
@@ -166,6 +192,8 @@ def mf4_extractor(
     # ================================================================
     # Match requested signals to MDF channels
     # ================================================================
+    signal_source_key = str(signal_source or "roadcast_log").strip().lower()
+
     if signal_database is not None:
         raster_groups = {}
         for group_idx, group_rows in sigs_copy.groupby("GroupIndex", sort=False):
@@ -175,45 +203,84 @@ def mf4_extractor(
             channel_map = dict(zip(group_rows["ChannelName"].str.lower(), group_rows.index))
             raster_groups.setdefault(raster_name, []).append((group_idx, channel_map))
 
-        for row in signal_db.itertuples(index=False):
-            generic_name = getattr(row, "genericname", None)
-            raster_val = getattr(row, "raster", None)
-            synonym_val = getattr(row, "synonym", None)
+        if signal_source_key in {"motion_1", "motion1"}:
+            source_column = "motion_1"
+            if source_column not in signal_db.columns:
+                print("MOTION_1 column not found in signal map.")
+            else:
+                for row in signal_db.itertuples(index=False):
+                    generic_name = getattr(row, "genericname", None)
+                    motion_signal = getattr(row, source_column, None)
+                    if not _is_present(generic_name) or not _is_present(motion_signal):
+                        continue
 
-            if pd.isna(generic_name) or pd.isna(raster_val) or pd.isna(synonym_val):
-                continue
-            generic_name = str(generic_name).strip()
-            raster_val = str(raster_val).strip()
-            synonym_val = str(synonym_val).strip()
-            if not raster_val or not synonym_val or not generic_name:
-                continue
+                    generic_name = str(generic_name).strip()
+                    motion_signal = str(motion_signal).strip()
+                    if not generic_name or not motion_signal:
+                        continue
 
-            raster_key = raster_val.lower()
-            if raster_key not in raster_groups:
-                print(f"Raster group '{raster_val}' not found in MF4 → skipping {generic_name}")
-                continue
+                    found = False
+                    for group_idx, group_rows in sigs_copy.groupby("GroupIndex", sort=False):
+                        best_loc = _match_channel(group_rows, motion_signal)
+                        if best_loc is None:
+                            continue
 
-            matching_groups = raster_groups.get(raster_key, [])
-            found = False
-            synonym_key = synonym_val.lower()
-            for group_idx, channel_map in matching_groups:
-                if synonym_key in channel_map:
-                    best_loc = channel_map[synonym_key]
-                    ch_name = sigs.at[best_loc, "ChannelName"]
-                    to_read.append(
-                        {
-                            "FullName": ch_name,
-                            "GroupIndex": group_idx,
-                            "GenericName": generic_name,
-                            "Raster": raster_val,
-                        }
-                    )
-                    signals_read.append(generic_name)
-                    found = True
-                    break
+                        ch_name = sigs.at[best_loc, "ChannelName"]
+                        raster_val = str(group_rows["RasterName"].iloc[0])
+                        to_read.append(
+                            {
+                                "FullName": ch_name,
+                                "GroupIndex": group_idx,
+                                "GenericName": generic_name,
+                                "Raster": raster_val,
+                            }
+                        )
+                        signals_read.append(generic_name)
+                        found = True
+                        break
 
-            if not found:
-                print(f"    ⚠️ No match for {generic_name} in raster '{raster_val}'")
+                    if not found:
+                        print(f"    ⚠️ No MOTION_1 match for {generic_name}: {motion_signal}")
+        else:
+            for row in signal_db.itertuples(index=False):
+                generic_name = getattr(row, "genericname", None)
+                raster_val = getattr(row, "raster", None)
+                synonym_val = getattr(row, "synonym", None)
+
+                if pd.isna(generic_name) or pd.isna(raster_val) or pd.isna(synonym_val):
+                    continue
+                generic_name = str(generic_name).strip()
+                raster_val = str(raster_val).strip()
+                synonym_val = str(synonym_val).strip()
+                if not raster_val or not synonym_val or not generic_name:
+                    continue
+
+                raster_key = raster_val.lower()
+                if raster_key not in raster_groups:
+                    print(f"Raster group '{raster_val}' not found in MF4 → skipping {generic_name}")
+                    continue
+
+                matching_groups = raster_groups.get(raster_key, [])
+                found = False
+                synonym_key = synonym_val.lower()
+                for group_idx, channel_map in matching_groups:
+                    if synonym_key in channel_map:
+                        best_loc = channel_map[synonym_key]
+                        ch_name = sigs.at[best_loc, "ChannelName"]
+                        to_read.append(
+                            {
+                                "FullName": ch_name,
+                                "GroupIndex": group_idx,
+                                "GenericName": generic_name,
+                                "Raster": raster_val,
+                            }
+                        )
+                        signals_read.append(generic_name)
+                        found = True
+                        break
+
+                if not found:
+                    print(f"    ⚠️ No match for {generic_name} in raster '{raster_val}'")
 
     # ================================================================
     # Read each matched signal

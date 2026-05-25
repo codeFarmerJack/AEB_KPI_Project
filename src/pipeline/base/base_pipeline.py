@@ -58,6 +58,8 @@ class BasePipeline:
             raise FileNotFoundError(f"⚠️ Config file not found: {self.config_path}")
 
         self.cfg = Config.from_json(self.config_path)
+        if self.ih is not None:
+            self.cfg.signal_source = getattr(self.ih, "signal_source", "roadcast_log")
         print(f"✅ Config loaded: {self.config_path}")
 
         if isinstance(self.cfg.event_kpi_list, pd.DataFrame):

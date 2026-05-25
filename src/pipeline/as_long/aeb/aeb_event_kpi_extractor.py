@@ -121,6 +121,8 @@ class AebEventKpiExtractor(BaseEventKpiExtractor):
     # ------------------------------------------------------------------ #
     def __init__(self, config, event_segmenter=None):
         super().__init__(config, event_segmenter, "in_path_aeb_chunks", feature_name="AEB")
+        if str(getattr(config, "signal_source", "")).lower() in {"motion_1", "motion1"}:
+            self.fb_tgt_decel = -11.0
         self.calibratables = self._load_calibratables(config)
         self._init_calculators()
 
