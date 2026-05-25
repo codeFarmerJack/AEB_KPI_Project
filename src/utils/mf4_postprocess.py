@@ -71,6 +71,9 @@ def apply_conversions(data, conversions=CONVERSIONS):
         if src not in data.columns:
             warnings.warn(f"⚠️ Signal '{src}' not found in extracted data.")
             continue
+        if dst in data.columns:
+            print(f"   ↪️ Skipped {src} → {dst}; {dst} already present")
+            continue
 
         try:
             derived[dst] = func(data[src])
@@ -101,6 +104,7 @@ def normalize_source_signals(data, signal_source):
         return data
 
     normalized = data.copy()
+    _preserve_motion_1_native_derived_units(normalized)
     for signal_name, func in MOTION_1_UNIT_NORMALIZERS.items():
         if signal_name in normalized.columns:
             normalized[signal_name] = func(normalized[signal_name].astype(float))
@@ -139,6 +143,19 @@ def normalize_source_signals(data, signal_source):
         print("   ✅ Normalized MOTION_1 BrakeSwitchStatus into brakePedalPressed")
 
     return normalized
+
+
+def _preserve_motion_1_native_derived_units(data):
+    native_units = {
+        "egoSpeed": "egoSpeedKph",
+        "steerWheelAngle": "steerWheelAngleDeg",
+        "steerWheelAngleSpeed": "steerWheelAngleSpeedDeg",
+        "yawRate": "yawRateDeg",
+    }
+    for src, dst in native_units.items():
+        if src in data.columns and dst not in data.columns:
+            data[dst] = data[src].astype(float)
+            print(f"   ↪️ Preserved MOTION_1 {src} as {dst} without conversion")
 
 
 def _decode_motion_1_value(value):

@@ -10,7 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.pipeline.input_handler import InputHandler
-from src.utils.mf4_postprocess import build_signal, normalize_source_signals
+from src.utils.mf4_postprocess import build_signal, normalize_source_signals, postprocess_signals
 
 
 def _make_config():
@@ -73,12 +73,36 @@ def test_motion_1_normalization_converts_units_and_derives_requests():
     out = normalize_source_signals(df, "motion_1")
 
     assert np.isclose(out["egoSpeed"].iloc[0], 10.0)
+    assert np.isclose(out["egoSpeedKph"].iloc[0], 36.0)
     assert np.isclose(out["steerWheelAngle"].iloc[0], np.pi)
+    assert np.isclose(out["steerWheelAngleDeg"].iloc[0], 180.0)
     assert np.isclose(out["steerWheelAngleSpeed"].iloc[0], np.pi / 2)
+    assert np.isclose(out["steerWheelAngleSpeedDeg"].iloc[0], 90.0)
     assert np.isclose(out["yawRate"].iloc[0], np.pi / 4)
+    assert np.isclose(out["yawRateDeg"].iloc[0], 45.0)
     assert out["aebRequest"].iloc[0] == 1
     assert out["aebPartialState"].iloc[0] == 2
     assert out["aebFullState"].iloc[0] == 1
     assert out["fcwRequest"].iloc[0] == 3
     assert out["fcwState"].iloc[0] == 5
     assert out["brakePedalPressed"][0] == 1
+
+
+def test_motion_1_postprocess_skips_native_derived_unit_reconversion():
+    df = pd.DataFrame(
+        {
+            "egoSpeed": [36.0],
+            "steerWheelAngle": [180.0],
+            "steerWheelAngleSpeed": [90.0],
+            "yawRate": [45.0],
+        },
+        index=[0.0],
+    )
+
+    normalized = normalize_source_signals(df, "motion_1")
+    derived = postprocess_signals(normalized, cutoff_freq=10.0)
+
+    assert "egoSpeedKph" not in derived.columns
+    assert "steerWheelAngleDeg" not in derived.columns
+    assert "steerWheelAngleSpeedDeg" not in derived.columns
+    assert "yawRateDeg" not in derived.columns
