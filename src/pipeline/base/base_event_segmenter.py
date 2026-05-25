@@ -30,11 +30,16 @@ class BaseEventSegmenter:
 
         self.event_name         = event_name.lower()
         self.in_path_raw_data   = input_handler.in_path_raw_data
+        self.out_path_base      = getattr(
+            input_handler,
+            "out_path_base",
+            os.path.join(self.in_path_raw_data, "kpi_parser"),
+        )
         self.in_path_extracted  = input_handler.out_path_extracted
         self.selected_mf4_files = getattr(input_handler, "selected_mf4_files", None)
 
         # --- Set folder for extracted chunks ---
-        self.out_path_chunks = os.path.join(self.in_path_raw_data, f"{self.event_name}_chunks")
+        self.out_path_chunks = os.path.join(self.out_path_base, f"{self.event_name}_chunks")
         os.makedirs(self.out_path_chunks, exist_ok=True)
 
         # load pre/post time keys

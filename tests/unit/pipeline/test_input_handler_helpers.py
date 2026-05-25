@@ -38,6 +38,8 @@ def test_input_handler_uses_provided_files(tmp_path):
     handler = InputHandler(_make_config(), input_path=tmp_path, mf4_files=[str(f1), str(f2)])
 
     assert handler.in_path_raw_data == str(tmp_path)
+    assert handler.out_path_base == str(tmp_path / "kpi_parser")
+    assert handler.out_path_extracted == str(tmp_path / "kpi_parser" / "extracted")
     assert sorted(handler._provided_files) == sorted([str(f1), str(f2)])
 
     paths = handler._collect_mf4_paths()
@@ -62,7 +64,8 @@ def test_motion_1_normalization_converts_units_and_derives_requests():
             "steerWheelAngleSpeed": [90.0],
             "yawRate": [45.0],
             "aebTargetDecel": [-6.0],
-            "fcwState": [5.0],
+            "fcwState": [b"ON_ACTIVE"],
+            "brakePedalPressed": [b"Brake Pedal Pressed"],
         },
         index=[0.0],
     )
@@ -77,3 +80,5 @@ def test_motion_1_normalization_converts_units_and_derives_requests():
     assert out["aebPartialState"].iloc[0] == 2
     assert out["aebFullState"].iloc[0] == 1
     assert out["fcwRequest"].iloc[0] == 3
+    assert out["fcwState"].iloc[0] == 5
+    assert out["brakePedalPressed"][0] == 1

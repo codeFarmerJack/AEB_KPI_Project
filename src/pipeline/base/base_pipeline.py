@@ -117,10 +117,13 @@ class BasePipeline:
         try:
             if self.EVENT_EXTRACTOR_CLS is not None:
                 event_kpi = self.EVENT_EXTRACTOR_CLS(self.cfg, self.event)
-                event_kpi.process_mdf_events()
-                event_kpi.export_event_kpis()
-                self.kpi = event_kpi
-                self.event_kpi = event_kpi
+                if getattr(event_kpi, "file_list", None):
+                    event_kpi.process_mdf_events()
+                    event_kpi.export_event_kpis()
+                    self.kpi = event_kpi
+                    self.event_kpi = event_kpi
+                else:
+                    print(f"ℹ️ No {self.feature} event chunks found; skipping event KPI export.")
 
             if self.CYCLE_EXTRACTOR_CLS is not None:
                 self.cycle_kpi = self.CYCLE_EXTRACTOR_CLS(self.ih, self.cfg)

@@ -210,7 +210,12 @@ class BaseEventKpiExtractor:
 
     def _init_paths(self, event_segmenter, chunk_attr_name):
         self.in_path_raw_data = event_segmenter.in_path_raw_data
-        self.out_path_results = os.path.join(self.in_path_raw_data, "analysis_results")
+        self.out_path_base = getattr(
+            event_segmenter,
+            "out_path_base",
+            os.path.join(self.in_path_raw_data, "kpi_parser"),
+        )
+        self.out_path_results = os.path.join(self.out_path_base, "analysis_results")
         os.makedirs(self.out_path_results, exist_ok=True)
         self.in_path_extracted = event_segmenter.in_path_extracted
         self.out_path_chunks = getattr(event_segmenter, chunk_attr_name)
@@ -223,7 +228,8 @@ class BaseEventKpiExtractor:
     def _collect_event_files(self, path):
         files = [f for f in os.listdir(path) if f.endswith(self._EVENT_EXT)]
         if not files:
-            raise FileNotFoundError(f"No {self._EVENT_EXT} files found in {path}")
+            warnings.warn(f"No {self._EVENT_EXT} event files found in {path}; skipping event KPIs.")
+            return []
         return files
 
     def _init_kpi_table(self, config):

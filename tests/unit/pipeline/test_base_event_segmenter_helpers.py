@@ -50,8 +50,10 @@ def test_process_all_files_calls_detect_and_extract(tmp_path, monkeypatch):
     input_handler = SimpleNamespace(
         in_path_raw_data=str(tmp_path),
         out_path_extracted=str(extracted_dir),
+        out_path_base=str(tmp_path / "kpi_parser"),
     )
     segmenter = _DummySegmenter(input_handler)
+    assert segmenter.out_path_chunks == str(tmp_path / "kpi_parser" / "dummy_chunks")
 
     dummy_mdf = _DummyMDF({"time": [0.0, 1.0, 2.0], "sig": [0, 1, 0]})
     monkeypatch.setattr(

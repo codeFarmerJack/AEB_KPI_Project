@@ -22,6 +22,21 @@ MOTION_1_UNIT_NORMALIZERS = {
     "yawRate": np.radians,
 }
 
+MOTION_1_FCW_STATE = {
+    "INITIALIZATION": 0,
+    "NOT_FITTED": 1,
+    "OFF": 2,
+    "FAULT": 3,
+    "ON_INACTIVE": 4,
+    "ON_ACTIVE": 5,
+}
+
+MOTION_1_AEB_DECEL = {
+    "PARTIAL BRAKING": -6.0,
+    "FULL BRAKING": -11.0,
+    "HOLD": -5.0,
+}
+
 
 def apply_filters(data, cutoff_freq, signals=FILTER_SIGNALS):
     if data is None or data.empty:
@@ -92,7 +107,8 @@ def normalize_source_signals(data, signal_source):
             print(f"   ✅ Normalized MOTION_1 {signal_name} into KPI base units")
 
     if "aebTargetDecel" in normalized.columns:
-        target_decel = normalized["aebTargetDecel"].astype(float)
+        target_decel = _coerce_motion_1_decel(normalized["aebTargetDecel"])
+        normalized["aebTargetDecel"] = target_decel
         normalized["aebRequest"] = np.select(
             [
                 np.isclose(target_decel, -6.0),
@@ -111,11 +127,55 @@ def normalize_source_signals(data, signal_source):
         print("   ✅ Derived MOTION_1 AEB request/state signals from DADCAxLmtIT4")
 
     if "fcwState" in normalized.columns:
-        fcw_state = normalized["fcwState"].astype(float)
+        fcw_state = _coerce_motion_1_fcw_state(normalized["fcwState"])
+        normalized["fcwState"] = fcw_state
         normalized["fcwRequest"] = np.where(fcw_state == 5, 3, 0)
         print("   ✅ Derived MOTION_1 fcwRequest from FCWState")
 
+    if "brakePedalPressed" in normalized.columns:
+        normalized["brakePedalPressed"] = _coerce_motion_1_brake_switch(
+            normalized["brakePedalPressed"]
+        )
+        print("   ✅ Normalized MOTION_1 BrakeSwitchStatus into brakePedalPressed")
+
     return normalized
+
+
+def _decode_motion_1_value(value):
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", errors="ignore")
+    if isinstance(value, str):
+        value = value.strip()
+        if value.startswith("b'") and value.endswith("'"):
+            value = value[2:-1]
+        elif value.startswith('b"') and value.endswith('"'):
+            value = value[2:-1]
+        return value.strip()
+    return value
+
+
+def _coerce_motion_1_fcw_state(series):
+    decoded = series.map(_decode_motion_1_value)
+    numeric = pd.to_numeric(decoded, errors="coerce")
+    mapped = decoded.astype(str).str.upper().map(MOTION_1_FCW_STATE)
+    return numeric.fillna(mapped).fillna(-1).astype(float)
+
+
+def _coerce_motion_1_decel(series):
+    decoded = series.map(_decode_motion_1_value)
+    numeric = pd.to_numeric(decoded, errors="coerce")
+    mapped = decoded.astype(str).str.upper().map(MOTION_1_AEB_DECEL)
+    return numeric.fillna(mapped).fillna(0.0).astype(float)
+
+
+def _coerce_motion_1_brake_switch(series):
+    decoded = series.map(_decode_motion_1_value)
+    numeric = pd.to_numeric(decoded, errors="coerce")
+    text = decoded.astype(str).str.upper()
+    mapped = np.where(text.str.contains("BRAKE PEDAL PRESSED", regex=False), 1.0, np.nan)
+    mapped = pd.Series(mapped, index=series.index)
+    brake_state = numeric.fillna(mapped).fillna(0.0).astype(float)
+    return np.where(brake_state == 1.0, 1.0, 0.0)
 
 
 def merge_signals(raw, derived):

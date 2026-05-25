@@ -150,7 +150,12 @@ class BaseCycleKpiExtractor(ABC):
 
     def _init_paths(self, input_handler):
         self.in_path_raw_data = input_handler.in_path_raw_data
-        self.out_path_results = os.path.join(self.in_path_raw_data, "analysis_results")
+        self.out_path_base = getattr(
+            input_handler,
+            "out_path_base",
+            os.path.join(self.in_path_raw_data, "kpi_parser"),
+        )
+        self.out_path_results = os.path.join(self.out_path_base, "analysis_results")
         os.makedirs(self.out_path_results, exist_ok=True)
         self.in_path_extracted = input_handler.out_path_extracted
         self.config.kpi_result_filename = build_kpi_result_filename(
