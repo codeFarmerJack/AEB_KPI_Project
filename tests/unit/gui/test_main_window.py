@@ -4,7 +4,7 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import Qt, QSettings
+from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -21,7 +21,26 @@ def _get_app():
     return app
 
 
-def test_switching_to_a_different_folder_keeps_latest_checked_file(tmp_path):
+def test_selecting_files_sets_active_folder_and_count(tmp_path):
+    _get_app()
+
+    folder_a = tmp_path / "folder_a"
+    folder_a.mkdir()
+    file_a = folder_a / "a.mf4"
+    file_b = folder_a / "b.mf4"
+    file_a.write_text("")
+    file_b.write_text("")
+
+    gui = KpiGui(tree_root=tmp_path)
+    gui._set_selected_files([file_a, file_b])
+
+    assert gui._selected_files() == [file_a.resolve(), file_b.resolve()]
+    assert gui.mf4_folder == folder_a.resolve()
+    assert gui.file_count.text() == "2 selected"
+    assert gui.selected_files_label.text() == "a.mf4 + 1 more"
+
+
+def test_rejects_files_from_multiple_folders(tmp_path):
     _get_app()
 
     folder_a = tmp_path / "folder_a"
@@ -33,23 +52,11 @@ def test_switching_to_a_different_folder_keeps_latest_checked_file(tmp_path):
     file_a.write_text("")
     file_b.write_text("")
 
-    gui = KpiGui()
-    gui.tree_root = tmp_path
-    gui.file_model.setRootPath(str(tmp_path))
-    gui.file_tree.setRootIndex(gui.file_model.index(str(tmp_path)))
+    gui = KpiGui(tree_root=tmp_path)
+    gui._set_selected_files([file_a, file_b])
 
-    idx_a = gui.file_model.index(str(file_a))
-    idx_b = gui.file_model.index(str(file_b))
-
-    assert gui.file_model.setData(idx_a, Qt.Checked, Qt.CheckStateRole)
-    assert gui._selected_files() == [file_a]
-    assert gui.mf4_folder == folder_a
-
-    assert gui.file_model.setData(idx_b, Qt.Checked, Qt.CheckStateRole)
-
-    assert gui._selected_files() == [file_b]
-    assert gui.mf4_folder == folder_b
-    assert gui.file_count.text() == "1 selected"
+    assert gui._selected_files() == []
+    assert gui.file_count.text() == "0 selected"
 
 
 def test_gui_restores_last_active_mf4_folder(tmp_path):

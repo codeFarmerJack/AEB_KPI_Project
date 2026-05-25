@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt, QDir, Signal, QEvent, QSettings
+from PySide6.QtCore import Qt, QSettings
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -12,12 +12,6 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QCheckBox,
     QFrame,
-    QTreeView,
-    QFileSystemModel,
-    QAbstractItemView,
-    QHeaderView,
-    QStyledItemDelegate,
-    QSplitter,
     QSpacerItem,
     QSizePolicy,
     QComboBox,
@@ -25,114 +19,6 @@ from PySide6.QtWidgets import (
 
 from src.gui.controllers.pipeline_runner import PipelineRunner
 from src.utils.path_manager import get_config_dir
-
-
-class FileTreeModel(QFileSystemModel):
-    check_state_changed = Signal(str, int)
-
-    @staticmethod
-    def _state_value(state):
-        return int(getattr(state, "value", state))
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._checks = {}
-
-    def flags(self, index):
-        flags = super().flags(index)
-        if index.isValid() and self._is_mf4(index) and index.column() == 0:
-            flags |= (
-                Qt.ItemIsUserCheckable
-                | Qt.ItemIsSelectable
-                | Qt.ItemIsEnabled
-                | Qt.ItemIsEditable
-            )
-        return flags
-
-    def data(self, index, role=Qt.DisplayRole):
-        if role == Qt.CheckStateRole and self._is_mf4(index) and index.column() == 0:
-            path = self.filePath(index)
-            return self._checks.get(path, Qt.Unchecked)
-        return super().data(index, role)
-
-    def setData(self, index, value, role=Qt.EditRole):
-        if role == Qt.CheckStateRole and self._is_mf4(index) and index.column() == 0:
-            path = self.filePath(index)
-            state = Qt.Checked if value == Qt.Checked else Qt.Unchecked
-            if self._checks.get(path) != state:
-                self._checks[path] = state
-                self.dataChanged.emit(index, index, [Qt.CheckStateRole])
-                self.check_state_changed.emit(path, self._state_value(state))
-            return True
-        return super().setData(index, value, role)
-
-    def checked_files(self):
-        return [Path(p) for p, s in self._checks.items() if s == Qt.Checked]
-
-    def clear_checks(self):
-        changed = False
-        for path, state in list(self._checks.items()):
-            if state == Qt.Checked:
-                self._checks[path] = Qt.Unchecked
-                idx = self.index(path)
-                if idx.isValid():
-                    self.dataChanged.emit(idx, idx, [Qt.CheckStateRole])
-                changed = True
-        if changed:
-            self.check_state_changed.emit("", self._state_value(Qt.Unchecked))
-
-    def set_checked_paths(self, paths, checked=True):
-        state = Qt.Checked if checked else Qt.Unchecked
-        changed = False
-        last_path = ""
-        for path in paths:
-            idx = self.index(str(path))
-            if not idx.isValid():
-                continue
-            if self._checks.get(str(path)) != state:
-                self._checks[str(path)] = state
-                self.dataChanged.emit(idx, idx, [Qt.CheckStateRole])
-                changed = True
-                last_path = str(path)
-        if changed:
-            self.check_state_changed.emit(last_path, self._state_value(state))
-
-    def clear_checks_outside_dir(self, folder: Path):
-        folder = Path(folder).resolve()
-        changed = False
-        for path, state in list(self._checks.items()):
-            if state != Qt.Checked:
-                continue
-            if Path(path).resolve().parent != folder:
-                self._checks[path] = Qt.Unchecked
-                idx = self.index(path)
-                if idx.isValid():
-                    self.dataChanged.emit(idx, idx, [Qt.CheckStateRole])
-                changed = True
-        if changed:
-            self.check_state_changed.emit("", self._state_value(Qt.Unchecked))
-
-    def _is_mf4(self, index):
-        if not index.isValid() or self.isDir(index):
-            return False
-        return self.filePath(index).lower().endswith(".mf4")
-
-
-class FileTreeDelegate(QStyledItemDelegate):
-    def editorEvent(self, event, model, option, index):
-        if (
-            event.type() == QEvent.MouseButtonRelease
-            and event.button() == Qt.LeftButton
-            and index.isValid()
-            and index.column() == 0
-        ):
-            path = model.filePath(index)
-            if path.lower().endswith(".mf4") and not model.isDir(index):
-                current = model.data(index, Qt.CheckStateRole)
-                new_state = Qt.Unchecked if current == Qt.Checked else Qt.Checked
-                model.setData(index, new_state, Qt.CheckStateRole)
-                return True
-        return super().editorEvent(event, model, option, index)
 
 
 class KpiGui(QWidget):
@@ -151,11 +37,13 @@ class KpiGui(QWidget):
         self.settings = settings or QSettings(self._SETTINGS_ORG, self._SETTINGS_APP)
         self.mf4_folder: Optional[Path] = None
         self.folder_label = None
+        self.file_count = None
+        self.selected_files_label = None
+        self.selected_mf4_files = []
         self.source_combo = None
         self.runner = None
         self.long_checks = {}
         self.lat_checks = {}
-        self.tree_root = Path(tree_root) if tree_root else Path(QDir.rootPath())
         self._build_ui()
         self._restore_signal_source()
         self._restore_last_active_folder()
@@ -239,17 +127,6 @@ class KpiGui(QWidget):
                 font-family: 'JetBrains Mono', 'SFMono-Regular', monospace;
                 font-size: 13px;
             }
-            QTreeView {
-                background: #f8fafc;
-                border: 1px solid #cbd5e1;
-                border-radius: 10px;
-                color: #0f172a;
-            }
-            QTreeView::item { padding: 4px; }
-            QTreeView::item:selected {
-                background: #e2e8f0;
-                color: #0f172a;
-            }
             """
         )
 
@@ -266,17 +143,12 @@ class KpiGui(QWidget):
         badge.setObjectName("badge")
         root.addWidget(badge)
 
-        # Main content splitter (left: files, right: features + run + logs)
-        splitter = QSplitter(Qt.Horizontal)
-
-        file_panel = self._build_file_panel()
-        file_panel.setMinimumWidth(220)
-        splitter.addWidget(file_panel)
-
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         right_layout.setSpacing(14)
         right_layout.setContentsMargins(0, 0, 0, 0)
+
+        right_layout.addWidget(self._build_file_picker())
 
         source_row = QHBoxLayout()
         source_label = QLabel("Input source")
@@ -312,12 +184,7 @@ class KpiGui(QWidget):
         self.log_view.setPlaceholderText("Logs will appear here...")
         right_layout.addWidget(self.log_view, 1)
 
-        splitter.addWidget(right_panel)
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([320, 520])
-
-        root.addWidget(splitter, 1)
+        root.addWidget(right_panel, 1)
 
     def _build_feature_column(self, title, options, domain):
         wrapper = QFrame()
@@ -344,7 +211,7 @@ class KpiGui(QWidget):
         layout.addStretch(1)
         return wrapper
 
-    def _build_file_panel(self):
+    def _build_file_picker(self):
         file_panel = QFrame()
         file_layout = QVBoxLayout(file_panel)
         file_layout.setSpacing(10)
@@ -359,89 +226,53 @@ class KpiGui(QWidget):
         file_layout.addLayout(file_header)
 
         file_buttons = QHBoxLayout()
-        btn_select_all = QPushButton("Select all")
-        btn_select_all.setObjectName("secondary")
-        btn_select_all.clicked.connect(lambda: self._set_all_files_checked(True))
+        btn_pick = QPushButton("Pick MF4 files")
+        btn_pick.setObjectName("secondary")
+        btn_pick.clicked.connect(self.select_files)
         btn_clear = QPushButton("Clear")
         btn_clear.setObjectName("secondary")
-        btn_clear.clicked.connect(lambda: self._set_all_files_checked(False))
-        btn_refresh = QPushButton("Refresh")
-        btn_refresh.setObjectName("secondary")
-        btn_refresh.clicked.connect(self._refresh_file_tree)
-        file_buttons.addWidget(btn_select_all)
+        btn_clear.clicked.connect(self.clear_selected_files)
+        file_buttons.addWidget(btn_pick)
         file_buttons.addWidget(btn_clear)
-        file_buttons.addWidget(btn_refresh)
         file_buttons.addStretch(1)
         file_layout.addLayout(file_buttons)
 
-        self.file_model = FileTreeModel(self)
-        self.file_model.setFilter(QDir.AllDirs | QDir.Files | QDir.NoDotAndDotDot)
-        self.file_model.setRootPath(str(self.tree_root))
-        self.file_model.check_state_changed.connect(self._on_check_state_changed)
-
-        self.file_tree = QTreeView()
-        self.file_tree.setModel(self.file_model)
-        self.file_tree.setRootIndex(self.file_model.index(str(self.tree_root)))
-        self.file_tree.setHeaderHidden(True)
-        self.file_tree.setUniformRowHeights(True)
-        self.file_tree.setSortingEnabled(True)
-        self.file_tree.sortByColumn(0, Qt.AscendingOrder)
-        self.file_tree.setColumnHidden(1, True)
-        self.file_tree.setColumnHidden(2, True)
-        self.file_tree.setColumnHidden(3, True)
-        self.file_tree.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.file_tree.setItemDelegate(FileTreeDelegate(self.file_tree))
-        self.file_tree.setTextElideMode(Qt.ElideNone)
-        self.file_tree.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        header = self.file_tree.header()
-        header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.file_model.directoryLoaded.connect(lambda _: self.file_tree.resizeColumnToContents(0))
-        file_layout.addWidget(self.file_tree, 1)
+        self.selected_files_label = QLabel("No files selected")
+        self.selected_files_label.setObjectName("badge")
+        self.selected_files_label.setWordWrap(True)
+        file_layout.addWidget(self.selected_files_label)
 
         return file_panel
 
     # ---------------- Actions ----------------
-    def select_folder(self):
-        folder = QFileDialog.getExistingDirectory(self, "Select MF4 Folder", "")
-        if folder:
-            self._set_active_folder(Path(folder))
+    def select_files(self):
+        start_dir = str(self.mf4_folder) if self.mf4_folder else ""
+        files, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Select MF4 Files",
+            start_dir,
+            "MF4 files (*.mf4 *.MF4);;All files (*)",
+        )
+        if files:
+            self._set_selected_files(files)
 
-    def _set_all_files_checked(self, checked: bool):
-        if not checked:
-            self.file_model.clear_checks()
-            self._update_file_count()
-            return
-
-        if not self.mf4_folder:
-            self.log("Select a folder to enable Select all.")
-            return
-
-        mf4_files = [p for p in self.mf4_folder.glob("*.mf4") if p.is_file()]
-        self.file_model.clear_checks()
-        self.file_model.set_checked_paths(mf4_files, checked=True)
+    def clear_selected_files(self):
+        self.selected_mf4_files = []
         self._update_file_count()
 
     def _update_file_count(self):
         selected = len(self._selected_files())
-        self.file_count.setText(f"{selected} selected")
-
-    def _refresh_file_tree(self):
-        self.file_model.setRootPath(str(self.tree_root))
-        self.file_tree.setRootIndex(self.file_model.index(str(self.tree_root)))
-        if self.mf4_folder:
-            self._reveal_path_in_tree(self.mf4_folder)
-
-    def _reveal_path_in_tree(self, path: Path):
-        idx = self.file_model.index(str(path))
-        if not idx.isValid():
+        if self.file_count is not None:
+            self.file_count.setText(f"{selected} selected")
+        if self.selected_files_label is None:
             return
-        self.file_tree.setCurrentIndex(idx)
-        self.file_tree.scrollTo(idx)
-        parent = idx.parent()
-        while parent.isValid():
-            self.file_tree.expand(parent)
-            parent = parent.parent()
+        if not selected:
+            self.selected_files_label.setText("No files selected")
+        elif selected == 1:
+            self.selected_files_label.setText(self.selected_mf4_files[0].name)
+        else:
+            first = self.selected_mf4_files[0].name
+            self.selected_files_label.setText(f"{first} + {selected - 1} more")
 
     def _set_active_folder(self, folder: Path):
         self.mf4_folder = Path(folder).expanduser().resolve()
@@ -449,7 +280,24 @@ class KpiGui(QWidget):
             self.folder_label.setText(str(self.mf4_folder))
         self._persist_active_folder()
         self.log(f"MF4 folder set to: {self.mf4_folder}")
-        self._reveal_path_in_tree(self.mf4_folder)
+
+    def _set_selected_files(self, files):
+        selected = [Path(p).expanduser().resolve() for p in files]
+        selected = [p for p in selected if p.suffix.lower() == ".mf4"]
+        if not selected:
+            self.log("Please select at least one MF4 file.")
+            return
+
+        parent = selected[0].parent
+        if any(p.parent != parent for p in selected):
+            self.log("Files must be selected from a single folder.")
+            return
+
+        self.selected_mf4_files = selected
+        self.mf4_folder = parent
+        self._persist_active_folder()
+        self._update_file_count()
+        self.log(f"Selected {len(selected)} MF4 file(s) from: {self.mf4_folder}")
 
     def _persist_active_folder(self):
         if self.mf4_folder is None:
@@ -472,7 +320,6 @@ class KpiGui(QWidget):
         self.mf4_folder = folder_path.resolve()
         if self.folder_label is not None:
             self.folder_label.setText(str(self.mf4_folder))
-        self._reveal_path_in_tree(self.mf4_folder)
         self._restore_signal_source()
 
     def _selected_signal_source(self):
@@ -493,54 +340,23 @@ class KpiGui(QWidget):
         if source_label in self._SOURCE_OPTIONS:
             self.source_combo.setCurrentText(source_label)
 
-    def _on_check_state_changed(self, changed_path="", state=None):
-        selected = self._selected_files()
-        if not selected:
-            self._update_file_count()
-            return
-
-        preferred_parent = None
-        changed = Path(changed_path).resolve() if changed_path else None
-        checked_state = int(getattr(Qt.Checked, "value", Qt.Checked))
-        if changed is not None and state == checked_state and changed in selected:
-            preferred_parent = changed.parent
-        else:
-            preferred_parent = selected[0].parent
-
-        if any(p.parent != preferred_parent for p in selected):
-            self.file_model.clear_checks_outside_dir(preferred_parent)
-            self.log("⚠️ Files must be selected from a single folder; cleared other folders.")
-            selected = self._selected_files()
-            if not selected:
-                self._update_file_count()
-                return
-
-        if self.mf4_folder != preferred_parent:
-            self.mf4_folder = preferred_parent
-            if self.folder_label is not None:
-                self.folder_label.setText(str(self.mf4_folder))
-            self._persist_active_folder()
-
-        self._update_file_count()
-
     def _selected_features(self):
         long_selected = [name for name, cb in self.long_checks.items() if cb.isChecked() and cb.isEnabled()]
         lat_selected = [name for name, cb in self.lat_checks.items() if cb.isChecked() and cb.isEnabled()]
         return long_selected, lat_selected
 
     def _selected_files(self):
-        return self.file_model.checked_files()
+        return list(self.selected_mf4_files)
 
     def run_selection(self):
         if self.runner and self.runner.isRunning():
             self.log("A run is already in progress.")
             return
-        if not self.mf4_folder:
-            self.log("Please select an MF4 folder.")
-            return
         if not self._selected_files():
-            self.log("Please select at least one MF4 file.")
-            return
+            self.select_files()
+            if not self._selected_files():
+                self.log("Please select at least one MF4 file.")
+                return
 
         long_sel, lat_sel = self._selected_features()
         if not long_sel and not lat_sel:
