@@ -94,16 +94,24 @@ def test_as_long_signal_map_contains_motion_1_mappings():
     signals.columns = signals.columns.str.strip()
 
     assert "MOTION_1" in signals.columns
+    assert "MOTION_1_Unit" in signals.columns
 
-    mapping = (
+    indexed = (
         signals.dropna(subset=["genericName"])
-        .set_index("genericName")["MOTION_1"]
-        .dropna()
-        .to_dict()
+        .set_index("genericName")
     )
+    mapping = indexed["MOTION_1"].dropna().to_dict()
+    units = indexed["MOTION_1_Unit"].dropna().to_dict()
+
     assert mapping["egoSpeed"] == "VehicleSpeed"
     assert mapping["steerWheelAngle"] == "SteeringWheelAngle"
     assert mapping["steerWheelAngleSpeed"] == "SteeringWheelAngleSpeed"
     assert mapping["yawRate"] == "YawRate"
     assert mapping["aebTargetDecel"] == "DADCAxLmtIT4"
     assert mapping["fcwState"] == "FCWState"
+    assert units["egoSpeed"] == "km/h"
+    assert units["steerWheelAngle"] == "deg"
+    assert units["steerWheelAngleSpeed"] == "deg/s"
+    assert units["yawRate"] == "deg/s"
+    assert units["brakePedalPressed"] == "enum"
+    assert units["fcwState"] == "enum"
