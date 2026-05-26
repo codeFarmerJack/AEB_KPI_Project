@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from src.utils.data_utils import prune_unpopulated_columns_for_source
+from src.utils.data_utils import prune_unsupported_columns_for_source
 
 
 def test_roadcast_export_keeps_empty_schema_columns():
@@ -13,45 +13,81 @@ def test_roadcast_export_keeps_empty_schema_columns():
         }
     )
 
-    result = prune_unpopulated_columns_for_source(df, "roadcast_log")
+    result = prune_unsupported_columns_for_source(df, "roadcast_log")
 
     assert list(result.columns) == ["label", "aebIntvStartTime", "aebSysRespTime"]
 
 
-def test_motion_1_export_drops_only_unpopulated_columns():
+def test_motion_1_event_export_keeps_supported_empty_kpi_columns():
     df = pd.DataFrame(
         {
             "label": ["motion_1.mf4"],
-            "feature": ["AEB"],
             "vehSpd": [42.0],
-            "all_nan": [np.nan],
-            "empty_text": [" "],
-            "false_flag": [False],
-            "zero_value": [0.0],
+            "aebSysRespTime": [np.nan],
+            "absSteerMaxDeg": [np.nan],
+            "absLatAccelMax": [np.nan],
+            "firstDetDist": [np.nan],
+            "ImpactRelSpdKph": [0.0],
         }
     )
     df.attrs["display_names"] = {
         "label": "label",
-        "feature": "feature",
         "vehSpd": "Vehicle Speed",
-        "all_nan": "All NaN",
-        "false_flag": "False Flag",
-        "zero_value": "Zero Value",
+        "aebSysRespTime": "AEB Response Time",
+        "absSteerMaxDeg": "Max Steering",
+        "absLatAccelMax": "Max Lateral Acceleration",
+        "firstDetDist": "First Detection Distance",
+        "ImpactRelSpdKph": "Impact Relative Speed",
     }
 
-    result = prune_unpopulated_columns_for_source(df, "motion_1")
+    result = prune_unsupported_columns_for_source(
+        df,
+        "motion_1",
+        feature_name="AEB",
+        table_kind="event",
+    )
+
+    assert list(result.columns) == [
+        "label",
+        "vehSpd",
+        "aebSysRespTime",
+        "absSteerMaxDeg",
+        "absLatAccelMax",
+    ]
+    assert result.attrs["display_names"] == {
+        "label": "label",
+        "vehSpd": "Vehicle Speed",
+        "aebSysRespTime": "AEB Response Time",
+        "absSteerMaxDeg": "Max Steering",
+        "absLatAccelMax": "Max Lateral Acceleration",
+    }
+
+
+def test_motion_1_cycle_export_keeps_supported_metrics_even_when_empty():
+    df = pd.DataFrame(
+        {
+            "label": ["motion_1.mf4"],
+            "feature": ["AEB"],
+            "AvailDistPct": [np.nan],
+            "PedalPosProSuppression": [np.nan],
+            "SteeringWheelAngle": [np.nan],
+            "LatAccel": [np.nan],
+            "LowSpeed": [0.0],
+        }
+    )
+
+    result = prune_unsupported_columns_for_source(
+        df,
+        "motion_1",
+        feature_name="AEB",
+        table_kind="cycle",
+    )
 
     assert list(result.columns) == [
         "label",
         "feature",
-        "vehSpd",
-        "false_flag",
-        "zero_value",
+        "PedalPosProSuppression",
+        "SteeringWheelAngle",
+        "LatAccel",
+        "LowSpeed",
     ]
-    assert result.attrs["display_names"] == {
-        "label": "label",
-        "feature": "feature",
-        "vehSpd": "Vehicle Speed",
-        "false_flag": "False Flag",
-        "zero_value": "Zero Value",
-    }

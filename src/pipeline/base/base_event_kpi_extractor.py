@@ -5,7 +5,7 @@ import numpy as np
 
 from src.utils.signal_mdf import SignalMDF, get_signal
 from src.utils.create_kpi_table import create_kpi_table_from_df
-from src.utils.data_utils import prune_unpopulated_columns_for_source
+from src.utils.data_utils import prune_unsupported_columns_for_source
 from src.utils.output_naming import build_kpi_result_filename
 from src.utils.exporter import export_kpi_to_excel
 
@@ -186,9 +186,11 @@ class BaseEventKpiExtractor:
         if "vehSpd" in df_main.columns:
             df_main = df_main.sort_values("vehSpd")
 
-        df_main = prune_unpopulated_columns_for_source(
+        df_main = prune_unsupported_columns_for_source(
             df_main,
             getattr(self.config, "signal_source", "roadcast_log"),
+            feature_name=self.feature_name,
+            table_kind="event",
         )
 
         export_kpi_to_excel(df_main, output_path, sheet_name=event_sheet)

@@ -104,11 +104,13 @@ def test_as_long_signal_map_contains_motion_1_mappings():
     units = indexed["MOTION_1_Unit"].dropna().to_dict()
 
     assert mapping["egoSpeed"] == "VehicleSpeed"
+    assert mapping["latActAccel"] == "A1"
     assert mapping["steerWheelAngle"] == "SteeringWheelAngle"
     assert mapping["steerWheelAngleSpeed"] == "SteeringWheelAngleSpeed"
     assert mapping["yawRate"] == "YawRate"
     assert mapping["aebTargetDecel"] == "DADCAxLmtIT4"
     assert mapping["fcwState"] == "FCWState"
+    assert units["latActAccel"] == "m/s2"
     assert units["egoSpeed"] == "km/h"
     assert units["steerWheelAngle"] == "deg"
     assert units["steerWheelAngleSpeed"] == "deg/s"

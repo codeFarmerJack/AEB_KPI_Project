@@ -9,18 +9,19 @@ def is_motion_1_source(signal_source) -> bool:
     return source_key in {"motion_1", "motion1"}
 
 
-def prune_unpopulated_columns_for_source(
+def prune_unsupported_columns_for_source(
     df: pd.DataFrame,
     signal_source,
+    feature_name=None,
+    table_kind="event",
     preserve_columns=("label", "feature"),
 ) -> pd.DataFrame:
     """
-    For MOTION_1 exports, remove KPI columns that have no extracted values.
+    For MOTION_1 exports, remove KPI columns that cannot be computed.
 
     Roadcast logs keep the complete configured schema because those KPIs can be
-    captured there. MOTION_1 has a smaller available signal set, so exporting
-    all configured columns makes the workbook look like those KPIs were
-    computed when they were not.
+    captured there. MOTION_1 has a smaller signal set, but supported KPIs
+    should remain even when an event does not occur in a particular recording.
     """
     if not is_motion_1_source(signal_source):
         return df
@@ -28,10 +29,14 @@ def prune_unpopulated_columns_for_source(
         return df
 
     out = df.copy()
+    supported = _supported_motion_1_columns(feature_name, table_kind)
+    if supported is None:
+        return out
+
     preserved = [col for col in preserve_columns if col in out.columns]
-    populated = [col for col in out.columns if _column_has_populated_value(out[col])]
+    supported_cols = [col for col in out.columns if col in supported]
     keep = []
-    for col in preserved + populated:
+    for col in preserved + supported_cols:
         if col not in keep:
             keep.append(col)
 
@@ -46,21 +51,69 @@ def prune_unpopulated_columns_for_source(
     return pruned
 
 
-def _column_has_populated_value(series: pd.Series) -> bool:
-    return any(_is_populated_value(value) for value in series.tolist())
+def _supported_motion_1_columns(feature_name, table_kind):
+    table = str(table_kind or "event").strip().lower()
+    feature = str(feature_name or "").strip().upper()
 
+    if table == "cycle":
+        return {
+            "label",
+            "feature",
+            "PedalPosProSuppression",
+            "SteeringWheelAngle",
+            "SteeringWheelAngleRate",
+            "YawRate",
+            "LatAccel",
+            "LowSpeed",
+        }
 
-def _is_populated_value(value) -> bool:
-    if value is None:
-        return False
-    try:
-        if pd.isna(value):
-            return False
-    except (TypeError, ValueError):
-        pass
-    if isinstance(value, str):
-        return bool(value.strip())
-    return True
+    common = {"label", "logTime", "vehSpd"}
+    event_columns = {
+        "AEB": {
+            "aebIntvStartTime",
+            "aebSysRespTime",
+            "aebDeadTime",
+            "aebIntvEndTime",
+            "intvDur",
+            "isVehStopped",
+            "isPBOn",
+            "isFBOn",
+            "pbDur",
+            "fbDur",
+            "pedalPosAtStart",
+            "isPedalOnAtStrt",
+            "pedalPosMax",
+            "pedalPosInc",
+            "pedalPosIncTh",
+            "isPedalPosIncHigh",
+            "absSteerMaxDeg",
+            "steerAngTh",
+            "isSteerHigh",
+            "absSteerRateMaxDeg",
+            "steerAngRateTh",
+            "isSteerAngRateHigh",
+            "absLatAccelMax",
+            "latAccelTh",
+            "isLatAccelHigh",
+            "absYawRateMaxDeg",
+            "yawRateSuspTh",
+            "isYawRateHigh",
+            "commLatency",
+            "aebAverageAccel",
+            "brakeDistAeb",
+        },
+        "FCW": {
+            "brakeJerkDur",
+            "brakeJerkStart",
+            "brakeJerkEnd",
+            "brakeJerkMax",
+            "brakeAccelMin",
+        },
+        "LSAEB": set(),
+    }
+    if feature not in event_columns:
+        return None
+    return common | event_columns[feature]
 
 
 def safe_scalar(x, warn: bool = True):
