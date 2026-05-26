@@ -7,6 +7,7 @@ import pandas as pd
 
 from src.utils.signal_mdf import safe_load_mdf
 from src.utils.create_kpi_table import create_kpi_table_from_df
+from src.utils.data_utils import prune_unpopulated_columns_for_source
 from src.utils.output_naming import build_kpi_result_filename
 from src.utils.exporter import export_kpi_to_excel
 from src.viz.visualizers.base_cycle_visualizer import BaseCycleVisualizer
@@ -61,6 +62,10 @@ class BaseCycleKpiExtractor(ABC):
         df_out = self.cycle_kpi_table.copy()
         df_out = self._merge_existing_cycle_sheet(df_out, output_path)
         df_out.attrs["display_names"] = self._get_schema_display_map()
+        df_out = prune_unpopulated_columns_for_source(
+            df_out,
+            getattr(self.config, "signal_source", "roadcast_log"),
+        )
         export_kpi_to_excel(df_out, output_path, sheet_name=self._CYCLE_SHEET_NAME)
 
         print(f"📄 Exported CYCLE KPIs → sheet 'cycleKPI' in {output_path}")
