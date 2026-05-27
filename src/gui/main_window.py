@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QSpacerItem,
     QSizePolicy,
     QComboBox,
+    QScrollArea,
 )
 
 from src.gui.controllers.pipeline_runner import PipelineRunner
@@ -39,6 +40,10 @@ class KpiGui(QWidget):
         self.folder_label = None
         self.file_count = None
         self.selected_files_label = None
+        self.file_list_container = None
+        self.file_list_layout = None
+        self.file_scroll = None
+        self.file_checks = {}
         self.selected_mf4_files = []
         self.source_combo = None
         self.runner = None
@@ -115,6 +120,18 @@ class KpiGui(QWidget):
                 border: 1px solid #cbd5e1;
                 border-radius: 8px;
                 padding: 8px 10px;
+                color: #1f2937;
+                font-weight: 600;
+            }
+            QFrame#fileList {
+                background: #e2e8f0;
+                border-radius: 8px;
+            }
+            QCheckBox#fileItem {
+                background: transparent;
+                border: none;
+                border-radius: 0;
+                padding: 6px 8px;
                 color: #1f2937;
                 font-weight: 600;
             }
@@ -237,10 +254,28 @@ class KpiGui(QWidget):
         file_buttons.addStretch(1)
         file_layout.addLayout(file_buttons)
 
+        file_list_frame = QFrame()
+        file_list_frame.setObjectName("fileList")
+        frame_layout = QVBoxLayout(file_list_frame)
+        frame_layout.setContentsMargins(8, 8, 8, 8)
+        frame_layout.setSpacing(2)
+
+        self.file_list_container = QWidget()
+        self.file_list_layout = QVBoxLayout(self.file_list_container)
+        self.file_list_layout.setContentsMargins(0, 0, 0, 0)
+        self.file_list_layout.setSpacing(2)
+
         self.selected_files_label = QLabel("No files selected")
-        self.selected_files_label.setObjectName("badge")
         self.selected_files_label.setWordWrap(True)
-        file_layout.addWidget(self.selected_files_label)
+        self.file_list_layout.addWidget(self.selected_files_label)
+
+        self.file_scroll = QScrollArea()
+        self.file_scroll.setWidgetResizable(True)
+        self.file_scroll.setFrameShape(QFrame.NoFrame)
+        self.file_scroll.setWidget(self.file_list_container)
+        self._resize_file_list_pane(0)
+        frame_layout.addWidget(self.file_scroll)
+        file_layout.addWidget(file_list_frame)
 
         return file_panel
 
@@ -258,21 +293,55 @@ class KpiGui(QWidget):
 
     def clear_selected_files(self):
         self.selected_mf4_files = []
+        self._render_selected_file_rows()
         self._update_file_count()
 
-    def _update_file_count(self):
+    def _update_file_count(self, *_args):
         selected = len(self._selected_files())
         if self.file_count is not None:
             self.file_count.setText(f"{selected} selected")
-        if self.selected_files_label is None:
+
+    def _render_selected_file_rows(self):
+        if self.file_list_layout is None:
             return
-        if not selected:
-            self.selected_files_label.setText("No files selected")
-        elif selected == 1:
-            self.selected_files_label.setText(self.selected_mf4_files[0].name)
-        else:
-            first = self.selected_mf4_files[0].name
-            self.selected_files_label.setText(f"{first} + {selected - 1} more")
+
+        while self.file_list_layout.count():
+            item = self.file_list_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        self.file_checks = {}
+        if not self.selected_mf4_files:
+            self.selected_files_label = QLabel("No files selected")
+            self.selected_files_label.setWordWrap(True)
+            self.file_list_layout.addWidget(self.selected_files_label)
+            self._resize_file_list_pane(0)
+            return
+
+        self.selected_files_label = None
+        for path in self.selected_mf4_files:
+            cb = QCheckBox(path.name)
+            cb.setObjectName("fileItem")
+            cb.setToolTip(str(path))
+            cb.setChecked(True)
+            cb.stateChanged.connect(self._update_file_count)
+            self.file_checks[path] = cb
+            self.file_list_layout.addWidget(cb)
+        self._resize_file_list_pane(len(self.selected_mf4_files))
+
+    def _resize_file_list_pane(self, file_count):
+        if self.file_scroll is None:
+            return
+
+        row_height = 32
+        vertical_padding = 16
+        min_height = 52
+        max_visible_rows = 5
+        visible_rows = max(1, min(file_count or 1, max_visible_rows))
+        height = max(min_height, vertical_padding + visible_rows * row_height)
+        self.file_scroll.setMinimumHeight(height)
+        self.file_scroll.setMaximumHeight(height)
 
     def _set_active_folder(self, folder: Path):
         self.mf4_folder = Path(folder).expanduser().resolve()
@@ -296,6 +365,7 @@ class KpiGui(QWidget):
         self.selected_mf4_files = selected
         self.mf4_folder = parent
         self._persist_active_folder()
+        self._render_selected_file_rows()
         self._update_file_count()
         self.log(f"Selected {len(selected)} MF4 file(s) from: {self.mf4_folder}")
 
@@ -346,7 +416,13 @@ class KpiGui(QWidget):
         return long_selected, lat_selected
 
     def _selected_files(self):
-        return list(self.selected_mf4_files)
+        if not self.file_checks:
+            return list(self.selected_mf4_files)
+        return [
+            path
+            for path in self.selected_mf4_files
+            if self.file_checks.get(path) is not None and self.file_checks[path].isChecked()
+        ]
 
     def run_selection(self):
         if self.runner and self.runner.isRunning():

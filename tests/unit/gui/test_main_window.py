@@ -37,7 +37,51 @@ def test_selecting_files_sets_active_folder_and_count(tmp_path):
     assert gui._selected_files() == [file_a.resolve(), file_b.resolve()]
     assert gui.mf4_folder == folder_a.resolve()
     assert gui.file_count.text() == "2 selected"
-    assert gui.selected_files_label.text() == "a.mf4 + 1 more"
+    assert gui.file_checks[file_a.resolve()].text() == "a.mf4"
+    assert gui.file_checks[file_b.resolve()].text() == "b.mf4"
+
+
+def test_selected_file_rows_can_be_unchecked(tmp_path):
+    _get_app()
+
+    folder = tmp_path / "folder"
+    folder.mkdir()
+    file_a = folder / "a.mf4"
+    file_b = folder / "b.mf4"
+    file_a.write_text("")
+    file_b.write_text("")
+
+    gui = KpiGui(tree_root=tmp_path)
+    gui._set_selected_files([file_a, file_b])
+    gui.file_checks[file_b.resolve()].setChecked(False)
+
+    assert gui._selected_files() == [file_a.resolve()]
+    assert gui.file_count.text() == "1 selected"
+
+
+def test_selected_file_pane_height_scales_with_visible_rows(tmp_path):
+    _get_app()
+
+    folder = tmp_path / "folder"
+    folder.mkdir()
+    files = []
+    for idx in range(8):
+        path = folder / f"{idx}.mf4"
+        path.write_text("")
+        files.append(path)
+
+    gui = KpiGui(tree_root=tmp_path)
+    initial_height = gui.file_scroll.maximumHeight()
+
+    gui._set_selected_files(files[:3])
+    three_file_height = gui.file_scroll.maximumHeight()
+
+    gui._set_selected_files(files)
+    capped_height = gui.file_scroll.maximumHeight()
+
+    assert three_file_height > initial_height
+    assert capped_height > three_file_height
+    assert capped_height == 16 + 5 * 32
 
 
 def test_rejects_files_from_multiple_folders(tmp_path):
