@@ -84,6 +84,51 @@ def test_selected_file_pane_height_scales_with_visible_rows(tmp_path):
     assert capped_height == 16 + 5 * 32
 
 
+def test_selecting_folder_loads_matching_mf4_files(tmp_path):
+    _get_app()
+
+    folder = tmp_path / "logs"
+    folder.mkdir()
+    selected_names = [
+        "a_roadcast.mf4",
+        "b_MOTION_1.MF4",
+    ]
+    ignored_names = [
+        "c_motion_1.mf4",
+        "d_ROADCAST.mf4",
+        "e_other.mf4",
+        "f_roadcast.txt",
+    ]
+    for name in selected_names + ignored_names:
+        (folder / name).write_text("")
+
+    gui = KpiGui(tree_root=tmp_path)
+    gui._set_selected_folder(folder)
+
+    assert [path.name for path in gui._selected_files()] == selected_names
+    assert gui.mf4_folder == folder.resolve()
+    assert gui.file_count.text() == "2 selected"
+
+
+def test_selecting_folder_without_matching_files_clears_target_files(tmp_path):
+    _get_app()
+
+    folder = tmp_path / "logs"
+    folder.mkdir()
+    existing = folder / "old_roadcast.mf4"
+    existing.write_text("")
+    non_matching = folder / "other.mf4"
+    non_matching.write_text("")
+
+    gui = KpiGui(tree_root=tmp_path)
+    gui._set_selected_files([existing])
+    existing.unlink()
+    gui._set_selected_folder(folder)
+
+    assert gui._selected_files() == []
+    assert gui.file_count.text() == "0 selected"
+
+
 def test_rejects_files_from_multiple_folders(tmp_path):
     _get_app()
 

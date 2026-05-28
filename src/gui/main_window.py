@@ -243,7 +243,7 @@ class KpiGui(QWidget):
         file_layout.addLayout(file_header)
 
         file_buttons = QHBoxLayout()
-        btn_pick = QPushButton("Pick MF4 files")
+        btn_pick = QPushButton("Pick MF4 folder")
         btn_pick.setObjectName("secondary")
         btn_pick.clicked.connect(self.select_files)
         btn_clear = QPushButton("Clear")
@@ -282,14 +282,13 @@ class KpiGui(QWidget):
     # ---------------- Actions ----------------
     def select_files(self):
         start_dir = str(self.mf4_folder) if self.mf4_folder else ""
-        files, _ = QFileDialog.getOpenFileNames(
+        folder = QFileDialog.getExistingDirectory(
             self,
-            "Select MF4 Files",
+            "Select Folder Containing MF4 Files",
             start_dir,
-            "MF4 files (*.mf4 *.MF4);;All files (*)",
         )
-        if files:
-            self._set_selected_files(files)
+        if folder:
+            self._set_selected_folder(folder)
 
     def clear_selected_files(self):
         self.selected_mf4_files = []
@@ -349,6 +348,39 @@ class KpiGui(QWidget):
             self.folder_label.setText(str(self.mf4_folder))
         self._persist_active_folder()
         self.log(f"MF4 folder set to: {self.mf4_folder}")
+
+    def _set_selected_folder(self, folder):
+        folder_path = Path(folder).expanduser().resolve()
+        if not folder_path.exists() or not folder_path.is_dir():
+            self.log("Please select a valid folder containing MF4 files.")
+            return
+
+        files = self._collect_target_mf4_files(folder_path)
+        if not files:
+            self.selected_mf4_files = []
+            self.mf4_folder = folder_path
+            self._persist_active_folder()
+            self._render_selected_file_rows()
+            self._update_file_count()
+            self.log(
+                "No MF4 files containing 'roadcast' or 'MOTION_1' were found in: "
+                f"{folder_path}"
+            )
+            return
+
+        self._set_selected_files(files)
+
+    def _collect_target_mf4_files(self, folder: Path):
+        return sorted(
+            [
+                path.resolve()
+                for path in Path(folder).iterdir()
+                if path.is_file()
+                and path.suffix.lower() == ".mf4"
+                and ("roadcast" in path.name or "MOTION_1" in path.name)
+            ],
+            key=lambda path: path.name,
+        )
 
     def _set_selected_files(self, files):
         selected = [Path(p).expanduser().resolve() for p in files]
